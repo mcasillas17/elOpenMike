@@ -13,9 +13,9 @@ A dark, modern personal website that serves as an all-in-one hub for Miguel
 Casillas: Software Engineer, builder, and stand-up comedian. It must work for
 multiple audiences at once:
 
-- **Recruiters / hiring managers** — clear, scannable experience and a
-  downloadable résumé. This is the professional spine; the site must never read
-  as unserious.
+- **Recruiters / hiring managers** — the primary audience. Professional
+  experience leads the page: clear, scannable experience and a downloadable
+  résumé come first, right after the hero. The site must never read as unserious.
 - **Peers and network** — a "this is me" home base, showcasing projects and
   personality.
 - **Everyone else** — the comedy and personal touches (Spider-Man fandom,
@@ -78,23 +78,27 @@ and SEO matter.
 | `/comedy`         | Fuller comedy page (embedded clips, photo gallery, show info)      |
 | `/api/contact`    | Route Handler: validates + sends contact email via Resend          |
 
-**Home page section order:** Hero → About + Turing → Experience → Projects
-preview (top 3) → Comedy teaser → Contact.
+**Home page section order (recruiter-first):** Hero → Experience → Projects
+preview (top 3) → About + Turing → Comedy teaser → Contact. Professional work
+leads; personality follows once the professional case is made.
 
 **Résumé:** PDF stored in `/public`; prominent "Download résumé" buttons in the
 Hero and Experience sections.
 
 ## 5. Sections in detail
 
+_Listed in home-page order (recruiter-first):_
+
 - **Hero** — name, one-liner ("Builder by day, open-mic by night"), two CTAs
   (View work / Download résumé), web-grid corner accent.
-- **About + Turing** — engineering story plus the personal layer: Turing (blue
-  merle Mini American Shepherd) with photos, fitness, and movies/TV. Personable
-  without losing professionalism.
 - **Experience** — vertical timeline of roles; clean, scannable, recruiter-first.
+  The first content section after the hero. Résumé download repeated here.
 - **Projects** — cards linking to detail pages. Data model includes a
   `type`/tag field so open-source contributions can be added later as tagged
   items without restructuring.
+- **About + Turing** — engineering story plus the personal layer: Turing (blue
+  merle Mini American Shepherd) with photos, fitness, and movies/TV. Personable
+  without losing professionalism.
 - **Comedy** — embedded video clips + photo gallery + show info; the
   differentiator. Teased on home, full content on `/comedy`.
 - **Contact** — real form (name, email, message) posting to `/api/contact`
@@ -151,15 +155,16 @@ Pragmatic, not exhaustive:
 1. Project scaffold: Next.js + TS + Tailwind + fonts + design tokens + base
    layout (halftone background, web-corner, Button, Section primitives).
 2. Home shell: sticky nav, smooth-scroll, section scaffolding with placeholders.
-3. Hero + About/Turing.
-4. Experience timeline + résumé download.
+3. Hero.
+4. Experience timeline + résumé download (the lead professional section).
 5. Projects (data model, grid, detail pages) + home preview.
-6. Comedy section + `/comedy` page.
-7. Blog (MDX pipeline, list, post pages).
-8. Contact form + `/api/contact` (Resend).
-9. Easter eggs / Spidey-mode polish + animations.
-10. SEO, error/loading states, accessibility pass, tests.
-11. Deploy to Vercel.
+6. About + Turing.
+7. Comedy section + `/comedy` page.
+8. Blog (MDX pipeline, list, post pages).
+9. Contact form + `/api/contact` (Resend).
+10. Easter eggs / Spidey-mode polish + animations.
+11. SEO, error/loading states, accessibility pass, tests.
+12. Deploy to Vercel.
 
 ## 11. Explicitly out of scope (v1)
 
