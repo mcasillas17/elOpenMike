@@ -4,10 +4,8 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import "./globals.css";
 
-// NOTE: metadataBase uses a placeholder domain. Update to the real deploy URL
-// when the domain is known (tracked for the polish/deploy plan).
 export const metadata: Metadata = {
-  metadataBase: new URL("https://elopenmike.dev"),
+  metadataBase: new URL("https://elopenmike.com"),
   title: {
     default: "Miguel Casillas — Software Engineer",
     template: "%s — Miguel Casillas",
