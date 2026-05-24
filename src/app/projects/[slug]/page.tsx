@@ -7,6 +7,18 @@ import { Button } from "@/components/ui/Button";
 import { Tag } from "@/components/ui/Tag";
 import { getProject, getAllSlugs } from "@/data/projects";
 
+function accentedTitle(title: string) {
+  const parts = title.split(" ");
+  if (parts.length < 2) return title;
+  const last = parts[parts.length - 1];
+  const rest = parts.slice(0, -1).join(" ");
+  return (
+    <>
+      {rest} <span className="text-spidey">{last}</span>
+    </>
+  );
+}
+
 export function generateStaticParams() {
   return getAllSlugs().map((slug) => ({ slug }));
 }
@@ -45,7 +57,7 @@ export default async function ProjectDetailPage({
           {project.year}
         </p>
         <h1 className="mt-2 font-display text-4xl font-extrabold sm:text-5xl">
-          {project.title}
+          {accentedTitle(project.title)}
         </h1>
         <p className="mt-4 text-lg text-ink">{project.summary}</p>
 

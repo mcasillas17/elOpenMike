@@ -10,7 +10,7 @@ describe("Header", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Experience" }),
-    ).toHaveAttribute("href", "#experience");
+    ).toHaveAttribute("href", "/#experience");
   });
 
   it("renders a résumé link", () => {

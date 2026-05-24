@@ -11,8 +11,8 @@ export const site = {
   resumeHref: "/resume.pdf",
   // Only sections that exist in Plan 1. Grow this as later plans land.
   nav: [
-    { label: "Experience", href: "#experience" },
-    { label: "Projects", href: "#projects" },
+    { label: "Experience", href: "/#experience" },
+    { label: "Projects", href: "/#projects" },
   ] as NavItem[],
   socials: [
     { label: "GitHub", href: "https://github.com/mcasillas17" },
