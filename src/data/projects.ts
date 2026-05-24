@@ -48,6 +48,21 @@ export const projects: Project[] = [
     repoUrl: "https://github.com/mcasillas17/TuringCare",
     images: [],
   },
+  {
+    slug: "light-master",
+    title: "Light Master",
+    summary:
+      "A Unity platformer where enemy behavior is evolved with genetic programming over behavior trees.",
+    year: "2019",
+    tags: ["Game", "AI", "Unity"],
+    stack: ["Unity", "C#", "HLSL"],
+    highlights: [
+      "Side-scrolling platformer built in Unity (C#).",
+      "Enemy behavior trees are evolved using genetic programming.",
+    ],
+    repoUrl: "https://github.com/mcasillas17/Light_Master",
+    images: [],
+  },
 ];
 
 export function getProject(slug: string): Project | undefined {
