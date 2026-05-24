@@ -12,54 +12,73 @@ const variants: Record<Variant, string> = {
     "border border-[#2a3242] text-ink hover:border-web hover:text-web",
 };
 
-type ButtonProps = {
-  children: ReactNode;
-  variant?: Variant;
-  href?: string;
-  download?: boolean;
-  className?: string;
-} & Omit<ComponentProps<"button">, "className">;
+function classesFor(variant: Variant, className: string) {
+  return `${base} ${variants[variant]} ${className}`.trim();
+}
 
-export function Button({
-  children,
-  variant = "primary",
-  href,
-  download,
-  className = "",
-  ...rest
-}: ButtonProps) {
-  const classes = `${base} ${variants[variant]} ${className}`.trim();
+type AnchorProps = { href: string; variant?: Variant } & Omit<
+  ComponentProps<"a">,
+  "href"
+>;
+type NativeButtonProps = { href?: never; variant?: Variant } & ComponentProps<
+  "button"
+>;
 
-  if (href) {
-    // Plain <a> for hash links, downloads, and external URLs.
+// Renders an <a> (hash links, downloads, external URLs) when href is set,
+// otherwise a <button>. Props are forwarded correctly in both modes.
+export function Button(props: AnchorProps | NativeButtonProps) {
+  if (props.href !== undefined) {
+    const {
+      href,
+      variant = "primary",
+      className = "",
+      children,
+      target,
+      rel,
+      ...rest
+    } = props;
+    const safeRel =
+      target === "_blank" ? rel ?? "noopener noreferrer" : rel;
     return (
-      <a href={href} download={download} className={classes}>
+      <a
+        href={href}
+        target={target}
+        rel={safeRel}
+        className={classesFor(variant, className)}
+        {...rest}
+      >
         {children}
       </a>
     );
   }
 
+  const { variant = "primary", className = "", children, ...rest } = props;
   return (
-    <button className={classes} {...rest}>
+    <button className={classesFor(variant, className)} {...rest}>
       {children}
     </button>
   );
 }
 
-// Internal route button (used by later tasks; uses next/link).
+// Internal route button using next/link, with next/link props forwarded.
 export function LinkButton({
   href,
   children,
   variant = "primary",
   className = "",
+  ...rest
 }: {
   href: string;
   children: ReactNode;
   variant?: Variant;
   className?: string;
-}) {
+} & Omit<ComponentProps<typeof Link>, "href" | "className" | "children">) {
   return (
-    <Link href={href} className={`${base} ${variants[variant]} ${className}`.trim()}>
+    <Link
+      href={href}
+      className={classesFor(variant, className)}
+      {...rest}
+    >
       {children}
     </Link>
   );
