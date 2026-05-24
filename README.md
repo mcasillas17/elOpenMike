@@ -25,6 +25,7 @@ pnpm run build    # production build
 ## Content to personalize
 
 - `src/data/experience.ts` — your roles and accomplishments.
+- `src/data/projects.ts` — your projects (slug, summary, tags, stack, links); add screenshots under `public/images/projects/` and reference them in each project's `images` array.
 - `public/resume.pdf` — your real résumé (replace the placeholder).
 - `src/lib/site.ts` — name, tagline, role, and social links (incl. the LinkedIn URL placeholder).
 
