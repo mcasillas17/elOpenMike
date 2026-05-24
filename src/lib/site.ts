@@ -13,6 +13,8 @@ export const site = {
   nav: [
     { label: "Experience", href: "/#experience" },
     { label: "Projects", href: "/#projects" },
+    { label: "About", href: "/#about" },
+    { label: "Comedy", href: "/#comedy" },
   ] as NavItem[],
   socials: [
     { label: "GitHub", href: "https://github.com/mcasillas17" },
