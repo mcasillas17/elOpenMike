@@ -1,9 +1,20 @@
 "use client";
 
+import { useEffect } from "react";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 
-export default function Error({ reset }: { error: Error; reset: () => void }) {
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  useEffect(() => {
+    console.error(error);
+  }, [error]);
+
   return (
     <Container className="flex min-h-[60vh] flex-col items-center justify-center text-center">
       <h1 className="font-display text-2xl font-bold">Something snapped.</h1>
