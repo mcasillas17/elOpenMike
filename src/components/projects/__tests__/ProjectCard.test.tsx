@@ -58,4 +58,9 @@ describe("ProjectCard", () => {
     render(<ProjectCard project={base} />);
     expect(screen.queryByRole("img")).toBeNull();
   });
+
+  it("renders the tech stack as a joined line", () => {
+    render(<ProjectCard project={base} />);
+    expect(screen.getByText("TypeScript · Node")).toBeInTheDocument();
+  });
 });

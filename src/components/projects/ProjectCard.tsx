@@ -11,7 +11,7 @@ import { GitHubIcon, ExternalLinkIcon } from "@/components/ui/icons";
 export function ProjectCard({ project }: { project: Project }) {
   const cover = project.images[0];
   return (
-    <article className="relative grid overflow-hidden rounded-2xl border border-edge bg-surface transition-colors hover:border-web sm:grid-cols-[38%_1fr]">
+    <article className="relative grid overflow-hidden rounded-2xl border border-edge bg-surface transition-colors hover:border-web focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-web sm:grid-cols-[38%_1fr]">
       <div className="relative aspect-video sm:aspect-auto sm:h-full">
         {cover ? (
           <Image
@@ -38,7 +38,7 @@ export function ProjectCard({ project }: { project: Project }) {
         <h3 className="font-display text-xl font-bold">
           <Link
             href={`/projects/${project.slug}`}
-            className="after:absolute after:inset-0 after:content-[''] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+            className="after:absolute after:inset-0 after:content-['']"
           >
             {project.title}
           </Link>
