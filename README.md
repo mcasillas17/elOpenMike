@@ -29,11 +29,29 @@ pnpm run build    # production build
 - `public/resume.pdf` — your real résumé (replace the placeholder).
 - `src/lib/site.ts` — name, tagline, role, and social links (incl. the LinkedIn URL placeholder).
 
-## Deploy (Vercel)
+## Deploy (Fly.io)
 
-1. Push to `main` on `github.com/mcasillas17/elOpenMike`.
-2. Import the repo at vercel.com → New Project (framework auto-detected as Next.js).
-3. Deploy. Add a custom domain later under Project → Settings → Domains.
+Runs as a Next.js standalone server in a container (`Dockerfile` + `fly.toml`;
+`next.config.ts` uses `output: "standalone"`).
+
+```bash
+fly auth login
+# First time: claim a unique app name + region (adopts the existing fly.toml/Dockerfile)
+fly launch
+# Subsequent deploys:
+fly deploy
+```
+
+Custom domain (e.g. via Cloudflare DNS):
+
+```bash
+fly certs add yourdomain.com
+# then add the A/AAAA (or CNAME) records Fly prints, in Cloudflare DNS
+```
+
+Image handling: `next.config.ts` sets `images.unoptimized: true` so the
+container needs no `sharp` (consistent with the supply-chain allowlist). Hand-
+optimize source images, or add a loader/sharp later if you want optimization.
 
 ## Design
 
