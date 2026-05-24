@@ -9,10 +9,10 @@ export function Hero() {
       <WebCorner className="right-0 top-0" />
       <Container>
         <p className="text-xs font-medium uppercase tracking-[0.3em] text-web">
-          Software Engineer
+          {site.role}
         </p>
         <h1 className="mt-3 font-display text-5xl font-extrabold leading-[1.02] sm:text-6xl">
-          Miguel <span className="text-spidey">Casillas</span>
+          {site.firstName} <span className="text-spidey">{site.lastName}</span>
         </h1>
         <p className="mt-4 text-lg text-ink">{site.tagline}</p>
         <p className="mt-3 max-w-xl text-muted">{site.intro}</p>

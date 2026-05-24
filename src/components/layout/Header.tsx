@@ -16,7 +16,7 @@ export function Header() {
           href="#top"
           className="font-display text-lg font-extrabold"
         >
-          Miguel <span className="text-spidey">Casillas</span>
+          {site.firstName} <span className="text-spidey">{site.lastName}</span>
         </a>
 
         <nav aria-label="Site navigation" className="flex items-center gap-6">

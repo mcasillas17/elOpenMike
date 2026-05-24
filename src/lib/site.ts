@@ -2,6 +2,9 @@ export type NavItem = { label: string; href: string };
 
 export const site = {
   name: "Miguel Casillas",
+  firstName: "Miguel",
+  lastName: "Casillas",
+  role: "Software Engineer",
   tagline: "Builder by day, open-mic by night.",
   intro:
     "I ship software, lift heavy, and occasionally make rooms laugh. Software Engineer focused on building things that work — and a few that web-sling.",

@@ -1,14 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Hero } from "@/components/sections/Hero";
+import { site } from "@/lib/site";
 
 describe("Hero", () => {
   it("renders the name and tagline", () => {
     render(<Hero />);
-    expect(screen.getByText(/Casillas/)).toBeInTheDocument();
-    expect(
-      screen.getByText("Builder by day, open-mic by night."),
-    ).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(site.lastName))).toBeInTheDocument();
+    expect(screen.getByText(site.tagline)).toBeInTheDocument();
   });
 
   it("renders View work and résumé CTAs", () => {
@@ -18,6 +17,6 @@ describe("Hero", () => {
     ).toHaveAttribute("href", "#experience");
     expect(
       screen.getByRole("link", { name: /résumé/i }),
-    ).toHaveAttribute("href", "/resume.pdf");
+    ).toHaveAttribute("href", site.resumeHref);
   });
 });
