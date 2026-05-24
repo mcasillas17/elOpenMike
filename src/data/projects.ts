@@ -11,51 +11,41 @@ export type Project = {
   images: string[]; // /images/projects/...; images[0] is the primary
 };
 
-// Placeholder projects — replace slugs/titles/content and add real screenshots
-// under public/images/projects/. Array order controls display order and which
-// three appear in the home preview.
+// Real projects (pulled from github.com/mcasillas17). Array order controls
+// display order and which three appear in the home preview. Add screenshots
+// under public/images/projects/ and reference them in `images`.
 export const projects: Project[] = [
   {
-    slug: "web-slinger-cli",
-    title: "Web-Slinger CLI",
+    slug: "turingagent",
+    title: "TuringAgent",
     summary:
-      "A fast terminal tool that scaffolds and deploys side projects in one command.",
-    year: "2025",
-    tags: ["CLI", "DevTools", "Open source"],
-    stack: ["TypeScript", "Node", "oclif"],
+      "A local-first AI orchestration platform — a Flutter client and Go gRPC backend that run a private assistant stack with model routing, streaming, MCP tools, and approval-gated actions.",
+    year: "2026",
+    tags: ["AI", "Full-stack", "Open source"],
+    stack: ["Go", "gRPC", "Flutter", "Ollama", "MCP", "Docker"],
     highlights: [
-      "One-command scaffold from opinionated templates.",
-      "Auto-creates the repo and a first deploy.",
-      "Plugin system so you can add your own templates.",
+      "Go gRPC orchestrator for sessions, messages, runs, events, and approvals.",
+      "Connects to local or OpenAI-compatible models (Ollama by default).",
+      "MCP tool servers for safe system tools and approval-gated sandboxed file access.",
+      "Flutter client with chat, streamed responses, and approval cards.",
     ],
-    repoUrl: "https://github.com/mcasillas17",
+    repoUrl: "https://github.com/mcasillas17/TuringAgent",
     images: [],
   },
   {
-    slug: "turing-tracker",
-    title: "Turing Tracker",
+    slug: "turingcare",
+    title: "TuringCare",
     summary:
-      "A workout and dog-walk logger with streaks and charts. Named after a very good blue merle.",
-    year: "2024",
+      "A humane, force-free dog-training support platform — owners keep a structured behavior journal, find science-based trainers, and export a shareable “Behavior Brief” PDF.",
+    year: "2026",
     tags: ["Web app", "Full-stack"],
-    stack: ["Next.js", "Postgres", "Chart.js"],
+    stack: ["TypeScript", "Next.js", "Node", "PostgreSQL", "Drizzle"],
     highlights: [
-      "Log workouts and walks; track streaks.",
-      "Charts for weekly volume and consistency.",
+      "Structured behavior journal for puppy and newly-adopted-dog owners.",
+      "Exportable “Behavior Brief” PDF to share with a trainer.",
+      "Directory to find science-based, force-free trainers.",
     ],
-    liveUrl: "https://example.com",
-    repoUrl: "https://github.com/mcasillas17",
-    images: [],
-  },
-  {
-    slug: "another-project",
-    title: "Another Project",
-    summary:
-      "Replace these placeholders with your real work — title, summary, tags, stack, links, and screenshots.",
-    year: "2023",
-    tags: ["Web"],
-    stack: ["React"],
-    highlights: ["Describe what it does in 2–4 short bullets."],
+    repoUrl: "https://github.com/mcasillas17/TuringCare",
     images: [],
   },
 ];
