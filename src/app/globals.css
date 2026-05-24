@@ -1,26 +1,35 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-canvas: #0b0e14;
+  --color-surface: #171c28;
+  --color-spidey: #e62429;
+  --color-web: #1b6fe3;
+  --color-ink: #e8eaed;
+  --color-muted: #9aa3b2;
+
+  --font-display: var(--font-sora), system-ui, sans-serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html {
+  scroll-behavior: smooth;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-canvas);
+  background-image: radial-gradient(var(--color-surface) 1px, transparent 1.5px);
+  background-size: 11px 11px;
+  color: var(--color-ink);
+}
+
+/* Offset for the sticky header when anchor-scrolling to a section. */
+.scroll-anchor {
+  scroll-margin-top: 5rem;
 }
