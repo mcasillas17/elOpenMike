@@ -37,7 +37,7 @@ export function Header() {
             })}
           </ul>
           <Button href={site.resumeHref} download variant="secondary">
-            Résumé
+            Resume
           </Button>
         </nav>
       </Container>

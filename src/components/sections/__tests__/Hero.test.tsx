@@ -10,13 +10,13 @@ describe("Hero", () => {
     expect(screen.getByText(site.tagline)).toBeInTheDocument();
   });
 
-  it("renders View work and résumé CTAs", () => {
+  it("renders View work and resume CTAs", () => {
     render(<Hero />);
     expect(
       screen.getByRole("link", { name: /view my work/i }),
     ).toHaveAttribute("href", "#experience");
     expect(
-      screen.getByRole("link", { name: /résumé/i }),
+      screen.getByRole("link", { name: /resume/i }),
     ).toHaveAttribute("href", site.resumeHref);
   });
 });

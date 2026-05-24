@@ -13,10 +13,10 @@ describe("Header", () => {
     ).toHaveAttribute("href", "/#experience");
   });
 
-  it("renders a résumé link", () => {
+  it("renders a resume link", () => {
     render(<Header />);
     expect(
-      screen.getByRole("link", { name: /résumé/i }),
+      screen.getByRole("link", { name: /resume/i }),
     ).toHaveAttribute("href", "/resume.pdf");
   });
 

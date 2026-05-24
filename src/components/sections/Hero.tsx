@@ -19,7 +19,7 @@ export function Hero() {
         <div className="mt-8 flex flex-wrap gap-3">
           <Button href="#experience">View my work</Button>
           <Button href={site.resumeHref} download variant="secondary">
-            Download résumé
+            Download resume
           </Button>
         </div>
       </Container>
