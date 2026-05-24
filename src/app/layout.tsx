@@ -1,10 +1,24 @@
 import type { Metadata } from "next";
 import { sora, inter } from "@/lib/fonts";
+import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/layout/Footer";
 import "./globals.css";
 
+// NOTE: metadataBase uses a placeholder domain. Update to the real deploy URL
+// when the domain is known (tracked for the polish/deploy plan).
 export const metadata: Metadata = {
-  title: "Miguel Casillas",
-  description: "Software Engineer, builder, and stand-up comedian.",
+  metadataBase: new URL("https://elopenmike.dev"),
+  title: {
+    default: "Miguel Casillas — Software Engineer",
+    template: "%s — Miguel Casillas",
+  },
+  description:
+    "Software Engineer, builder, and stand-up comedian. Experience, projects, and the occasional joke.",
+  openGraph: {
+    title: "Miguel Casillas — Software Engineer",
+    description: "Software Engineer, builder, and stand-up comedian.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -13,7 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${sora.variable} ${inter.variable}`}>
       <body className="font-body antialiased">
-        {children}
+        <Header />
+        <main>{children}</main>
+        <Footer />
       </body>
     </html>
   );
