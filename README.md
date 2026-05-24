@@ -9,11 +9,18 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · next/font (Sora + In
 ## Develop
 
 ```bash
-npm install
-npm run dev      # http://localhost:3000
-npm test         # run unit/component tests
-npm run build    # production build
+pnpm install
+pnpm dev          # http://localhost:3000
+pnpm test         # run unit/component tests
+pnpm run build    # production build
 ```
+
+## Supply-chain hardening
+
+- **Script blocking**: pnpm 10+ blocks dependency install/build scripts by default. The allowlist in `pnpm-workspace.yaml` → `allowBuilds` permits only `esbuild` (native binary setup) and `unrs-resolver` (Tailwind v4 Rust binding). All other lifecycle scripts are blocked.
+- **Release-age cooldown**: `minimumReleaseAge: "10080 minutes"` (7 days) in `pnpm-workspace.yaml` prevents installing package versions published in the past week, reducing exposure to freshly-compromised or typosquatted releases (requires pnpm 10.16+).
+- **Lockfile committed**: `pnpm-lock.yaml` is committed to the repo, pinning all resolved versions for reproducible installs.
+- **Audit**: Run `pnpm audit` at any time to check for known vulnerability advisories.
 
 ## Content to personalize
 

@@ -1,0 +1,29 @@
+# Supply-chain hardening
+#
+# allowBuilds: allowlist for dependency install/build scripts.
+# pnpm 10+ blocks all lifecycle scripts by default; only packages listed here
+# with a value of `true` are permitted to run postinstall/install/build scripts.
+#
+# esbuild: its install.js hardlinks the platform-specific native binary
+#   (@esbuild/darwin-arm64 etc.) into esbuild/bin/esbuild and patches
+#   esbuild/lib/main.js with ESBUILD_BINARY_PATH; without it Vite/Vitest
+#   fall back to a slow JS stub or fail.
+#
+# unrs-resolver: its postinstall.js (via napi-postinstall) copies the
+#   platform .node binding from @unrs/resolver-binding-<platform> into
+#   the package root; used by @tailwindcss/oxide (Tailwind v4 Rust engine)
+#   and eslint-config-next; without it both fail to load.
+#
+# sharp is intentionally blocked (false): Next.js uses it only for optional
+# image optimization and degrades gracefully when it is absent.
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
+  sharp: false
+
+# Refuse to install package versions published in the last 7 days.
+# Protects against freshly-compromised / typosquatted releases.
+# Requires pnpm 10.16+. If your pnpm version warns "unrecognized setting",
+# see .npmrc for the fallback key, or upgrade pnpm.
+# TODO: verify pnpm 11.1.2 accepts this key (no "unrecognized setting" warning).
+minimumReleaseAge: "10080 minutes"
