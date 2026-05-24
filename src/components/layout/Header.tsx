@@ -19,7 +19,7 @@ export function Header() {
           Miguel <span className="text-spidey">Casillas</span>
         </a>
 
-        <nav className="flex items-center gap-6">
+        <nav aria-label="Site navigation" className="flex items-center gap-6">
           <ul className="hidden items-center gap-6 sm:flex">
             {site.nav.map((item) => {
               const id = item.href.replace("#", "");

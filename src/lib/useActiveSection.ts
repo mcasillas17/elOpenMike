@@ -8,11 +8,16 @@ import { useEffect, useState } from "react";
  */
 export function useActiveSection(ids: string[]): string {
   const [active, setActive] = useState<string>(ids[0] ?? "");
+  // Stable primitive dep so the effect doesn't re-run when callers pass a new
+  // array reference on every render.
+  const key = ids.join(",");
 
   useEffect(() => {
-    const elements = ids
+    const sectionIds = key ? key.split(",") : [];
+    const elements = sectionIds
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
+    if (elements.length === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -27,7 +32,7 @@ export function useActiveSection(ids: string[]): string {
 
     elements.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [ids]);
+  }, [key]);
 
   return active;
 }

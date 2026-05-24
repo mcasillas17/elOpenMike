@@ -15,7 +15,7 @@ export function Footer() {
                 href={s.href}
                 className="text-sm text-muted transition-colors hover:text-web"
                 target={s.href.startsWith("http") ? "_blank" : undefined}
-                rel={s.href.startsWith("http") ? "noreferrer" : undefined}
+                rel={s.href.startsWith("http") ? "noopener noreferrer" : undefined}
               >
                 {s.label}
               </a>

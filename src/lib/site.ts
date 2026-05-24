@@ -10,6 +10,7 @@ export const site = {
   nav: [{ label: "Experience", href: "#experience" }] as NavItem[],
   socials: [
     { label: "GitHub", href: "https://github.com/mcasillas17" },
+    // TODO: replace with the real LinkedIn profile URL
     { label: "LinkedIn", href: "https://www.linkedin.com/" },
     { label: "Email", href: "mailto:micasillm@gmail.com" },
   ],

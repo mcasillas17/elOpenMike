@@ -19,4 +19,12 @@ describe("Header", () => {
       screen.getByRole("link", { name: /résumé/i }),
     ).toHaveAttribute("href", "/resume.pdf");
   });
+
+  it("marks the current section's nav link as active", () => {
+    render(<Header />);
+    // Experience is ids[0], so it is active on initial render.
+    expect(screen.getByRole("link", { name: "Experience" })).toHaveClass(
+      "text-web",
+    );
+  });
 });
