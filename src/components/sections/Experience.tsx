@@ -8,8 +8,14 @@ export function Experience() {
     <Section id="experience" eyebrow="Career" title="Experience">
       <ol className="relative border-l border-[#2a3242] pl-6">
         {experience.map((role) => (
-          <li key={`${role.company}-${role.start}`} className="mb-10 last:mb-0">
-            <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full bg-spidey" />
+          <li
+            key={`${role.company}-${role.title}-${role.start}`}
+            className="mb-10 last:mb-0"
+          >
+            <span
+              aria-hidden="true"
+              className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full bg-spidey"
+            />
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="font-display text-xl font-bold">
                 {role.title}

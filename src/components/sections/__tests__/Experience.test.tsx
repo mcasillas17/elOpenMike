@@ -25,4 +25,18 @@ describe("Experience", () => {
       screen.getByRole("link", { name: /résumé/i }),
     ).toHaveAttribute("href", "/resume.pdf");
   });
+
+  it("renders each role's highlights and tech stack", () => {
+    render(<Experience />);
+    for (const role of experience) {
+      for (const highlight of role.highlights) {
+        expect(screen.getByText(highlight)).toBeInTheDocument();
+      }
+      if (role.stack && role.stack.length > 0) {
+        expect(
+          screen.getByText(role.stack.join(" · ")),
+        ).toBeInTheDocument();
+      }
+    }
+  });
 });
