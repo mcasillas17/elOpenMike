@@ -8,5 +8,6 @@ describe("about data", () => {
     expect(about.bio.length).toBeGreaterThan(0);
     expect(about.turing.caption).toBeTruthy();
     expect(Array.isArray(about.facts)).toBe(true);
+    expect(about.facts.length).toBeGreaterThan(0);
   });
 });

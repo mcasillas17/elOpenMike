@@ -29,9 +29,9 @@ export default function ComedyPage() {
             Clips
           </h2>
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {clips.map((c) => (
+            {clips.map((c, i) => (
               <YouTubeEmbed
-                key={`${c.youtubeId}-${c.title}`}
+                key={`${c.youtubeId}-${i}`}
                 youtubeId={c.youtubeId}
                 title={c.title}
               />
