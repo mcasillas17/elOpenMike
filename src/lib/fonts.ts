@@ -2,7 +2,7 @@ import { Sora, Inter } from "next/font/google";
 
 export const sora = Sora({
   subsets: ["latin"],
-  weight: ["600", "800"],
+  weight: ["600", "700", "800"],
   variable: "--font-sora",
   display: "swap",
 });

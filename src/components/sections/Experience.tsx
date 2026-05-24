@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 export function Experience() {
   return (
     <Section id="experience" eyebrow="Career" title="Experience">
-      <ol className="relative border-l border-[#2a3242] pl-6">
+      <ol className="relative border-l border-edge pl-6">
         {experience.map((role) => (
           <li
             key={`${role.company}-${role.title}-${role.start}`}
