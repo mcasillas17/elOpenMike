@@ -34,7 +34,10 @@ export default async function ProjectDetailPage({
   return (
     <Container className="py-16">
       <div className="mx-auto max-w-3xl">
-        <Link href="/projects" className="text-sm text-muted hover:text-web">
+        <Link
+          href="/projects"
+          className="rounded text-sm text-muted hover:text-web focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+        >
           ← Back to projects
         </Link>
 
@@ -101,8 +104,8 @@ export default async function ProjectDetailPage({
               What it does
             </h2>
             <ul className="mt-3 list-disc space-y-1.5 pl-5 text-muted">
-              {project.highlights.map((h, i) => (
-                <li key={i}>{h}</li>
+              {project.highlights.map((h) => (
+                <li key={h}>{h}</li>
               ))}
             </ul>
           </>

@@ -4,7 +4,7 @@ import ProjectDetailPage, {
   generateStaticParams,
   generateMetadata,
 } from "@/app/projects/[slug]/page";
-import { getAllSlugs } from "@/data/projects";
+import { getAllSlugs, getProject } from "@/data/projects";
 
 describe("/projects/[slug] detail page", () => {
   it("generateStaticParams returns every slug", () => {
@@ -26,11 +26,12 @@ describe("/projects/[slug] detail page", () => {
     ).toHaveAttribute("href", "/projects");
   });
 
-  it("sets metadata title to the project name", async () => {
+  it("sets metadata title and description from the project", async () => {
     const meta = await generateMetadata({
       params: Promise.resolve({ slug: "web-slinger-cli" }),
     });
     expect(meta.title).toBe("Web-Slinger CLI");
+    expect(meta.description).toBe(getProject("web-slinger-cli")?.summary);
   });
 
   it("calls notFound for an unknown slug (throws)", async () => {
