@@ -12,7 +12,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${sora.variable} ${inter.variable}`}>
-      <body className="font-[family-name:var(--font-body)] antialiased">
+      <body className="font-body antialiased">
         {children}
       </body>
     </html>
