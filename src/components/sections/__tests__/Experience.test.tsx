@@ -14,7 +14,8 @@ describe("Experience", () => {
   it("renders each role's company and title", () => {
     render(<Experience />);
     for (const role of experience) {
-      expect(screen.getByText(role.company)).toBeInTheDocument();
+      // company can repeat across roles (e.g. multiple roles at one employer)
+      expect(screen.getAllByText(role.company).length).toBeGreaterThan(0);
       expect(screen.getAllByText(role.title).length).toBeGreaterThan(0);
     }
   });
