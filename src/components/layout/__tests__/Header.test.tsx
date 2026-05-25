@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { Header } from "@/components/layout/Header";
 
 describe("Header", () => {
@@ -26,5 +26,14 @@ describe("Header", () => {
     expect(screen.getByRole("link", { name: "Experience" })).toHaveClass(
       "text-web-strong",
     );
+  });
+
+  it("toggles a mobile menu exposing the nav links", () => {
+    render(<Header />);
+    const toggle = screen.getByRole("button", { name: /menu/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("link", { name: "Experience" }).length).toBeGreaterThan(1);
   });
 });
