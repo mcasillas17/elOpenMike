@@ -1,0 +1,21 @@
+---
+title: "Grounding agents in real data"
+date: "2026-05-20"
+excerpt: "Why retrieval beats prompt-stuffing, and a pattern for wiring tools to an agent without losing the plot."
+tags: ["AI", "Distributed Systems"]
+---
+
+Prompt-stuffing falls over the moment your data changes. The fix is to let the agent `retrieve` what it needs at call time.
+
+## A minimal tool
+
+Here's the shape of a grounded tool call:
+
+```ts
+async function searchDocs(query: string) {
+  const hits = await index.search(query, { topK: 5 });
+  return hits.map((h) => h.text);
+}
+```
+
+Keep the surface small, log every call, and ground answers in what came back.

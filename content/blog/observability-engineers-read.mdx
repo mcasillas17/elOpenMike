@@ -1,0 +1,21 @@
+---
+title: "Telemetry that engineers actually read"
+date: "2026-04-02"
+excerpt: "Dashboards age fast. A few habits that keep observability useful past week one."
+tags: ["Observability"]
+---
+
+A dashboard nobody opens is just a very expensive screensaver.
+
+## Start from the question
+
+Instrument the questions you'll actually ask during an incident, not every metric you can emit.
+
+- What's the error rate, by route?
+- Which dependency got slow?
+
+```ts
+logger.info("request.done", { route, status, ms });
+```
+
+Then delete the panels you never look at.
