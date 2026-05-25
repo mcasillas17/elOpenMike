@@ -69,7 +69,7 @@ function ContactFormInner({
     return (
       <div
         role="status"
-        className="mt-8 max-w-xl rounded-lg border border-edge bg-surface p-6 font-body"
+        className="mx-auto mt-8 max-w-xl rounded-lg border border-edge bg-surface p-6 text-left font-body"
       >
         <p className="font-display text-lg font-semibold text-ink">
           Message sent
@@ -92,7 +92,7 @@ function ContactFormInner({
       action={formAction}
       noValidate
       data-testid="contact-form"
-      className="mt-8 max-w-xl space-y-5 font-body"
+      className="mx-auto mt-8 max-w-xl space-y-5 text-left font-body"
     >
       {/* Honeypot: hidden from users; bots that fill it are dropped. */}
       <div className="sr-only" aria-hidden="true">
