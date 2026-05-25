@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { Tag } from "@/components/ui/Tag";
+import { Carousel } from "@/components/ui/Carousel";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
 import { getProject, getAllSlugs } from "@/data/projects";
 
@@ -97,25 +97,13 @@ export default async function ProjectDetailPage({
           </div>
         )}
 
-        {project.images[0] && (
-          <div className="relative mt-8 aspect-video overflow-hidden rounded-xl border border-edge">
-            <Image
-              src={project.images[0]}
-              alt={`${project.title} screenshot`}
-              fill
-              sizes="(max-width: 768px) 100vw, 768px"
-              className="object-cover"
-            />
-          </div>
-        )}
-        {project.images[1] && (
-          <div className="relative mt-4 aspect-video overflow-hidden rounded-xl border border-edge">
-            <Image
-              src={project.images[1]}
-              alt={`${project.title} screenshot 2`}
-              fill
-              sizes="(max-width: 768px) 100vw, 768px"
-              className="object-cover"
+        {project.images.length > 0 && (
+          <div className="mt-8">
+            <Carousel
+              images={project.images}
+              altPrefix={`${project.title} screenshot`}
+              aspectClassName="aspect-video"
+              className="overflow-hidden rounded-xl border border-edge"
             />
           </div>
         )}

@@ -66,6 +66,8 @@ export const projects: Project[] = [
     images: [
       "/images/projects/light-master-1.jpg",
       "/images/projects/light-master-2.jpg",
+      "/images/projects/light-master-3.jpg",
+      "/images/projects/light-master-4.jpg",
     ],
   },
 ];
