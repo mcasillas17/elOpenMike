@@ -21,12 +21,31 @@ describe("ContactForm", () => {
     expect(honeypot?.closest('[aria-hidden="true"]')).toBeTruthy();
   });
 
-  it("shows a success message after a successful submit", async () => {
+  it("shows a confirmation and hides the form after a successful submit", async () => {
     renderWith({ ok: true });
-    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() =>
       expect(screen.getByText(/on its way/i)).toBeInTheDocument(),
     );
+    // the form fields are replaced by the confirmation
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /send another/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("returns to an empty form when 'Send another' is clicked", async () => {
+    renderWith({ ok: true });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() =>
+      expect(screen.getByText(/on its way/i)).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /send another/i }));
+
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(screen.queryByText(/on its way/i)).not.toBeInTheDocument();
   });
 
   it("shows an error message when submit fails", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, type ReactNode } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { submitContact, type ContactState } from "@/app/contact/actions";
 
@@ -39,17 +39,54 @@ function Field({
   );
 }
 
+// Outer wrapper holds a remount key so "Send another" resets useActionState
+// (no built-in reset) by mounting a fresh inner form with empty fields.
 export function ContactForm({ action = submitContact }: { action?: Action }) {
-  const [state, formAction, isPending] = useActionState(action, initialState);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [formKey, setFormKey] = useState(0);
+  return (
+    <ContactFormInner
+      key={formKey}
+      action={action}
+      onReset={() => setFormKey((k) => k + 1)}
+    />
+  );
+}
 
-  useEffect(() => {
-    if (state.ok) formRef.current?.reset();
-  }, [state.ok]);
+function ContactFormInner({
+  action,
+  onReset,
+}: {
+  action: Action;
+  onReset: () => void;
+}) {
+  const [state, formAction, isPending] = useActionState(action, initialState);
+
+  // On success, replace the form with a confirmation. "Send another" remounts
+  // a fresh form via the parent's key.
+  if (state.ok) {
+    return (
+      <div
+        role="status"
+        className="mt-8 max-w-xl rounded-lg border border-edge bg-surface p-6 font-body"
+      >
+        <p className="font-display text-lg font-semibold text-ink">
+          Message sent
+        </p>
+        <p className="mt-2 text-sm text-muted">
+          Thanks &mdash; your message is on its way. I&rsquo;ll get back to you
+          soon.
+        </p>
+        <div className="mt-5">
+          <Button type="button" variant="secondary" onClick={onReset}>
+            Send another message
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form
-      ref={formRef}
       action={formAction}
       noValidate
       data-testid="contact-form"
@@ -113,11 +150,6 @@ export function ContactForm({ action = submitContact }: { action?: Action }) {
       </Button>
 
       <div aria-live="polite" className="min-h-5">
-        {state.ok && (
-          <p className="text-sm text-web">
-            Thanks &mdash; your message is on its way. I&rsquo;ll get back to you soon.
-          </p>
-        )}
         {state.error && <p className="text-sm text-spidey">{state.error}</p>}
       </div>
     </form>
