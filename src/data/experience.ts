@@ -8,21 +8,32 @@ export type Role = {
   stack?: string[];
 };
 
-// A single consolidated entry for the whole Microsoft tenure (rather than one
-// card per role like the résumé). Highlights are a high-level overview of focus
-// + strengths — intentionally no internal/proprietary project or system names.
+// Grouped by title/level (two entries) rather than one card per team like the
+// résumé. Highlights are a high-level overview of focus + strengths —
+// intentionally no internal/proprietary project or system names.
 export const experience: Role[] = [
   {
     company: "Microsoft",
     title: "Software Engineer II",
-    start: "2018",
+    start: "2024",
     end: "Present",
     location: "Redmond, WA",
     highlights: [
-      "Six+ years building backend services and APIs at Microsoft — across cross-platform telemetry SDKs, Outlook calendar & scheduling, campaign & platform tooling, and, most recently, large-scale email and push messaging with AI/agent tooling.",
+      "Backend services and APIs for large-scale email and push messaging, including AI/agent tooling that surfaces content and insights.",
       "Focus: AI-powered systems, distributed systems, data-grounded analytics, and observability — building services that stay fast, scalable, and understandable as they grow.",
-      "Strengths: scalable service & API design across many data sources, end-to-end telemetry and observability, large migrations delivered without disrupting downstream consumers, and modern, secure CI/CD.",
     ],
-    stack: ["C#", "TypeScript", "C++", "Azure", "MCP", "REST APIs"],
+    stack: ["C#", "TypeScript", "MCP", "Azure DevOps"],
+  },
+  {
+    company: "Microsoft",
+    title: "Software Engineer",
+    start: "2018",
+    end: "2024",
+    location: "Redmond, WA",
+    highlights: [
+      "Shipped across cross-platform telemetry SDKs, Outlook calendar & scheduling, and campaign & platform tooling — from enterprise scheduling services and reusable APIs to large data migrations.",
+      "Strengths: scalable service & API design across many data sources, end-to-end telemetry and observability, and large migrations delivered without disrupting downstream consumers.",
+    ],
+    stack: ["C#", "C++", "Azure", "REST APIs"],
   },
 ];
