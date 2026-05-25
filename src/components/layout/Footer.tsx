@@ -1,5 +1,6 @@
 import { site } from "@/lib/site";
 import { Container } from "@/components/ui/Container";
+import { SpideyTrigger } from "@/components/spidey/SpideyTrigger";
 
 export function Footer() {
   return (
@@ -22,6 +23,7 @@ export function Footer() {
             </li>
           ))}
         </ul>
+        <SpideyTrigger />
       </Container>
     </footer>
   );
