@@ -29,6 +29,7 @@ pnpm run build    # production build
 - `public/resume.pdf` — your real résumé (replace the placeholder).
 - `src/lib/site.ts` — name, tagline, role, and social links (incl. the LinkedIn URL placeholder).
 - `content/blog/*.mdx` — blog posts (frontmatter: title, date, excerpt, tags; body in MDX with fenced code blocks).
+- `.env.local` — contact-form email delivery (see `.env.example`): `RESEND_API_KEY`, `CONTACT_TO_EMAIL`, `CONTACT_FROM_EMAIL`. In production set these as Fly secrets (`fly secrets set …`); the build needs none of them.
 
 ## Deploy (Fly.io)
 
