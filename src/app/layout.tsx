@@ -19,6 +19,11 @@ export const metadata: Metadata = {
     description: "Software Engineer, builder, and stand-up comedian.",
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Miguel Casillas — Software Engineer",
+    description: "Software Engineer, builder, and stand-up comedian.",
+  },
 };
 
 export default function RootLayout({
