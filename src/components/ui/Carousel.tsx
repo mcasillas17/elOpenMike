@@ -10,10 +10,12 @@ export function Carousel({
   images,
   altPrefix = "Photo",
   className = "",
+  aspectClassName = "aspect-[4/3]",
 }: {
   images: string[];
   altPrefix?: string;
   className?: string;
+  aspectClassName?: string;
 }) {
   const [index, setIndex] = useState(0);
   const count = images.length;
@@ -28,7 +30,7 @@ export function Carousel({
       aria-roledescription="carousel"
       aria-label={`${altPrefix} photos`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden">
+      <div className={`relative ${aspectClassName} overflow-hidden`}>
         <div
           className="flex h-full motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out"
           style={{ transform: `translateX(-${index * 100}%)` }}
@@ -44,7 +46,7 @@ export function Carousel({
                 alt={`${altPrefix} — photo ${i + 1} of ${count}`}
                 fill
                 sizes="(max-width: 640px) 100vw, 40vw"
-                className="object-cover object-top"
+                className="object-cover"
               />
             </div>
           ))}

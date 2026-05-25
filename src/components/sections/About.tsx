@@ -24,9 +24,13 @@ export function About() {
 
         <figure className="overflow-hidden rounded-2xl border border-edge bg-surface">
           {about.turing.images.length > 0 ? (
-            <Carousel images={about.turing.images} altPrefix="Turing" />
+            <Carousel
+              images={about.turing.images}
+              altPrefix="Turing"
+              aspectClassName="aspect-[3/4]"
+            />
           ) : (
-            <div className="relative aspect-[4/3]">
+            <div className="relative aspect-[3/4]">
               <div
                 aria-hidden="true"
                 className="h-full w-full"
