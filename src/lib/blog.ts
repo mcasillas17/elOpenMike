@@ -30,6 +30,8 @@ export function getPost(
   slug: string,
 ): { meta: PostMeta; body: string } | undefined {
   const file = path.join(BLOG_DIR, `${slug}.mdx`);
+  // Guard against path traversal (e.g. slug "../../.env") — stay inside BLOG_DIR.
+  if (!file.startsWith(BLOG_DIR + path.sep)) return undefined;
   if (!fs.existsSync(file)) return undefined;
   const { data, content } = matter(fs.readFileSync(file, "utf8"));
   const meta: PostMeta = {

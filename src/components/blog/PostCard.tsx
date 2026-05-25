@@ -7,6 +7,7 @@ export function PostCard({ post }: { post: PostMeta }) {
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "UTC", // dates are date-only; render in UTC so they don't shift a day
   });
   return (
     <article className="relative border-t border-edge py-6 first:border-t-0 first:pt-0">

@@ -69,6 +69,7 @@ export default async function PostPage({
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "UTC", // dates are date-only; render in UTC so they don't shift a day
   });
 
   return (
