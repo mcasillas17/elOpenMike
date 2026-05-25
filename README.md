@@ -28,6 +28,7 @@ pnpm run build    # production build
 - `src/data/projects.ts` — your projects (slug, summary, tags, stack, links); add screenshots under `public/images/projects/` and reference them in each project's `images` array.
 - `public/resume.pdf` — your real résumé (replace the placeholder).
 - `src/lib/site.ts` — name, tagline, role, and social links (incl. the LinkedIn URL placeholder).
+- `content/blog/*.mdx` — blog posts (frontmatter: title, date, excerpt, tags; body in MDX with fenced code blocks).
 
 ## Deploy (Fly.io)
 

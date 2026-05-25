@@ -15,6 +15,7 @@ export const site = {
     { label: "Projects", href: "/#projects" },
     { label: "About", href: "/#about" },
     { label: "Comedy", href: "/#comedy" },
+    { label: "Blog", href: "/blog" },
   ] as NavItem[],
   socials: [
     { label: "GitHub", href: "https://github.com/mcasillas17" },
