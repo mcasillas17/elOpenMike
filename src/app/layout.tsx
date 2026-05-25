@@ -3,6 +3,7 @@ import { sora, inter } from "@/lib/fonts";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { SkipLink } from "@/components/layout/SkipLink";
+import { JsonLd } from "@/components/seo/JsonLd";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default function RootLayout({
     <html lang="en" className={`${sora.variable} ${inter.variable}`}>
       <body className="font-body antialiased">
         <SkipLink />
+        <JsonLd />
         <Header />
         <main id="main" tabIndex={-1}>{children}</main>
         <Footer />
