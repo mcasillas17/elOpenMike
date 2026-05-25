@@ -6,7 +6,7 @@ const BASE = "https://elopenmike.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  const staticPaths = ["", "/projects", "/comedy", "/blog", "/contact"];
+  const staticPaths = ["", "/projects", "/comedy", "/blog"];
   const entries: MetadataRoute.Sitemap = staticPaths.map((p) => ({
     url: `${BASE}${p}`,
     lastModified: now,
