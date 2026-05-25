@@ -8,56 +8,21 @@ export type Role = {
   stack?: string[];
 };
 
-// Roles at Microsoft (Redmond), most recent first. Highlights are a high-level
-// overview of focus + strengths per role — intentionally no internal/
-// proprietary project or system names.
+// A single consolidated entry for the whole Microsoft tenure (rather than one
+// card per role like the résumé). Highlights are a high-level overview of focus
+// + strengths — intentionally no internal/proprietary project or system names.
 export const experience: Role[] = [
   {
     company: "Microsoft",
-    title: "Software Engineer II — Messaging & AI Platform",
-    start: "2024",
+    title: "Software Engineer II",
+    start: "2018",
     end: "Present",
     location: "Redmond, WA",
     highlights: [
-      "Focus: backend services and APIs for large-scale email and push messaging, including AI/agent tooling that surfaces content and insights.",
-      "Strengths: scalable service design across many data sources, end-to-end telemetry and observability, and modernizing CI/CD with strong pipeline security.",
+      "Six+ years building backend services and APIs at Microsoft — across cross-platform telemetry SDKs, Outlook calendar & scheduling, campaign & platform tooling, and, most recently, large-scale email and push messaging with AI/agent tooling.",
+      "Focus: AI-powered systems, distributed systems, data-grounded analytics, and observability — building services that stay fast, scalable, and understandable as they grow.",
+      "Strengths: scalable service & API design across many data sources, end-to-end telemetry and observability, large migrations delivered without disrupting downstream consumers, and modern, secure CI/CD.",
     ],
-    stack: ["C#", "TypeScript", "MCP", "Azure DevOps"],
-  },
-  {
-    company: "Microsoft",
-    title: "Software Engineer — Campaign Platform Tooling",
-    start: "2022",
-    end: "2024",
-    location: "Redmond, WA",
-    highlights: [
-      "Focus: platform and portal tooling used across product teams, plus email-delivery integrations for commercial scenarios.",
-      "Strengths: cross-team platform work, data automation, and large migrations delivered without disrupting downstream consumers.",
-    ],
-    stack: ["C#", "Azure", "Exchange"],
-  },
-  {
-    company: "Microsoft",
-    title: "Software Engineer — Outlook Calendar & Scheduling",
-    start: "2019",
-    end: "2022",
-    location: "Redmond, WA",
-    highlights: [
-      "Focus: calendar and scheduling for Outlook — shipping an enterprise scheduling service to general availability and exposing internal services as reusable APIs.",
-      "Strengths: API design, algorithm work on meeting-time suggestions, and shipping reliable services for enterprise customers.",
-    ],
-    stack: ["C#", "REST APIs"],
-  },
-  {
-    company: "Microsoft",
-    title: "Software Engineer — Telemetry SDKs",
-    start: "2018",
-    end: "2019",
-    location: "Redmond, WA",
-    highlights: [
-      "Focus: cross-platform telemetry SDKs — build systems, language wrappers (C++, Objective-C, C#), and diagnostics.",
-      "Strengths: systems and SDK engineering across platforms and languages, enabling partner teams to adopt shared infrastructure.",
-    ],
-    stack: ["C++", "Objective-C", "C#"],
+    stack: ["C#", "TypeScript", "C++", "Azure", "MCP", "REST APIs"],
   },
 ];
