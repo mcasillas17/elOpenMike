@@ -95,7 +95,7 @@ function ContactFormInner({
       className="mt-8 max-w-xl space-y-5 font-body"
     >
       {/* Honeypot: hidden from users; bots that fill it are dropped. */}
-      <div className="sr-only" aria-hidden="true">
+      <div hidden aria-hidden="true">
         <label htmlFor="company">Company</label>
         <input
           id="company"

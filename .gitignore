@@ -46,3 +46,8 @@ next-env.d.ts
 
 # Claude Code local state (worktrees, settings)
 .claude/
+
+# playwright
+/playwright-report/
+/test-results/
+/playwright/.cache/
