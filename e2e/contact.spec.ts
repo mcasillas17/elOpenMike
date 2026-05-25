@@ -8,9 +8,11 @@ test("empty submit shows field validation errors", async ({ page }) => {
   await expect(page.getByText("Please enter a message.")).toBeVisible();
 });
 
-test("the honeypot field is present and hidden", async ({ page }) => {
+test("the honeypot field is present but hidden from users", async ({ page }) => {
   await page.goto("/contact");
-  const honeypot = page.locator('input[name="company"]');
-  await expect(honeypot).toHaveCount(1);
-  await expect(honeypot).toBeHidden();
+  await expect(page.locator('input[name="company"]')).toHaveCount(1);
+  // it lives inside an aria-hidden (sr-only) wrapper, so it's not exposed to users
+  await expect(
+    page.locator('[aria-hidden="true"] input[name="company"]'),
+  ).toHaveCount(1);
 });
