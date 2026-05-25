@@ -20,8 +20,7 @@ export const site = {
   ] as NavItem[],
   socials: [
     { label: "GitHub", href: "https://github.com/mcasillas17" },
-    // TODO: replace with the real LinkedIn profile URL
-    { label: "LinkedIn", href: "https://www.linkedin.com/" },
+    { label: "LinkedIn", href: "https://www.linkedin.com/in/mcasillas17/" },
     { label: "Email", href: "mailto:micasillm@gmail.com" },
   ],
 } as const;
