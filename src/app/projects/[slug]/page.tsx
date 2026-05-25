@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { Tag } from "@/components/ui/Tag";
+import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
 import { getProject, getAllSlugs } from "@/data/projects";
 
 function accentedTitle(title: string) {
@@ -84,6 +85,15 @@ export default async function ProjectDetailPage({
                 View source
               </Button>
             )}
+          </div>
+        )}
+
+        {project.youtubeId && (
+          <div className="mt-8">
+            <YouTubeEmbed
+              youtubeId={project.youtubeId}
+              title={`${project.title} — trailer`}
+            />
           </div>
         )}
 

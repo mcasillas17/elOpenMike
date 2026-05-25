@@ -8,6 +8,7 @@ export type Project = {
   highlights: string[]; // "What it does" bullets (detail page)
   liveUrl?: string;
   repoUrl?: string;
+  youtubeId?: string; // optional trailer/demo embedded on the detail page
   images: string[]; // /images/projects/...; images[0] is the primary
 };
 
@@ -61,7 +62,11 @@ export const projects: Project[] = [
       "Enemy behavior trees are evolved using genetic programming.",
     ],
     repoUrl: "https://github.com/mcasillas17/Light_Master",
-    images: [],
+    youtubeId: "0RjQiMqRIoE",
+    images: [
+      "/images/projects/light-master-1.jpg",
+      "/images/projects/light-master-2.jpg",
+    ],
   },
 ];
 
