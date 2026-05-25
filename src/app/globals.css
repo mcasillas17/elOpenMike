@@ -56,3 +56,25 @@ body {
   outline: 2px solid var(--color-web);
   outline-offset: 2px;
 }
+
+/* Reveal-on-scroll. Visible by default so no-JS users see content;
+   only the `js`-flagged document hides-then-reveals. */
+.reveal {
+  opacity: 1;
+}
+html.js .reveal {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+html.js .reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.js .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

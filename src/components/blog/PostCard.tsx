@@ -10,7 +10,7 @@ export function PostCard({ post }: { post: PostMeta }) {
     timeZone: "UTC", // dates are date-only; render in UTC so they don't shift a day
   });
   return (
-    <article className="relative border-t border-edge py-6 first:border-t-0 first:pt-0">
+    <article className="relative border-t border-edge py-6 first:border-t-0 first:pt-0 motion-safe:transition-transform motion-safe:hover:-translate-y-0.5">
       <p className="text-xs text-muted">
         {dateLabel} · {post.readingMinutes} min read
       </p>
