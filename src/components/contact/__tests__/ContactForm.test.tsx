@@ -48,15 +48,16 @@ describe("ContactForm", () => {
     expect(screen.queryByText(/on its way/i)).not.toBeInTheDocument();
   });
 
-  it("shows an error message when submit fails", async () => {
+  it("shows an error with a clickable mailto link when submit fails", async () => {
     renderWith({
       ok: false,
       error:
         "Something went wrong sending your message. Please email me directly at micasillm@gmail.com.",
     });
-    fireEvent.click(screen.getByRole("button", { name: /send/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/email me directly/i)).toBeInTheDocument(),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    const link = await screen.findByRole("link", {
+      name: "micasillm@gmail.com",
+    });
+    expect(link).toHaveAttribute("href", "mailto:micasillm@gmail.com");
   });
 });

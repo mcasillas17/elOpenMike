@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionState, useState, type ReactNode, Fragment } from "react";
 import { Button } from "@/components/ui/Button";
 import { submitContact, type ContactState } from "@/app/contact/actions";
 
 const initialState: ContactState = { ok: false };
+
+const CONTACT_EMAIL = "micasillm@gmail.com";
 
 type Action = (state: ContactState, formData: FormData) => Promise<ContactState>;
 
@@ -150,7 +152,23 @@ function ContactFormInner({
       </Button>
 
       <div aria-live="polite" className="min-h-5">
-        {state.error && <p className="text-sm text-spidey">{state.error}</p>}
+        {state.error && (
+          <p className="text-sm text-spidey">
+            {state.error.split(CONTACT_EMAIL).map((part, i, arr) => (
+              <Fragment key={i}>
+                {part}
+                {i < arr.length - 1 && (
+                  <a
+                    href={`mailto:${CONTACT_EMAIL}`}
+                    className="underline hover:text-ink"
+                  >
+                    {CONTACT_EMAIL}
+                  </a>
+                )}
+              </Fragment>
+            ))}
+          </p>
+        )}
       </div>
     </form>
   );
