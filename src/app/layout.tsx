@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { sora, inter } from "@/lib/fonts";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { SkipLink } from "@/components/layout/SkipLink";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,8 +26,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${sora.variable} ${inter.variable}`}>
       <body className="font-body antialiased">
+        <SkipLink />
         <Header />
-        <main>{children}</main>
+        <main id="main" tabIndex={-1}>{children}</main>
         <Footer />
       </body>
     </html>
