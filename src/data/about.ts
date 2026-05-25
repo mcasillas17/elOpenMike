@@ -1,12 +1,11 @@
 export type About = {
   headline: string;
   bio: string[]; // paragraphs
-  turing: { caption: string; image?: string }; // image: path under /images/about/
+  turing: { caption: string; images: string[] }; // paths under /images/about/ (first = main shot)
   facts: string[]; // chip labels
 };
 
-// Placeholder content — edit freely. Add a Turing photo at
-// public/images/about/turing.jpg and set turing.image to "/images/about/turing.jpg".
+// Edit freely. Turing photos live under public/images/about/ (first is the main shot).
 export const about: About = {
   headline: "Builder, lifter, occasional comedian",
   bio: [
@@ -16,7 +15,11 @@ export const about: About = {
   turing: {
     caption:
       "Turing — blue merle Mini American Shepherd, and my best debugging partner.",
-    image: "",
+    images: [
+      "/images/about/turing-1.jpg",
+      "/images/about/turing-2.jpg",
+      "/images/about/turing-3.jpg",
+    ],
   },
   facts: ["🏋️ Lifting", "🎬 Movies & TV", "🕷️ Spider-Man (huge)"],
 };

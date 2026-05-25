@@ -4,6 +4,7 @@ import { Tag } from "@/components/ui/Tag";
 import { about } from "@/data/about";
 
 export function About() {
+  const [mainImage, ...thumbnails] = about.turing.images;
   return (
     <Section id="about" eyebrow="About" title={about.headline}>
       <div className="grid gap-8 sm:grid-cols-[1.4fr_1fr]">
@@ -24,13 +25,13 @@ export function About() {
 
         <figure className="overflow-hidden rounded-2xl border border-edge bg-surface">
           <div className="relative aspect-[4/3]">
-            {about.turing.image ? (
+            {mainImage ? (
               <Image
-                src={about.turing.image}
+                src={mainImage}
                 alt="Turing"
                 fill
                 sizes="(max-width: 640px) 100vw, 40vw"
-                className="object-cover"
+                className="object-cover object-top"
               />
             ) : (
               <div
@@ -44,6 +45,21 @@ export function About() {
               />
             )}
           </div>
+          {thumbnails.length > 0 && (
+            <div className="grid grid-cols-2 gap-1 p-1">
+              {thumbnails.map((src, i) => (
+                <div key={src} className="relative aspect-[4/3]">
+                  <Image
+                    src={src}
+                    alt={`Turing ${i + 2}`}
+                    fill
+                    sizes="(max-width: 640px) 50vw, 20vw"
+                    className="rounded-md object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           <figcaption className="px-4 py-3 text-sm text-muted">
             {about.turing.caption}
           </figcaption>
