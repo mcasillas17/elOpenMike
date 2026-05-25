@@ -10,6 +10,7 @@ import { Container } from "@/components/ui/Container";
 import { Tag } from "@/components/ui/Tag";
 import { getPost, getPostSlugs } from "@/lib/blog";
 import { mdxComponents } from "@/components/blog/mdx-components";
+import { ArticleJsonLd } from "@/components/seo/ArticleJsonLd";
 
 const prettyCodeOptions: PrettyCodeOptions = {
   theme: "github-dark",
@@ -75,6 +76,13 @@ export default async function PostPage({
   return (
     <Container className="py-16">
       <div className="mx-auto max-w-3xl">
+        <ArticleJsonLd
+          slug={slug}
+          title={post.meta.title}
+          description={post.meta.excerpt}
+          date={post.meta.date}
+          tags={post.meta.tags}
+        />
         <Link
           href="/blog"
           className="rounded text-sm text-muted hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"

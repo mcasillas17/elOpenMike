@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { SkipLink } from "@/components/layout/SkipLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SpideyMode } from "@/components/spidey/SpideyMode";
+import { Analytics } from "@/components/analytics/Analytics";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -44,6 +45,7 @@ export default function RootLayout({
         <main id="main" tabIndex={-1}>{children}</main>
         <Footer />
         <SpideyMode />
+        <Analytics />
       </body>
     </html>
   );
