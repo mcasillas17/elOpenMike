@@ -27,7 +27,7 @@ export function Header() {
                   <a
                     href={item.href}
                     className={`text-sm transition-colors ${
-                      isActive ? "text-web" : "text-muted hover:text-ink"
+                      isActive ? "text-web-strong" : "text-muted hover:text-ink"
                     }`}
                   >
                     {item.label}

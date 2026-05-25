@@ -13,7 +13,7 @@ export function Footer() {
             <li key={s.href}>
               <a
                 href={s.href}
-                className="text-sm text-muted transition-colors hover:text-web"
+                className="text-sm text-muted transition-colors hover:text-web-strong"
                 target={s.href.startsWith("http") ? "_blank" : undefined}
                 rel={s.href.startsWith("http") ? "noopener noreferrer" : undefined}
               >

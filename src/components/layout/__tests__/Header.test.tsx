@@ -24,7 +24,7 @@ describe("Header", () => {
     render(<Header />);
     // Experience is ids[0], so it is active on initial render.
     expect(screen.getByRole("link", { name: "Experience" })).toHaveClass(
-      "text-web",
+      "text-web-strong",
     );
   });
 });

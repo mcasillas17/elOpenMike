@@ -18,7 +18,7 @@ export const mdxComponents = {
     <p className="mb-4 leading-relaxed text-muted" {...p} />
   ),
   a: (p: ComponentProps<"a">) => (
-    <a className="text-web underline underline-offset-2 hover:opacity-80" {...p} />
+    <a className="text-web-strong underline underline-offset-2 hover:opacity-80" {...p} />
   ),
   ul: (p: ComponentProps<"ul">) => (
     <ul className="mb-4 list-disc space-y-1.5 pl-5 text-muted" {...p} />

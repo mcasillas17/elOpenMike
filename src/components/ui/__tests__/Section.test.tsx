@@ -16,4 +16,9 @@ describe("Section", () => {
     expect(screen.getByText("Career")).toBeInTheDocument();
     expect(screen.getByText("content")).toBeInTheDocument();
   });
+
+  it("renders the eyebrow with the AA contrast variant", () => {
+    render(<Section id="x" eyebrow="Eyebrow" title="Title">body</Section>);
+    expect(screen.getByText("Eyebrow")).toHaveClass("text-web-strong");
+  });
 });

@@ -18,7 +18,7 @@ export function Section({
     <section id={id} className={`scroll-anchor py-20 ${className}`.trim()}>
       <Container>
         {eyebrow && (
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-web">
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
             {eyebrow}
           </p>
         )}

@@ -33,7 +33,7 @@ function Field({
       </label>
       <div className="mt-1.5">{children}</div>
       {error && (
-        <p id={`${id}-error`} className="mt-1 text-sm text-spidey">
+        <p id={`${id}-error`} className="mt-1 text-sm text-spidey-strong">
           {error}
         </p>
       )}
@@ -153,7 +153,7 @@ function ContactFormInner({
 
       <div aria-live="polite" className="min-h-5">
         {state.error && (
-          <p className="text-sm text-spidey">
+          <p className="text-sm text-spidey-strong">
             {state.error.split(CONTACT_EMAIL).map((part, i, arr) => (
               <Fragment key={i}>
                 {part}

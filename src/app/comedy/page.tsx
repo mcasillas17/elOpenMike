@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function ComedyPage() {
   return (
     <Container className="py-20">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-web">
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
         Comedy
       </p>
       <h1 className="mt-2 font-display text-4xl font-extrabold sm:text-5xl">
@@ -25,7 +25,7 @@ export default function ComedyPage() {
 
       {clips.length > 0 && (
         <>
-          <h2 className="mt-10 text-xs font-medium uppercase tracking-[0.2em] text-web">
+          <h2 className="mt-10 text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
             Clips
           </h2>
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -42,7 +42,7 @@ export default function ComedyPage() {
 
       {photos.length > 0 && (
         <>
-          <h2 className="mt-12 text-xs font-medium uppercase tracking-[0.2em] text-web">
+          <h2 className="mt-12 text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
             Photos
           </h2>
           <div className="mt-4">

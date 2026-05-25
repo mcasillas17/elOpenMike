@@ -9,6 +9,8 @@
   --color-muted: #9aa3b2;
   --color-edge: #2a3242;
   --color-spidey-dark: #c81d22;
+  --color-web-strong: #3b82f6;
+  --color-spidey-strong: #ff5a5a;
 
   --font-display: var(--font-sora), system-ui, sans-serif;
   --font-body: var(--font-inter), system-ui, sans-serif;

@@ -17,7 +17,7 @@ export function PostCard({ post }: { post: PostMeta }) {
       <h2 className="mt-1 font-display text-xl font-bold text-ink">
         <Link
           href={`/blog/${post.slug}`}
-          className="after:absolute after:inset-0 after:content-[''] hover:text-web focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+          className="after:absolute after:inset-0 after:content-[''] hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
           {post.title}
         </Link>

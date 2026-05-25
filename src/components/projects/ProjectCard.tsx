@@ -54,7 +54,7 @@ export function ProjectCard({ project }: { project: Project }) {
         )}
 
         {project.stack.length > 0 && (
-          <p className="mt-3 text-xs text-web">{project.stack.join(" · ")}</p>
+          <p className="mt-3 text-xs text-web-strong">{project.stack.join(" · ")}</p>
         )}
 
         {(project.liveUrl || project.repoUrl) && (
@@ -74,7 +74,7 @@ export function ProjectCard({ project }: { project: Project }) {
                 href={project.repoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-web hover:text-web"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-web hover:text-web-strong"
               >
                 <GitHubIcon className="h-3.5 w-3.5" /> Source
               </a>

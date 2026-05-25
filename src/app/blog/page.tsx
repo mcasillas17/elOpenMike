@@ -12,7 +12,7 @@ export default function BlogPage() {
   const posts = getAllPosts();
   return (
     <Container className="py-20">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-web">
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
         Writing
       </p>
       <h1 className="mt-2 font-display text-4xl font-extrabold sm:text-5xl">

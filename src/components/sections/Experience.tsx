@@ -35,7 +35,7 @@ export function Experience() {
               ))}
             </ul>
             {role.stack && role.stack.length > 0 && (
-              <p className="mt-3 text-sm text-web">{role.stack.join(" · ")}</p>
+              <p className="mt-3 text-sm text-web-strong">{role.stack.join(" · ")}</p>
             )}
           </li>
         ))}

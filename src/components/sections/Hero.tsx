@@ -8,7 +8,7 @@ export function Hero() {
     <section id="top" className="relative overflow-hidden pb-16 pt-28 sm:pt-36">
       <WebCorner className="right-0 top-0" />
       <Container>
-        <p className="text-xs font-medium uppercase tracking-[0.3em] text-web">
+        <p className="text-xs font-medium uppercase tracking-[0.3em] text-web-strong">
           {site.role}
         </p>
         <h1 className="mt-3 font-display text-5xl font-extrabold leading-[1.02] sm:text-6xl">

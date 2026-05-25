@@ -48,12 +48,12 @@ export default async function ProjectDetailPage({
       <div className="mx-auto max-w-3xl">
         <Link
           href="/projects"
-          className="rounded text-sm text-muted hover:text-web focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+          className="rounded text-sm text-muted hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
           ← Back to projects
         </Link>
 
-        <p className="mt-6 text-xs font-medium uppercase tracking-[0.2em] text-web">
+        <p className="mt-6 text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
           {project.year}
         </p>
         <h1 className="mt-2 font-display text-4xl font-extrabold sm:text-5xl">
@@ -69,7 +69,7 @@ export default async function ProjectDetailPage({
           </div>
         )}
         {project.stack.length > 0 && (
-          <p className="mt-3 text-sm text-web">{project.stack.join(" · ")}</p>
+          <p className="mt-3 text-sm text-web-strong">{project.stack.join(" · ")}</p>
         )}
 
         {(project.liveUrl || project.repoUrl) && (

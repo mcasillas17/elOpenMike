@@ -9,7 +9,7 @@ const base =
 const variants: Record<Variant, string> = {
   primary: "bg-spidey text-white hover:bg-spidey-dark",
   secondary:
-    "border border-edge text-ink hover:border-web hover:text-web",
+    "border border-edge text-ink hover:border-web hover:text-web-strong",
 };
 
 function classesFor(variant: Variant, className: string) {
