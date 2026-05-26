@@ -3,24 +3,47 @@ import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { WebCorner } from "@/components/ui/WebCorner";
 
+const linkedin = site.socials.find((s) => s.label === "LinkedIn")?.href;
+const email = site.socials.find((s) => s.label === "Email")?.href;
+
 export function Hero() {
   return (
     <section id="top" className="relative overflow-hidden pb-16 pt-28 sm:pt-36">
       <WebCorner className="right-0 top-0" />
       <Container>
         <p className="text-xs font-medium uppercase tracking-[0.3em] text-web-strong">
-          {site.role}
+          {site.role} · {site.company}
         </p>
         <h1 className="mt-3 font-display text-5xl font-extrabold leading-[1.02] sm:text-6xl">
           {site.firstName} <span className="text-spidey">{site.lastName}</span>
         </h1>
-        <p className="mt-4 text-lg text-ink">{site.tagline}</p>
-        <p className="mt-3 max-w-xl text-muted">{site.intro}</p>
+        <p className="mt-5 max-w-2xl text-lg text-ink sm:text-xl">
+          {site.headline}
+        </p>
+        <p className="mt-3 text-muted">{site.tagline}</p>
+
+        <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-edge px-3 py-1 text-sm text-muted">
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 rounded-full bg-web-strong"
+          />
+          {site.availability}
+        </div>
+
         <div className="mt-8 flex flex-wrap gap-3">
-          <Button href="#experience">View my work</Button>
-          <Button href={site.resumeHref} download variant="secondary">
-            Download resume
+          <Button href={site.resumeHref} download>
+            Resume
           </Button>
+          {email && (
+            <Button href={email} variant="secondary">
+              Email
+            </Button>
+          )}
+          {linkedin && (
+            <Button href={linkedin} target="_blank" variant="secondary">
+              LinkedIn
+            </Button>
+          )}
         </div>
       </Container>
     </section>
