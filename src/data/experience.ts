@@ -8,9 +8,8 @@ export type Role = {
   stack?: string[];
 };
 
-// Grouped by title/level (two entries) rather than one card per team like the
-// résumé. Highlights are a high-level overview of focus + strengths —
-// intentionally no internal/proprietary project or system names.
+// Grouped by title/level. Each role gets a couple of clean summary bullets —
+// what you focused on, no internal/proprietary project or system names.
 export const experience: Role[] = [
   {
     company: "Microsoft",
@@ -20,7 +19,7 @@ export const experience: Role[] = [
     location: "Redmond, WA",
     highlights: [
       "Backend services and APIs for large-scale email and push messaging, including AI/agent tooling that surfaces content and insights.",
-      "Focus: AI-powered systems, distributed systems, data-grounded analytics, and observability — building services that stay fast, scalable, and understandable as they grow.",
+      "Scalable service design across many data sources, with end-to-end telemetry and observability and modern, secure CI/CD pipelines.",
     ],
     stack: ["C#", "TypeScript", "MCP", "Azure DevOps"],
   },
@@ -32,7 +31,7 @@ export const experience: Role[] = [
     location: "Redmond, WA",
     highlights: [
       "Shipped across cross-platform telemetry SDKs, Outlook calendar & scheduling, and campaign & platform tooling — from enterprise scheduling services and reusable APIs to large data migrations.",
-      "Strengths: scalable service & API design across many data sources, end-to-end telemetry and observability, and large migrations delivered without disrupting downstream consumers.",
+      "Cross-team platform work, API and algorithm design, and large migrations delivered without disrupting downstream consumers.",
     ],
     stack: ["C#", "C++", "Azure", "REST APIs"],
   },
