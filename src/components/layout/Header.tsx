@@ -28,7 +28,7 @@ export function Header() {
           aria-label="elOpenMike — home"
           className="font-display text-lg font-extrabold"
         >
-          elOpen<span className="text-spidey">Mike</span>
+          <span className="text-web-strong">el</span>Open<span className="text-spidey">Mike</span>
         </Link>
 
         <nav aria-label="Site navigation" className="flex items-center gap-6">
