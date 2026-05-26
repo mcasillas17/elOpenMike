@@ -6,6 +6,10 @@ describe("Footer", () => {
   it("renders the site name and social links", () => {
     render(<Footer />);
     expect(screen.getByText(/Miguel Casillas/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /resume/i })).toHaveAttribute(
+      "href",
+      "/resume.pdf",
+    );
     expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
       "href",
       "https://github.com/mcasillas17",

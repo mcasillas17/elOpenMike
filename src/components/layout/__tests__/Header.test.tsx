@@ -13,13 +13,6 @@ describe("Header", () => {
     ).toHaveAttribute("href", "/#experience");
   });
 
-  it("renders a resume link", () => {
-    render(<Header />);
-    expect(
-      screen.getByRole("link", { name: /resume/i }),
-    ).toHaveAttribute("href", "/resume.pdf");
-  });
-
   it("marks the current section's nav link as active", () => {
     render(<Header />);
     // Experience is ids[0], so it is active on initial render.

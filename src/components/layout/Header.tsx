@@ -5,7 +5,6 @@ import Link from "next/link";
 import { site } from "@/lib/site";
 import { useActiveSection } from "@/lib/useActiveSection";
 import { Container } from "@/components/ui/Container";
-import { Button } from "@/components/ui/Button";
 
 export function Header() {
   const ids = site.nav.map((item) => item.href.split("#")[1] ?? "");
@@ -50,9 +49,6 @@ export function Header() {
               );
             })}
           </ul>
-          <Button href={site.resumeHref} download variant="secondary">
-            Resume
-          </Button>
           <button
             type="button"
             aria-label="Menu"

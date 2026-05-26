@@ -10,6 +10,15 @@ export function Footer() {
           © {new Date().getFullYear()} {site.name}
         </p>
         <ul className="flex gap-5">
+          <li>
+            <a
+              href={site.resumeHref}
+              download
+              className="text-sm text-muted transition-colors hover:text-web-strong"
+            >
+              Resume
+            </a>
+          </li>
           {site.socials.map((s) => (
             <li key={s.href}>
               <a
