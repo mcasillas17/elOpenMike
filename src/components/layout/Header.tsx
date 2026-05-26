@@ -23,8 +23,12 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-[#171c28]/80 bg-canvas/80 backdrop-blur">
       <Container className="flex h-16 items-center justify-between">
-        <Link href="/" className="font-display text-lg font-extrabold">
-          {site.firstName} <span className="text-spidey">{site.lastName}</span>
+        <Link
+          href="/"
+          aria-label="elOpenMike — home"
+          className="font-display text-lg font-extrabold"
+        >
+          elOpen<span className="text-spidey">Mike</span>
         </Link>
 
         <nav aria-label="Site navigation" className="flex items-center gap-6">
