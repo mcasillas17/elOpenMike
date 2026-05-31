@@ -4,11 +4,14 @@ import ProjectsPage from "@/app/projects/page";
 import { projects } from "@/data/projects";
 
 describe("/projects page", () => {
-  it("renders the page heading and a card per project", () => {
+  it("renders 'The Casefile' as the visible h1", () => {
     render(<ProjectsPage />);
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Projects" }),
-    ).toBeInTheDocument();
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.textContent).toMatch(/Casefile/);
+  });
+
+  it("renders one card per project, each linked to its detail page", () => {
+    render(<ProjectsPage />);
     for (const p of projects) {
       expect(
         screen.getByRole("link", { name: p.title }),
