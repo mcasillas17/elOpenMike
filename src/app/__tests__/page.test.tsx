@@ -11,7 +11,7 @@ describe("Home page", () => {
       screen.getByRole("heading", { name: "Experience" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Projects" }),
+      screen.getByRole("heading", { name: "Selected Projects" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: about.headline }),
