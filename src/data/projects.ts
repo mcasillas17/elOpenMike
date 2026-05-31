@@ -19,6 +19,30 @@ export type Project = {
 // screenshots — `images` shows up on the detail page carousel only.
 export const projects: Project[] = [
   {
+    slug: "thwiply",
+    title: "Thwiply",
+    summary:
+      "A privacy-first Android app that “thwips” useful items out of the noise — an on-device LLM reads notifications and screenshots and surfaces them as actionable tasks, with no backend or telemetry.",
+    year: "2026",
+    tags: ["Android", "AI", "Open source"],
+    stack: [
+      "Kotlin",
+      "Jetpack Compose",
+      "LiteRT-LM",
+      "Gemma 3",
+      "Hilt",
+      "Room",
+    ],
+    highlights: [
+      "Passive capture of notifications and screenshots in the background.",
+      "On-device Gemma 3 1B inference via LiteRT-LM — no cloud, no account, no telemetry.",
+      "Smart task list that surfaces extracted actions, with optional cleanup of processed screenshots.",
+      "Resumable model download with integrity verification — onboarding is a one-time thing.",
+    ],
+    repoUrl: "https://github.com/mcasillas17/Thwiply",
+    images: [],
+  },
+  {
     slug: "turingagent",
     title: "TuringAgent",
     summary:
