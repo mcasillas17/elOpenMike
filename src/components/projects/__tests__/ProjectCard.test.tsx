@@ -12,55 +12,117 @@ const base: Project = {
   stack: ["TypeScript", "Node"],
   highlights: ["does a thing"],
   images: [],
+  liveUrl: "https://live.example.com",
+  repoUrl: "https://github.com/x/y",
 };
 
 describe("ProjectCard", () => {
-  it("links the title to the project detail page", () => {
-    render(<ProjectCard project={base} />);
-    expect(
-      screen.getByRole("link", { name: "Demo Project" }),
-    ).toHaveAttribute("href", "/projects/demo");
-  });
+  for (const variant of [
+    "large",
+    "tall",
+    "wide",
+    "small",
+    "feature",
+    "aux",
+    "uniform",
+  ] as const) {
+    it(`(${variant}) links the title to the project detail page`, () => {
+      render(
+        <ProjectCard
+          project={base}
+          index={0}
+          variant={variant}
+          issueNumber="04"
+        />,
+      );
+      expect(
+        screen.getByRole("link", { name: "Demo Project" }),
+      ).toHaveAttribute("href", "/projects/demo");
+    });
+  }
 
-  it("renders summary and tags", () => {
-    render(<ProjectCard project={base} />);
-    expect(screen.getByText("A short summary.")).toBeInTheDocument();
-    expect(screen.getByText("CLI")).toBeInTheDocument();
-    expect(screen.getByText("Open source")).toBeInTheDocument();
-  });
-
-  it("renders Live and Source links when urls are present", () => {
+  it("renders the summary in non-small variants", () => {
     render(
       <ProjectCard
-        project={{
-          ...base,
-          liveUrl: "https://live.example.com",
-          repoUrl: "https://github.com/x/y",
-        }}
+        project={base}
+        index={1}
+        variant="uniform"
+        issueNumber="03"
       />,
     );
-    expect(screen.getByRole("link", { name: /live demo/i })).toHaveAttribute(
-      "href",
-      "https://live.example.com",
+    expect(screen.getByText("A short summary.")).toBeInTheDocument();
+  });
+
+  it("omits the summary in the small variant", () => {
+    render(
+      <ProjectCard
+        project={base}
+        index={3}
+        variant="small"
+        issueNumber="01"
+      />,
     );
-    const source = screen.getByRole("link", { name: /source/i });
-    expect(source).toHaveAttribute("href", "https://github.com/x/y");
-    expect(source).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.queryByText("A short summary.")).toBeNull();
   });
 
-  it("omits Live/Source links when urls are absent", () => {
-    render(<ProjectCard project={base} />);
+  it("never renders Live demo or Source links on listing variants", () => {
+    render(
+      <ProjectCard
+        project={base}
+        index={0}
+        variant="large"
+        issueNumber="04"
+      />,
+    );
     expect(screen.queryByRole("link", { name: /live demo/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /source/i })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /^source$/i }),
+    ).toBeNull();
   });
 
-  it("shows the gradient fallback (no img) when there is no image", () => {
-    render(<ProjectCard project={base} />);
-    expect(screen.queryByRole("img")).toBeNull();
+  it("never renders tag pills on listing variants", () => {
+    render(
+      <ProjectCard
+        project={base}
+        index={0}
+        variant="large"
+        issueNumber="04"
+      />,
+    );
+    expect(screen.queryByText("CLI")).toBeNull();
+    expect(screen.queryByText("Open source")).toBeNull();
   });
 
-  it("renders the tech stack as a joined line", () => {
-    render(<ProjectCard project={base} />);
-    expect(screen.getByText("TypeScript · Node")).toBeInTheDocument();
+  it("renders the issue number with the № prefix", () => {
+    render(
+      <ProjectCard
+        project={base}
+        index={0}
+        variant="large"
+        issueNumber="04"
+      />,
+    );
+    expect(screen.getByText(/№04/)).toBeInTheDocument();
+  });
+
+  it("always renders a POW mark for the first project (index 0)", () => {
+    render(
+      <ProjectCard
+        project={base}
+        index={0}
+        variant="large"
+        issueNumber="04"
+      />,
+    );
+    // The MARKS pool: THWIP! BAMF! ZAP! BOOM! KAPOW! SNIKT!
+    const found = [
+      "THWIP!",
+      "BAMF!",
+      "ZAP!",
+      "BOOM!",
+      "KAPOW!",
+      "SNIKT!",
+    ].some((m) => screen.queryByText(m) !== null);
+    expect(found).toBe(true);
   });
 });

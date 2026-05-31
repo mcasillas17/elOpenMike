@@ -1,41 +1,86 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { Project } from "@/data/projects";
-import { Tag } from "@/components/ui/Tag";
-import { GitHubIcon, ExternalLinkIcon } from "@/components/ui/icons";
+import { ComicPanel } from "@/components/ui/comic/ComicPanel";
+import { IssueTag } from "@/components/ui/comic/IssueTag";
+import { PowMark } from "@/components/ui/comic/PowMark";
+import { getTint, getMark } from "@/lib/projectVisuals";
 
-// Hybrid horizontal card: image-left / details-right (stacks on mobile).
-// Whole card is clickable via the stretched-link pattern: the title link's
-// ::after overlay covers the card; the Live/Source anchors sit above it
-// (relative z-10) so they remain independently clickable. No nested <a>.
-export function ProjectCard({ project }: { project: Project }) {
-  const cover = project.images[0];
+export type ProjectCardVariant =
+  | "large"
+  | "tall"
+  | "wide"
+  | "small"
+  | "feature"
+  | "aux"
+  | "uniform";
+
+type Props = {
+  project: Project;
+  index: number;
+  variant: ProjectCardVariant;
+  issueNumber: string;
+  className?: string;
+};
+
+const TITLE_SIZE: Record<ProjectCardVariant, string> = {
+  large: "text-2xl sm:text-3xl",
+  feature: "text-2xl sm:text-3xl",
+  tall: "text-lg",
+  wide: "text-lg",
+  aux: "text-lg",
+  uniform: "text-lg",
+  small: "text-sm",
+};
+
+const SHOW_SUMMARY: Record<ProjectCardVariant, boolean> = {
+  large: true,
+  feature: true,
+  tall: true,
+  wide: true,
+  aux: true,
+  uniform: true,
+  small: false,
+};
+
+const ISSUE_VARIANT_BY_INDEX = ["red", "blue", "dark"] as const;
+const ISSUE_ROTATE_BY_INDEX = [-3, 2, -1] as const;
+
+export function ProjectCard({
+  project,
+  index,
+  variant,
+  issueNumber,
+  className = "",
+}: Props) {
+  const tint = getTint(project, index);
+  const mark = getMark(project, index);
+  const issueVariant =
+    ISSUE_VARIANT_BY_INDEX[index % ISSUE_VARIANT_BY_INDEX.length];
+  const issueRotate =
+    ISSUE_ROTATE_BY_INDEX[index % ISSUE_ROTATE_BY_INDEX.length];
+  const isFeatured = variant === "large" || variant === "feature";
+  const label = index === 0 && isFeatured ? "NEW" : undefined;
+
   return (
-    <article className="relative grid overflow-hidden rounded-2xl border border-edge bg-surface transition-colors hover:border-web focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-web sm:grid-cols-[38%_1fr] motion-safe:transition-transform motion-safe:hover:-translate-y-0.5">
-      <div className="relative aspect-video sm:aspect-auto sm:h-full">
-        {cover ? (
-          <Image
-            src={cover}
-            alt={`${project.title} screenshot`}
-            fill
-            sizes="(max-width: 640px) 100vw, 38vw"
-            className="object-cover"
-          />
-        ) : (
-          <div
-            aria-hidden="true"
-            className="h-full w-full"
-            style={{
-              backgroundColor: "#11151f",
-              backgroundImage:
-                "radial-gradient(circle at 30% 30%, rgba(27,111,227,.35), transparent 60%), radial-gradient(circle at 75% 70%, rgba(230,36,41,.30), transparent 55%)",
-            }}
-          />
-        )}
-      </div>
-
-      <div className="p-5 sm:p-6">
-        <h3 className="font-display text-xl font-bold">
+    <ComicPanel tint={tint} className={`h-full w-full ${className}`}>
+      <IssueTag
+        number={issueNumber}
+        label={label}
+        variant={issueVariant}
+        rotate={issueRotate}
+      />
+      {mark && (
+        <PowMark
+          word={mark}
+          color={index % 2 === 0 ? "spidey" : "web"}
+          rotate={isFeatured ? 8 : -6}
+        />
+      )}
+      <div className="absolute inset-x-4 bottom-3 z-10">
+        <h3
+          className={`font-display font-black leading-none ${TITLE_SIZE[variant]}`}
+          style={{ textShadow: "0 2px 6px rgba(0,0,0,0.7)" }}
+        >
           <Link
             href={`/projects/${project.slug}`}
             className="after:absolute after:inset-0 after:content-['']"
@@ -43,45 +88,16 @@ export function ProjectCard({ project }: { project: Project }) {
             {project.title}
           </Link>
         </h3>
-        <p className="mt-1.5 text-sm text-muted">{project.summary}</p>
-
-        {project.tags.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {project.tags.map((t) => (
-              <Tag key={t}>{t}</Tag>
-            ))}
-          </div>
-        )}
-
-        {project.stack.length > 0 && (
-          <p className="mt-3 text-xs text-web-strong">{project.stack.join(" · ")}</p>
-        )}
-
-        {(project.liveUrl || project.repoUrl) && (
-          <div className="relative z-10 mt-4 flex flex-wrap gap-2">
-            {project.liveUrl && (
-              <a
-                href={project.liveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-spidey px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-spidey-dark"
-              >
-                <ExternalLinkIcon className="h-3.5 w-3.5" /> Live demo
-              </a>
-            )}
-            {project.repoUrl && (
-              <a
-                href={project.repoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-web hover:text-web-strong"
-              >
-                <GitHubIcon className="h-3.5 w-3.5" /> Source
-              </a>
-            )}
-          </div>
+        {SHOW_SUMMARY[variant] && (
+          <p
+            className={`mt-1.5 max-w-[90%] ${
+              isFeatured ? "text-sm text-ink" : "text-xs text-muted"
+            }`}
+          >
+            {project.summary}
+          </p>
         )}
       </div>
-    </article>
+    </ComicPanel>
   );
 }
