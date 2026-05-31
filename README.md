@@ -25,7 +25,7 @@ pnpm run build    # production build
 ## Content to personalize
 
 - `src/data/experience.ts` — your roles and accomplishments.
-- `src/data/projects.ts` — your projects (slug, summary, tags, stack, links); add screenshots under `public/images/projects/` and reference them in each project's `images` array.
+- `src/data/projects.ts` — your projects (slug, summary, tags, stack, links). Tags drive panel tint on listings (AI/Full-stack → blue, Web app → red, Game/Unity → green, Open source → purple). Add screenshots under `public/images/projects/` and reference them in each project's `images` array — they appear in the detail-page carousel; listing cards are styled as comic panels and don't render screenshots.
 - `public/resume.pdf` — your real résumé (replace the placeholder).
 - `src/lib/site.ts` — name, tagline, role, and social links (incl. the LinkedIn URL placeholder).
 - `content/blog/*.mdx` — blog posts (frontmatter: title, date, excerpt, tags; body in MDX with fenced code blocks).

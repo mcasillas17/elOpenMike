@@ -9,12 +9,14 @@ export type Project = {
   liveUrl?: string;
   repoUrl?: string;
   youtubeId?: string; // optional trailer/demo embedded on the detail page
-  images: string[]; // /images/projects/...; images[0] is the primary
+  images: string[]; // /images/projects/...; carousel on the detail page only
 };
 
 // Real projects (pulled from github.com/mcasillas17). Array order controls
-// display order and which three appear in the home preview. Add screenshots
-// under public/images/projects/ and reference them in `images`.
+// display order: the first four appear in the home Projects section as a
+// hybrid comic-panel grid (large + tall + wide + small); the first two also
+// headline the /projects featured row. Listing surfaces don't render
+// screenshots — `images` shows up on the detail page carousel only.
 export const projects: Project[] = [
   {
     slug: "turingagent",

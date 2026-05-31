@@ -6,7 +6,6 @@ import ProjectDetailPage, {
 } from "@/app/projects/[slug]/page";
 import { projects, getAllSlugs } from "@/data/projects";
 
-// Drive the tests off the real data so they don't break when projects change.
 const sample = projects[0];
 
 describe("/projects/[slug] detail page", () => {
@@ -16,7 +15,7 @@ describe("/projects/[slug] detail page", () => {
     );
   });
 
-  it("renders a known project", async () => {
+  it("renders the project title as an h1", async () => {
     const ui = await ProjectDetailPage({
       params: Promise.resolve({ slug: sample.slug }),
     });
@@ -24,9 +23,26 @@ describe("/projects/[slug] detail page", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: sample.title }),
     ).toBeInTheDocument();
+  });
+
+  it("renders the 'Back to The Casefile' link to /projects", async () => {
+    const ui = await ProjectDetailPage({
+      params: Promise.resolve({ slug: sample.slug }),
+    });
+    render(ui);
     expect(
-      screen.getByRole("link", { name: /back to projects/i }),
+      screen.getByRole("link", { name: /back to the casefile/i }),
     ).toHaveAttribute("href", "/projects");
+  });
+
+  it("renders each highlight bullet", async () => {
+    const ui = await ProjectDetailPage({
+      params: Promise.resolve({ slug: sample.slug }),
+    });
+    render(ui);
+    for (const h of sample.highlights) {
+      expect(screen.getByText(h)).toBeInTheDocument();
+    }
   });
 
   it("sets metadata title and description from the project", async () => {
