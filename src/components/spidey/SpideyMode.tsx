@@ -1,33 +1,55 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useKonami } from "@/lib/useKonami";
 import { WebCorner } from "@/components/ui/WebCorner";
 
 export function SpideyMode() {
   const [on, setOn] = useState(false);
   const [toast, setToast] = useState(false);
-  const toggle = useCallback(() => setOn((o) => !o), []);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearToastTimer = useCallback(() => {
+    if (toastTimer.current) {
+      clearTimeout(toastTimer.current);
+      toastTimer.current = null;
+    }
+  }, []);
+
+  const toggle = useCallback(() => {
+    setOn((prev) => {
+      const next = !prev;
+      clearToastTimer();
+      if (next) {
+        setToast(true);
+        toastTimer.current = setTimeout(() => setToast(false), 2500);
+      } else {
+        setToast(false);
+      }
+      return next;
+    });
+  }, [clearToastTimer]);
+
+  const turnOff = useCallback(() => {
+    setOn(false);
+    setToast(false);
+    clearToastTimer();
+  }, [clearToastTimer]);
 
   useKonami(toggle);
 
   useEffect(() => {
     function onEvt() { toggle(); }
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOn(false); }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") turnOff(); }
     window.addEventListener("spidey:toggle", onEvt);
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("spidey:toggle", onEvt);
       window.removeEventListener("keydown", onKey);
     };
-  }, [toggle]);
+  }, [toggle, turnOff]);
 
-  useEffect(() => {
-    if (!on) { setToast(false); return; }
-    setToast(true);
-    const t = setTimeout(() => setToast(false), 2500);
-    return () => clearTimeout(t);
-  }, [on]);
+  useEffect(() => () => clearToastTimer(), [clearToastTimer]);
 
   return (
     <>
