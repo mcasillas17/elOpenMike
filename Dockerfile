@@ -17,6 +17,10 @@ RUN pnpm install --frozen-lockfile
 # --- Build ---
 FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* env vars are baked into the client bundle at build time.
+# Pass via `docker build --build-arg` or `fly.toml` [build.args].
+ARG NEXT_PUBLIC_CF_BEACON_TOKEN=""
+ENV NEXT_PUBLIC_CF_BEACON_TOKEN=$NEXT_PUBLIC_CF_BEACON_TOKEN
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm run build

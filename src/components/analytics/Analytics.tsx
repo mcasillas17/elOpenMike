@@ -1,8 +1,7 @@
 // Cloudflare Web Analytics — cookieless, no PII, no consent banner needed.
-// The beacon token is a PUBLIC client-side token (safe to commit). Get it from
-// Cloudflare → Analytics → Web Analytics → add site elopenmike.com → copy the
-// token from the JS snippet, then paste it below. Empty = analytics disabled.
-const CF_BEACON_TOKEN = "a14e2ed4e49548e5b1a7787b9da254a6";
+// Token is a public client-side beacon ID (safe to expose in HTML). Provided
+// at build time via NEXT_PUBLIC_CF_BEACON_TOKEN. Unset = analytics disabled.
+const CF_BEACON_TOKEN = process.env.NEXT_PUBLIC_CF_BEACON_TOKEN;
 
 export function Analytics() {
   if (!CF_BEACON_TOKEN) return null;
