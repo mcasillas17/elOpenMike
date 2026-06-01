@@ -79,7 +79,7 @@ export default async function ProjectDetailPage({
           <div className="relative z-10">
             <h1
               className="mt-6 font-display text-4xl font-black leading-none sm:text-5xl"
-              style={{ textShadow: "0 2px 12px rgba(0,0,0,0.7)" }}
+              style={{ textShadow: "var(--text-shadow-cover-title)" }}
             >
               {accentedTitle(project.title)}
             </h1>
@@ -130,7 +130,7 @@ export default async function ProjectDetailPage({
         )}
 
         {project.youtubeId && (
-          <div className="mt-8 border-[3px] border-panel-border" style={{ boxShadow: "4px 4px 0 var(--color-panel-shadow)" }}>
+          <div className="mt-8 border-[3px] border-panel-border" style={{ boxShadow: "var(--shadow-panel-lg)" }}>
             <YouTubeEmbed
               youtubeId={project.youtubeId}
               title={`${project.title} — trailer`}
@@ -139,7 +139,7 @@ export default async function ProjectDetailPage({
         )}
 
         {!project.youtubeId && project.images.length > 0 && (
-          <div className="mt-8 border-[3px] border-panel-border overflow-hidden" style={{ boxShadow: "4px 4px 0 var(--color-panel-shadow)" }}>
+          <div className="mt-8 border-[3px] border-panel-border overflow-hidden" style={{ boxShadow: "var(--shadow-panel-lg)" }}>
             <Carousel
               images={project.images}
               altPrefix={`${project.title} screenshot`}
@@ -153,7 +153,7 @@ export default async function ProjectDetailPage({
             <div className="mt-10">
               <span
                 className="inline-block border-2 border-panel-border bg-white px-2.5 py-1 font-display text-sm font-black uppercase tracking-widest text-black"
-                style={{ boxShadow: "2px 2px 0 var(--color-web)" }}
+                style={{ boxShadow: "var(--shadow-panel-accent)" }}
               >
                 What it does
               </span>

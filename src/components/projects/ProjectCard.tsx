@@ -80,7 +80,7 @@ export function ProjectCard({
       <div className="absolute inset-x-4 bottom-3 z-10">
         <h3
           className={`font-display font-black leading-none ${TITLE_SIZE[variant]}`}
-          style={{ textShadow: "0 2px 6px rgba(0,0,0,0.7)" }}
+          style={{ textShadow: "var(--text-shadow-card-title)" }}
         >
           <Link
             href={routes.projectDetail(project.slug)}
