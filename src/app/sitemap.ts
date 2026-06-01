@@ -1,21 +1,38 @@
 import type { MetadataRoute } from "next";
 import { getAllSlugs } from "@/data/projects";
-import { getPostSlugs } from "@/lib/blog";
+import { getAllPosts } from "@/lib/blog";
 
 const BASE = "https://elopenmike.com";
 
+// Fallback used when no blog posts exist yet (or none have a date). Bump
+// when you ship a redesign or a content refresh that doesn't include a post.
+const SITE_FALLBACK_UPDATED = "2026-05-31";
+
+function siteLastModified(latestPostDate: string | undefined): Date {
+  return new Date(latestPostDate ?? SITE_FALLBACK_UPDATED);
+}
+
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
+  const posts = getAllPosts();
+  // getAllPosts sorts newest-first, so posts[0] is the most recent.
+  const siteUpdated = siteLastModified(posts[0]?.date);
+
   const staticPaths = ["", "/projects", "/comedy", "/blog"];
   const entries: MetadataRoute.Sitemap = staticPaths.map((p) => ({
     url: `${BASE}${p}`,
-    lastModified: now,
+    lastModified: siteUpdated,
   }));
   for (const slug of getAllSlugs()) {
-    entries.push({ url: `${BASE}/projects/${slug}`, lastModified: now });
+    entries.push({
+      url: `${BASE}/projects/${slug}`,
+      lastModified: siteUpdated,
+    });
   }
-  for (const slug of getPostSlugs()) {
-    entries.push({ url: `${BASE}/blog/${slug}`, lastModified: now });
+  for (const post of posts) {
+    entries.push({
+      url: `${BASE}/blog/${post.slug}`,
+      lastModified: post.date ? new Date(post.date) : siteUpdated,
+    });
   }
   return entries;
 }
