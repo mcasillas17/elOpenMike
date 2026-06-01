@@ -1,5 +1,6 @@
 import { Container } from "@/components/ui/Container";
 import { LinkButton } from "@/components/ui/Button";
+import { routes } from "@/lib/site";
 
 export default function NotFound() {
   return (
@@ -12,7 +13,7 @@ export default function NotFound() {
         The thing you&#x2019;re looking for swung off somewhere else.
       </p>
       <div className="mt-8">
-        <LinkButton href="/">Back home</LinkButton>
+        <LinkButton href={routes.home}>Back home</LinkButton>
       </div>
     </Container>
   );

@@ -11,6 +11,7 @@ import { Tag } from "@/components/ui/Tag";
 import { getPost, getPostSlugs } from "@/lib/blog";
 import { mdxComponents } from "@/components/blog/mdx-components";
 import { ArticleJsonLd } from "@/components/seo/ArticleJsonLd";
+import { routes } from "@/lib/site";
 
 const prettyCodeOptions: PrettyCodeOptions = {
   theme: "github-dark",
@@ -31,7 +32,11 @@ export async function generateMetadata({
   const { slug } = await params;
   const post = getPost(slug);
   if (!post) return {};
-  return { title: post.meta.title, description: post.meta.excerpt };
+  return {
+    title: post.meta.title,
+    description: post.meta.excerpt,
+    alternates: { canonical: routes.blogPost(slug) },
+  };
 }
 
 function accentedTitle(title: string) {
@@ -84,7 +89,7 @@ export default async function PostPage({
           tags={post.meta.tags}
         />
         <Link
-          href="/blog"
+          href={routes.blog}
           className="rounded text-sm text-muted hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
           ← Back to blog

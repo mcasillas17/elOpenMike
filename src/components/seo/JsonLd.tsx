@@ -1,6 +1,4 @@
-import { site } from "@/lib/site";
-
-const BASE = "https://elopenmike.com";
+import { site, SITE_URL } from "@/lib/site";
 
 export function JsonLd() {
   const data = {
@@ -10,12 +8,12 @@ export function JsonLd() {
         "@type": "Person",
         name: site.name,
         jobTitle: site.role,
-        url: BASE,
+        url: SITE_URL,
         sameAs: site.socials
           .filter((s) => s.href.startsWith("http"))
           .map((s) => s.href),
       },
-      { "@type": "WebSite", name: site.name, url: BASE },
+      { "@type": "WebSite", name: site.name, url: SITE_URL },
     ],
   };
   return (

@@ -1,6 +1,4 @@
-import { site } from "@/lib/site";
-
-const BASE = "https://elopenmike.com";
+import { site, SITE_URL, absoluteUrl, routes } from "@/lib/site";
 
 // BlogPosting structured data for a blog post (Google rich results).
 export function ArticleJsonLd({
@@ -16,7 +14,7 @@ export function ArticleJsonLd({
   date: string;
   tags: string[];
 }) {
-  const url = `${BASE}/blog/${slug}`;
+  const url = absoluteUrl(routes.blogPost(slug));
   const data = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
@@ -24,7 +22,7 @@ export function ArticleJsonLd({
     description,
     datePublished: date,
     dateModified: date,
-    author: { "@type": "Person", name: site.name, url: BASE },
+    author: { "@type": "Person", name: site.name, url: SITE_URL },
     keywords: tags.join(", "),
     url,
     mainEntityOfPage: url,

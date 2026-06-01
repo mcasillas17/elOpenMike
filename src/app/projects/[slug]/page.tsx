@@ -12,6 +12,7 @@ import { Carousel } from "@/components/ui/Carousel";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
 import { getProject, getAllSlugs, projects } from "@/data/projects";
 import { getTint } from "@/lib/projectVisuals";
+import { routes } from "@/lib/site";
 
 function accentedTitle(title: string): ReactNode {
   const parts = title.split(" ");
@@ -37,7 +38,11 @@ export async function generateMetadata({
   const { slug } = await params;
   const project = getProject(slug);
   if (!project) return {};
-  return { title: project.title, description: project.summary };
+  return {
+    title: project.title,
+    description: project.summary,
+    alternates: { canonical: routes.projectDetail(slug) },
+  };
 }
 
 export default async function ProjectDetailPage({
@@ -57,7 +62,7 @@ export default async function ProjectDetailPage({
     <Container className="py-16">
       <div className="mx-auto max-w-3xl">
         <Link
-          href="/projects"
+          href={routes.projects}
           className="rounded text-sm text-muted hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
           ← Back to The Casefile

@@ -4,6 +4,7 @@ import { ComicPanel } from "@/components/ui/comic/ComicPanel";
 import { IssueTag } from "@/components/ui/comic/IssueTag";
 import { PowMark } from "@/components/ui/comic/PowMark";
 import { getTint, getMark } from "@/lib/projectVisuals";
+import { routes } from "@/lib/site";
 
 export type ProjectCardVariant =
   | "large"
@@ -82,7 +83,7 @@ export function ProjectCard({
           style={{ textShadow: "0 2px 6px rgba(0,0,0,0.7)" }}
         >
           <Link
-            href={`/projects/${project.slug}`}
+            href={routes.projectDetail(project.slug)}
             className="after:absolute after:inset-0 after:content-['']"
           >
             {project.title}

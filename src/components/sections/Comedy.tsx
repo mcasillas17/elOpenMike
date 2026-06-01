@@ -2,6 +2,7 @@ import { Section } from "@/components/ui/Section";
 import { LinkButton } from "@/components/ui/Button";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
 import { clips } from "@/data/comedy";
+import { routes } from "@/lib/site";
 
 export function Comedy() {
   const featured = clips[0];
@@ -16,7 +17,7 @@ export function Comedy() {
         </div>
       )}
       <div className="mt-8">
-        <LinkButton href="/comedy" variant="secondary">
+        <LinkButton href={routes.comedy} variant="secondary">
           Watch more →
         </LinkButton>
       </div>
