@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { site } from "@/lib/site";
+import { site, routes } from "@/lib/site";
 import { useActiveSection } from "@/lib/useActiveSection";
 import { Container } from "@/components/ui/Container";
 
@@ -23,7 +23,7 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-[#171c28]/80 bg-canvas/80 backdrop-blur">
       <Container className="flex h-16 items-center justify-between">
         <Link
-          href="/"
+          href={routes.home}
           aria-label="elOpenMike — home"
           className="font-display text-lg font-extrabold"
         >

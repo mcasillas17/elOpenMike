@@ -15,6 +15,15 @@ pnpm test         # run unit/component tests
 pnpm run build    # production build
 ```
 
+## Environment variables
+
+Copy `.env.example` to `.env.local` and fill in what you need. All variables
+are optional; the site builds and runs without any of them.
+
+- `NEXT_PUBLIC_CF_BEACON_TOKEN` — Cloudflare Web Analytics beacon (public
+  client-side token). Forwarded to the Docker build via `fly.toml` →
+  `[build.args]` so Next bakes it into the client bundle. Unset = analytics off.
+
 ## Supply-chain hardening
 
 - **Script blocking**: pnpm 10+ blocks dependency install/build scripts by default. The allowlist in `pnpm-workspace.yaml` → `allowBuilds` permits only `esbuild` (native binary setup) and `unrs-resolver` (Tailwind v4 Rust binding). All other lifecycle scripts are blocked.

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { sora, inter } from "@/lib/fonts";
+import { SITE_URL } from "@/lib/site";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { SkipLink } from "@/components/layout/SkipLink";
@@ -9,7 +10,7 @@ import { Analytics } from "@/components/analytics/Analytics";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://elopenmike.com"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Miguel Casillas — Software Engineer",
     template: "%s — Miguel Casillas",

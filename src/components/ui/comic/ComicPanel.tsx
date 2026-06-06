@@ -31,7 +31,7 @@ export function ComicPanel({ tint = "blue", className = "", children }: Props) {
       className={`${base} ${className}`.trim()}
       style={{
         ...TINT_STYLE[tint],
-        boxShadow: "4px 4px 0 var(--color-panel-shadow)",
+        boxShadow: "var(--shadow-panel-lg)",
       }}
     >
       <Halftone />

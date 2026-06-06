@@ -1,13 +1,13 @@
 import { renderOgImage, ogSize, ogContentType } from "@/lib/og";
-import { getAllPosts, getPostSlugs } from "@/lib/blog";
+import { getAllSlugs, getProject } from "@/data/projects";
 
-export const alt = "elOpenMike blog post";
+export const alt = "elOpenMike project";
 export const size = ogSize;
 export const contentType = ogContentType;
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return getPostSlugs().map((slug) => ({ slug }));
+  return getAllSlugs().map((slug) => ({ slug }));
 }
 
 export default async function Image({
@@ -16,6 +16,6 @@ export default async function Image({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const title = getAllPosts().find((p) => p.slug === slug)?.title;
-  return renderOgImage({ title, caption: "elOpenMike — the blog" });
+  const title = getProject(slug)?.title;
+  return renderOgImage({ title, caption: "elOpenMike — projects" });
 }

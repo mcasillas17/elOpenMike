@@ -5,6 +5,14 @@ import { ImageResponse } from "next/og";
 export const ogSize = { width: 1200, height: 630 };
 export const ogContentType = "image/png";
 
+type OgOptions = {
+  // Big title line. When unset, shows the site author name.
+  title?: string;
+  // Small caption under the title. When unset, defaults to the site tagline
+  // for the homepage variant or "elOpenMike" for content variants.
+  caption?: string;
+};
+
 // Load the brand font (Sora) for the OG cards. OG images are generated at build
 // time, where src/og-assets exists; if it's ever unavailable, fall back to the
 // built-in font rather than crashing.
@@ -29,8 +37,15 @@ function loadFonts() {
   }
 }
 
-export function renderOgImage(title?: string) {
+export function renderOgImage(options?: OgOptions) {
   const fonts = loadFonts();
+  const title = options?.title ?? "Miguel Casillas";
+  const caption =
+    options?.caption ??
+    (options?.title
+      ? "elOpenMike"
+      : "Software Engineer · builder · stand-up comedian");
+
   return new ImageResponse(
     (
       <div
@@ -52,10 +67,10 @@ export function renderOgImage(title?: string) {
           elopenmike.com
         </div>
         <div style={{ display: "flex", fontSize: 76, fontWeight: 800, marginTop: 12 }}>
-          {title ?? "Miguel Casillas"}
+          {title}
         </div>
         <div style={{ display: "flex", fontSize: 36, color: "#9aa3b2", marginTop: 16 }}>
-          {title ? "elOpenMike — the blog" : "Software Engineer · builder · stand-up comedian"}
+          {caption}
         </div>
       </div>
     ),

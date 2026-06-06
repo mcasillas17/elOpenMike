@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PostMeta } from "@/lib/blog";
 import { Tag } from "@/components/ui/Tag";
+import { routes } from "@/lib/site";
 
 export function PostCard({ post }: { post: PostMeta }) {
   const dateLabel = new Date(post.date).toLocaleDateString("en-US", {
@@ -16,7 +17,7 @@ export function PostCard({ post }: { post: PostMeta }) {
       </p>
       <h2 className="mt-1 font-display text-xl font-bold text-ink">
         <Link
-          href={`/blog/${post.slug}`}
+          href={routes.blogPost(post.slug)}
           className="after:absolute after:inset-0 after:content-[''] hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
           {post.title}

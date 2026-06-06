@@ -5,6 +5,7 @@ import {
   type ProjectCardVariant,
 } from "@/components/projects/ProjectCard";
 import { projects } from "@/data/projects";
+import { routes } from "@/lib/site";
 
 // Hybrid 6-column grid: large + tall side-by-side on top, wide + small on
 // bottom. Collapses to single column below md.
@@ -41,7 +42,7 @@ export function Projects() {
         ))}
       </div>
       <div className="mt-8">
-        <ComicLinkButton href="/projects" variant="primary">
+        <ComicLinkButton href={routes.projects} variant="primary">
           View All Issues →
         </ComicLinkButton>
       </div>

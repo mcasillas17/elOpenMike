@@ -7,6 +7,12 @@ app = "elopenmike"
 primary_region = "sjc"
 
 [build]
+  [build.args]
+    # Cloudflare Web Analytics beacon (public client-side token). Forwarded to
+    # the Docker build so Next bakes it into the client bundle. Leave empty
+    # to ship without analytics.
+    NEXT_PUBLIC_CF_BEACON_TOKEN = "a14e2ed4e49548e5b1a7787b9da254a6"
+
 
 [http_service]
   internal_port = 3000

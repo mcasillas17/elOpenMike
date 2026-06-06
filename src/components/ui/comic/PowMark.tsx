@@ -19,7 +19,7 @@ export function PowMark({ word, color = "spidey", rotate = 8 }: Props) {
       className={`pointer-events-none absolute right-3.5 top-3 font-display text-xs font-black tracking-widest ${COLOR[color]}`}
       style={{
         transform: `rotate(${rotate}deg)`,
-        textShadow: "1px 1px 0 #000",
+        textShadow: "var(--text-shadow-pow)",
       }}
     >
       {word}

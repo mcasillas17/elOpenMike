@@ -25,7 +25,7 @@ export function IssueTag({
       className={`absolute -top-2 left-3 z-20 inline-block border-2 border-panel-border px-2.5 py-1 font-display text-[11px] font-black tracking-widest text-white ${VARIANT_BG[variant]}`}
       style={{
         transform: `rotate(${rotate}deg)`,
-        boxShadow: "2px 2px 0 var(--color-panel-shadow)",
+        boxShadow: "var(--shadow-panel-sm)",
       }}
     >
       №{number}

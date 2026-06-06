@@ -14,6 +14,21 @@
   --color-panel-border: #000;
   --color-panel-shadow: #000;
 
+  /* Comic-panel drop-shadow scale. Hard, offset shadows that make panels
+     feel like cut-out stickers. Used by ComicPanel, ComicButton, IssueTag,
+     and the bordered media wrappers on the detail page. */
+  --shadow-panel-sm: 2px 2px 0 var(--color-panel-shadow);
+  --shadow-panel-md: 3px 3px 0 var(--color-panel-shadow);
+  --shadow-panel-lg: 4px 4px 0 var(--color-panel-shadow);
+  /* Blue-tinted hard shadow for accent stickers (e.g., the "What it does"
+     badge on the detail page). */
+  --shadow-panel-accent: 2px 2px 0 var(--color-web);
+
+  /* Text shadows that lift titles off tinted panel backgrounds. */
+  --text-shadow-pow: 1px 1px 0 #000;
+  --text-shadow-card-title: 0 2px 6px rgba(0, 0, 0, 0.7);
+  --text-shadow-cover-title: 0 2px 12px rgba(0, 0, 0, 0.7);
+
   --font-display: var(--font-sora), system-ui, sans-serif;
   --font-body: var(--font-inter), system-ui, sans-serif;
 }
