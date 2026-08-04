@@ -99,7 +99,7 @@ Notion workspace
 - **Body content is published in full.** Private asides do not belong in the post body.
 - **Sub-pages are not followed.** `child_page` blocks fall under the "skipped, logged" rule in §5.1, so a page nested under a post is a safe place for outlines, research, or drafted sections. It stays in Notion.
 
-**Extending to other content later.** `src/data/projects.ts` and `src/data/comedy.ts` are currently hardcoded and could become additional Notion-backed data sources reusing the same converter, each opt-in via its own connection and database ID. Out of scope here (§16) — the blog pipeline should prove itself first — but the architecture does not need to change to support it.
+**Extending to other content later.** `src/data/projects.ts` and `src/data/comedy.ts` are currently hardcoded and could become additional Notion-backed data sources reusing the same converter, each opt-in via its own connection and database ID. Out of scope here (§18) — the blog pipeline should prove itself first — but the architecture does not need to change to support it.
 
 ---
 
@@ -137,9 +137,9 @@ src/lib/notion/
 | Notion block | Markdown output |
 |---|---|
 | `paragraph` | text, blank line after |
-| `heading_1` | `##` — the page title is already the `<h1>` |
-| `heading_2` | `##` |
-| `heading_3` | `###` |
+| `heading_1` | `##` |
+| `heading_2` | `###` |
+| `heading_3` | `####` |
 | `bulleted_list_item` | `- `, two-space indent per nesting level |
 | `numbered_list_item` | `1. `, two-space indent per nesting level |
 | `to_do` | `- [ ]` / `- [x]` (remark-gfm) |
@@ -152,6 +152,8 @@ src/lib/notion/
 | `bookmark` / `link_preview` | `[url](url)` |
 | `toggle` | children flattened; the toggle summary becomes a paragraph |
 | everything else | skipped, logged as a warning (not an error) |
+
+The heading scale is shifted down one level because the post title already occupies the page's `<h1>`. Mapping Notion's H1 and H2 both to `##` (the obvious approach) would render two levels the author deliberately distinguished as visually identical. Shifting instead preserves all three: Notion H1/H2/H3 become `h2`/`h3`/`h4` on the page, which requires an `h4` style in `mdx-components.tsx` (§9.6).
 
 `code` block languages are mapped through a lookup to Shiki-known identifiers (Notion's `plain text` → `text`, `c++` → `cpp`, etc.), with an unknown language falling back to `text`. This keeps the existing `rehype-pretty-code` + Shiki pipeline working with no changes to `[slug]/page.tsx`.
 
@@ -259,7 +261,11 @@ Add `rehype-slug` and `rehype-autolink-headings` (behavior `append`, a visually-
 
 `PostMeta` in `src/lib/blog.ts` gains an optional `updated?: string`, parsed from the new frontmatter key. `ArticleJsonLd` uses it for `dateModified`, falling back to `date` when absent (as it will be for the two pre-migration posts until they next change). No other consumer changes.
 
-### 9.6 Date-sorting fix
+### 9.6 Heading scale in `mdx-components.tsx`
+
+Per §5.1 the converter emits `h2`/`h3`/`h4` for Notion's three heading levels. `mdx-components.tsx` currently styles `h1` (→ h2 element), `h2`, and `h3`; it gains an **`h4`** style — same `font-display`, one step down in size from `h3`, with proportional top margin. The existing `h1` mapping stays as a safety net for the two hand-written posts and any stray `#` in migrated content.
+
+### 9.7 Date-sorting fix
 
 `getAllPosts` currently sorts with a string comparison (`a.date < b.date`). Switch to comparing parsed timestamps, with an invalid date sorting last rather than throwing. Validation (§8) makes this unreachable for synced posts, but the loader should not depend on that.
 
@@ -359,7 +365,32 @@ New: `@notionhq/client` (v5.x), `rehype-slug`, `rehype-autolink-headings`. All p
 
 ---
 
-## 16. Out of scope
+## 16. Documentation — `docs/authoring.md`
+
+A user-facing authoring guide, distinct from this design doc:
+
+- **Mobile formatting cheat sheet** — intent → Notion shortcut → what lands on the site, covering headings, lists, bold/italic, inline code, code blocks, quotes, dividers, images, and links.
+- **Worked example** — a short Notion page shown beside the `.mdx` it generates, so the properties→frontmatter and blocks→body mapping is concrete.
+- **What to avoid** — synced blocks, embedded databases, buttons, and column layouts are skipped with a warning rather than failing the build, so their content would vanish silently.
+- **Known rough edge** — code blocks are painful to author on a phone (touch keyboards and the language dropdown). Draft prose on mobile, add code from a laptop; pasting copied code works fine on mobile.
+- **Publish checklist** — `Excerpt` filled, `Published` date set, `Tags` chosen, `Status` → `Published`; live in ~5–15 min, or immediately via the "Sync now" `workflow_dispatch` button.
+- **Privacy rules** — the three gates from §3.1, and the properties-vs-body distinction.
+
+The README's "Content to personalize" section is updated to point here and to state that `content/blog/*.mdx` is now generated — hand edits are reverted by the next sync.
+
+---
+
+## 17. Implementation split
+
+This spec ships as **two plans**, in order. They are independent; the pipeline does not depend on the site improvements.
+
+**Plan A — Notion pipeline.** §3–§8, §10, §11, §16, and the §13 tests covering the converter. Delivers phone publishing end to end. Ships with the heading scale emitting `h2`/`h3`/`h4`, so §9.6 (the `h4` style) rides along here rather than in Plan B — otherwise Notion H3 content would render unstyled in the gap between the two plans.
+
+**Plan B — blog improvements.** §9.1–§9.5 and §9.7: RSS feed, homepage writing section, tag pages, heading anchors, prev/next, `PostMeta.updated`, and the date-sorting fix.
+
+---
+
+## 18. Out of scope
 
 Scheduled/future-dated publishing, per-post cover images and custom OG art, Notion comments as post comments, a newsletter, incremental sync via `last_edited_time` cursors (the full sync is cheap at this scale), and multi-author support.
 
