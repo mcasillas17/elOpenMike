@@ -75,6 +75,32 @@ One Notion database. The integration is shared with it via **Connections → Add
 
 Only pages with `Status = Published` are ever fetched. Drafts never leave Notion — important because this repo is public.
 
+### 3.1 Workspace isolation
+
+The Notion workspace is expected to hold plenty that is not the blog — personal notes, project tracking, setlists. Three independent gates decide what reaches the site, and the first is enforced by Notion rather than by this codebase.
+
+**Gate 1 — the integration connection.** A Notion integration begins with access to nothing. Access is granted per-page through **Connections → Add connection**. With only the Blog database connected, the token cannot read anything else in the workspace; the API returns 404 for unshared pages. Unrelated content is not filtered out by the sync — it is invisible to it. A bug in the sync cannot leak it.
+
+**Gate 2 — the database ID.** The sync queries exactly one `NOTION_DATABASE_ID`. Connecting the integration to something else later does not pull it in.
+
+**Gate 3 — `Status = Published`.** Within the blog database, only published rows are fetched.
+
+```
+Notion workspace
+├── Blog              ← connected to the integration
+├── Personal notes    ← never connected → invisible to the token
+├── Project tracker   ← never connected → invisible to the token
+└── Setlists          ← never connected → invisible to the token
+```
+
+**Properties vs. body.** The distinction matters for anything private kept alongside a post:
+
+- **Extra properties are ignored.** Only the seven properties in §3 are read. A `Notes to self` or `Edit status` column on the blog database is never fetched and never published.
+- **Body content is published in full.** Private asides do not belong in the post body.
+- **Sub-pages are not followed.** `child_page` blocks fall under the "skipped, logged" rule in §5.1, so a page nested under a post is a safe place for outlines, research, or drafted sections. It stays in Notion.
+
+**Extending to other content later.** `src/data/projects.ts` and `src/data/comedy.ts` are currently hardcoded and could become additional Notion-backed data sources reusing the same converter, each opt-in via its own connection and database ID. Out of scope here (§16) — the blog pipeline should prove itself first — but the architecture does not need to change to support it.
+
 ---
 
 ## 4. Notion API specifics
@@ -336,3 +362,5 @@ New: `@notionhq/client` (v5.x), `rehype-slug`, `rehype-autolink-headings`. All p
 ## 16. Out of scope
 
 Scheduled/future-dated publishing, per-post cover images and custom OG art, Notion comments as post comments, a newsletter, incremental sync via `last_edited_time` cursors (the full sync is cheap at this scale), and multi-author support.
+
+Also out of scope: migrating `src/data/projects.ts` or `src/data/comedy.ts` to Notion-backed data sources (§3.1). The converter is written to make that possible later, but this plan ships the blog pipeline only.
