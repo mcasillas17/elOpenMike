@@ -1,5 +1,6 @@
 import matter from "gray-matter";
 import type { BlockObjectRequest } from "@notionhq/client";
+import { JSON_SCHEMA, load as loadYaml } from "js-yaml";
 import { slugify, isValidSlug } from "./slug";
 import {
   titlePropertyName,
@@ -182,12 +183,23 @@ export type PageState = {
   blocks: MdBlock[];
 };
 
+// js-yaml's default schema resolves an unquoted ISO date or timestamp into a
+// Date before gray-matter returns it. That loses the calendar day the author
+// wrote whenever an offset crosses midnight, and normalizes impossible dates
+// before validation can refuse them. JSON_SCHEMA keeps those scalars as text
+// while retaining YAML arrays, quoted escapes, booleans, and numbers.
+const FRONTMATTER_OPTIONS = {
+  engines: {
+    yaml: (source: string): object => loadYaml(source, { schema: JSON_SCHEMA }) as object,
+  },
+};
+
 // Reads one content/blog/*.mdx file into the shape the migration writes. The
 // slug is normalized the same way fetch-post.ts reads it back, so a re-run
 // compares like with like.
 export function toLocalPost(file: string, raw: string): LocalPost {
   const stem = file.replace(/\.mdx$/, "");
-  const { data, content } = matter(raw);
+  const { data, content } = matter(raw, FRONTMATTER_OPTIONS);
   const updated = frontmatterDate(data.updated);
 
   return {
@@ -202,19 +214,10 @@ export function toLocalPost(file: string, raw: string): LocalPost {
   };
 }
 
-// YAML parses an unquoted 2026-05-20 into a Date, and String()ing that yields
-// "Tue May 19 2026 17:00:00 GMT-0700" — a value Notion rejects, and one that has
-// already slipped a day into the local timezone. The parsed date is UTC
-// midnight, so the ISO day is the day that was written.
-//
-// A *quoted* timestamp stays a string, and YAML hands it over exactly as typed.
-// It is narrowed to its day here for the same reason: a post's date is a day
-// everywhere else — the Notion property reads back as one, the frontmatter is
-// one, the site prints one — so writing a timestamp into the database would put
-// a value in it that nothing on either side ever compares equal to what the
-// file says.
-//
-// The day is taken as the ten characters the author wrote, never by parsing.
+// Dates and timestamps reach this function as the scalar text the author wrote.
+// A timestamp is narrowed to its written day for the same reason on both sides
+// of the migration: the Notion property and the generated frontmatter are days.
+// The day is taken as the first ten characters, never by parsing.
 // `new Date("2026-05-20T18:30:00")` — a date-time with no offset — is read by
 // JS as *local* time, so round-tripping it through toISOString() moves the post
 // a day west of Greenwich and makes the same file mean two different days on
@@ -223,12 +226,6 @@ export function toLocalPost(file: string, raw: string): LocalPost {
 const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]/;
 
 function frontmatterDate(value: unknown): string {
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime())
-      ? ""
-      : value.toISOString().slice(0, 10);
-  }
-
   const written = String(value ?? "").trim();
   return ISO_DATETIME.test(written) ? written.slice(0, 10) : written;
 }

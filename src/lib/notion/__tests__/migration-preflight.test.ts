@@ -462,27 +462,64 @@ describe("what toLocalPost carries into the check", () => {
     ['date: "2026-05-20T18:30:00"', "2026-05-20"],
     ['date: "2026-05-20 22:00:00"', "2026-05-20"],
     ['date: "2026-05-20T23:59:59-07:00"', "2026-05-20"],
+    ["date: 2026-05-20T23:59:59-07:00", "2026-05-20"],
     ['date: "2026-05-20T00:00:00+13:00"', "2026-05-20"],
+    ["date: 2026-05-20T00:00:00+13:00", "2026-05-20"],
     ['date: "2026-05-20T09:00:00.000Z"', "2026-05-20"],
+    ["date: 2026-05-20T09:00:00.000Z", "2026-05-20"],
     ['date: "2026-05-20"', "2026-05-20"],
+    ["date: 2026-05-20", "2026-05-20"],
   ])("reads %s as the day it names", (frontmatter, expected) => {
     expect(day(frontmatter)).toBe(expected);
   });
 
-  it("refuses a timestamp whose day does not exist, rather than rolling it over", () => {
-    const post = toLocalPost(
-      "a.mdx",
-      '---\ntitle: "T"\ndate: "2026-02-31T09:00:00Z"\nexcerpt: "E"\n---\n\nB.\n',
-    );
+  it.each([
+    '"2026-02-31T09:00:00Z"',
+    "2026-02-31T09:00:00Z",
+    '"2026-13-01T09:00:00Z"',
+    "2026-13-01T09:00:00Z",
+  ])(
+    "refuses an impossible authored day in %s rather than rolling it over",
+    (written) => {
+      const post = toLocalPost(
+        "a.mdx",
+        `---\ntitle: "T"\ndate: ${written}\nexcerpt: "E"\n---\n\nB.\n`,
+      );
 
-    expect(post.date).toBe("2026-02-31");
-    expect(validateLocalPosts([post]).join("\n")).toMatch(/date/i);
+      expect(post.date).toBe(written.replaceAll('"', "").slice(0, 10));
+      expect(validateLocalPosts([post]).join("\n")).toMatch(/date/i);
+    },
+  );
+
+  it.each([
+    '"2026-06-01T23:59:59-07:00"',
+    "2026-06-01T23:59:59-07:00",
+  ])("narrows an authored `updated` timestamp %s the same way", (written) => {
+    expect(
+      toLocalPost("a.mdx", `---\nupdated: ${written}\n---\n\nB.\n`).updated,
+    ).toBe("2026-06-01");
   });
 
-  it("narrows an `updated` timestamp the same way", () => {
-    expect(
-      toLocalPost("a.mdx", '---\nupdated: "2026-06-01T18:30:00"\n---\n\nB.\n')
-        .updated,
-    ).toBe("2026-06-01");
+  it("keeps YAML arrays and quoted escapes while disabling timestamps", () => {
+    const post = toLocalPost(
+      "a.mdx",
+      [
+        "---",
+        'title: "A \\"quoted\\" title"',
+        "date: 2026-05-20",
+        'excerpt: "A line\\nbreak"',
+        'tags: ["C++", "tag: colon", "back\\\\slash"]',
+        "---",
+        "",
+        "B.",
+      ].join("\n"),
+    );
+
+    expect(post).toMatchObject({
+      title: 'A "quoted" title',
+      date: "2026-05-20",
+      excerpt: "A line\nbreak",
+      tags: ["C++", "tag: colon", "back\\slash"],
+    });
   });
 });
