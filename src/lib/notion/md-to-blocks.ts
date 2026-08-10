@@ -628,14 +628,16 @@ function readTable(
   };
 }
 
-// GFM pads a short row and drops whatever runs past the header's width.
+// GFM pads a short row and drops whatever runs past the header's width. A cell
+// is the one inline context that can carry `<br />`, because a row is one line
+// and blocks-to-md has nowhere else to put a cell's line endings.
 function tableRow(cells: string[], width: number): TableRowRequest {
   return {
     object: "block",
     type: "table_row",
     table_row: {
       cells: Array.from({ length: width }, (_, column) =>
-        inlineToRichText(cells[column] ?? ""),
+        inlineToRichText(cells[column] ?? "", { tableCell: true }),
       ),
     },
   };

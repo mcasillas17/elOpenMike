@@ -62,6 +62,10 @@ export class UnsupportedInlineMarkdownError extends Error {
 export type InlineParseMetrics = { steps: number; depth: number };
 
 export type InlineParseOptions = {
+  // True where the line is one cell of a GFM table row. A row is a single line,
+  // so a cell holding two lines has nowhere to put the break except the
+  // `<br />` blocks-to-md writes there — and only there. See readLineBreak.
+  tableCell?: boolean;
   // The ceiling on `steps`. Defaults to inlineScanBudget(markdown.length).
   maxSteps?: number;
   onMetrics?: (metrics: InlineParseMetrics) => void;
@@ -135,6 +139,7 @@ type Scan = {
   items: TextItem[];
   closers: CloserMemo;
   budget: ScanBudget;
+  tableCell: boolean;
 };
 
 // The runs one line of inline Markdown describes. Throws
@@ -142,7 +147,7 @@ type Scan = {
 // and for anything that would cost more to read than the budget allows.
 export function inlineToRichText(
   markdown: string,
-  { maxSteps, onMetrics }: InlineParseOptions = {},
+  { maxSteps, onMetrics, tableCell = false }: InlineParseOptions = {},
 ): RichTextInput {
   const budget = new ScanBudget(
     markdown,
@@ -153,6 +158,7 @@ export function inlineToRichText(
     items: [],
     closers: new Map(),
     budget,
+    tableCell,
   };
 
   try {
@@ -220,6 +226,12 @@ function parse(
     // elements rich-text.ts writes on purpose, which are annotations spelled
     // another way. See readGeneratedElement.
     if (char === "<") {
+      const lineBreak = readLineBreak(scan, index, end);
+      if (lineBreak !== undefined) {
+        literal += "\n";
+        index = lineBreak;
+        continue;
+      }
       const element = readGeneratedElement(scan, index, end);
       if (!element) {
         throw new UnsupportedInlineMarkdownError(
@@ -570,6 +582,11 @@ function scanForCloser(
     // The children of a generated element are parsed as markdown, but a
     // delimiter inside one cannot pair with a delimiter outside it.
     if (char === "<") {
+      const lineBreak = readLineBreak(scan, index, end);
+      if (lineBreak !== undefined) {
+        index = lineBreak;
+        continue;
+      }
       const element = readGeneratedElement(scan, index, end);
       index = element ? element.end : index + 1;
       continue;
@@ -638,6 +655,32 @@ const GENERATED_ELEMENTS: Record<string, Annotation> = {
 };
 
 const OPENING_TAG = /^<(strong|em|del|code)>/;
+
+// A GFM table row is one line, so blocks-to-md writes a cell's line endings as
+// this element — self-closing, because MDX reads raw HTML as JSX and a bare
+// `<br>` makes the generated file fail to compile. It is written in a table
+// cell and nowhere else (a paragraph keeps its line endings as line endings),
+// so it is read back in a table cell and nowhere else.
+//
+// The match is the exact six characters the converter emits. `<br>`, `<br/>`,
+// `<br  />` and anything carrying an attribute are somebody else's HTML, and
+// the rule that has always kept `<script>` and `<img onerror=…>` out of a
+// Notion page is that this converter reads only what it writes.
+const LINE_BREAK_ELEMENT = "<br />";
+
+function readLineBreak(
+  scan: Scan,
+  index: number,
+  end: number,
+): number | undefined {
+  if (!scan.tableCell) return undefined;
+  const past = index + LINE_BREAK_ELEMENT.length;
+  if (past > end || !scan.source.startsWith(LINE_BREAK_ELEMENT, index)) {
+    return undefined;
+  }
+  scan.budget.spend(index, LINE_BREAK_ELEMENT.length);
+  return past;
+}
 
 type GeneratedElement = {
   annotation: Annotation;
