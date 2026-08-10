@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import matter from "gray-matter";
 import {
   serializePost,
   contentProjection,
@@ -76,5 +77,93 @@ describe("resolveUpdated", () => {
 
   it("uses the new value when there is no existing file", () => {
     expect(resolveUpdated("2026-08-03", undefined)).toBe("2026-08-03");
+  });
+});
+
+// gray-matter splits the frontmatter block on a literal `---` line before YAML
+// ever sees it, and YAML folds a newline inside a double-quoted scalar into a
+// space. A Notion title pasted with a line break therefore either corrupted the
+// value or destroyed the whole file — and Notion property values are free text.
+describe("serializePost hostile frontmatter values", () => {
+  const roundTrip = (frontmatter: PostFrontmatter, body: string) => {
+    const file = serializePost(frontmatter, body);
+    const parsed = matter(file);
+    return { file, data: parsed.data, content: parsed.content };
+  };
+
+  it("round-trips a value containing a newline", () => {
+    const title = "Line one\nLine two";
+    const { data, content } = roundTrip({ ...fm, title }, "Body.\n");
+    expect(data.title).toBe(title);
+    expect(content.trim()).toBe("Body.");
+  });
+
+  it("round-trips a value that closes the frontmatter block", () => {
+    const excerpt = 'boom\n---\ntitle: "pwned"\n---\ninjected body';
+    const { data, content } = roundTrip({ ...fm, excerpt }, "Body.\n");
+    expect(data.excerpt).toBe(excerpt);
+    expect(data.title).toBe(fm.title);
+    expect(content.trim()).toBe("Body.");
+  });
+
+  it("round-trips a value that mimics another frontmatter key", () => {
+    const title = 'x"\nupdated: "1999-01-01';
+    const { data } = roundTrip({ ...fm, title }, "Body.\n");
+    expect(data.title).toBe(title);
+    expect(data.updated).toBe(fm.updated);
+  });
+
+  it("round-trips control characters, tabs, and CR", () => {
+    const excerpt = "tab\there\rcarriage\u0000null\u001bescape\u007fdel";
+    const { file, data } = roundTrip({ ...fm, excerpt }, "Body.\n");
+    expect(data.excerpt).toBe(excerpt);
+    // No raw control character survives into the file.
+    expect(/[\u0000-\u0008\u000b-\u001f\u007f]/.test(file)).toBe(false);
+  });
+
+  it("round-trips the unicode line separators that break JS parsers", () => {
+    const excerpt = "before\u2028middle\u2029after";
+    const { file, data } = roundTrip({ ...fm, excerpt }, "Body.\n");
+    expect(data.excerpt).toBe(excerpt);
+    expect(file).not.toContain("\u2028");
+    expect(file).not.toContain("\u2029");
+  });
+
+  it("round-trips hostile tag names", () => {
+    const tags = ['tag "quoted"', "tag\nbreak", "tag\\slash", "tag: colon"];
+    const { data } = roundTrip({ ...fm, tags }, "Body.\n");
+    expect(data.tags).toEqual(tags);
+  });
+
+  it("keeps emoji and accents literal rather than escaping them", () => {
+    const title = "Café ☕ — naïve";
+    const { file, data } = roundTrip({ ...fm, title }, "Body.\n");
+    expect(data.title).toBe(title);
+    expect(file).toContain(title);
+  });
+
+  it("stays byte-identical across runs for a hostile value", () => {
+    const hostile = { ...fm, title: "a\nb\u0007c\u2028d" };
+    expect(serializePost(hostile, "Body.\n")).toBe(
+      serializePost(hostile, "Body.\n"),
+    );
+  });
+
+  it("leaves the body untouched even when it contains a fence or ---", () => {
+    const body = "---\n\n```md\n---\ntitle: not frontmatter\n---\n```\n";
+    const { data, content } = roundTrip(fm, body);
+    expect(data.title).toBe(fm.title);
+    expect(content.trimStart()).toBe(body.replace(/\n+$/, "\n"));
+  });
+});
+
+// A newline in a title used to split into extra frontmatter lines, so a value
+// beginning with `updated: ` would be dropped by the projection and make two
+// different posts look identical.
+describe("contentProjection with hostile values", () => {
+  it("distinguishes posts whose values merely look like an updated line", () => {
+    const a = serializePost({ ...fm, title: 'x\nupdated: "2099-01-01"' }, "B.\n");
+    const b = serializePost({ ...fm, title: "x" }, "B.\n");
+    expect(contentProjection(a)).not.toBe(contentProjection(b));
   });
 });

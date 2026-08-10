@@ -4,8 +4,24 @@ import type { PostFrontmatter } from "./types";
 // identical bytes — a prerequisite for the sync being idempotent (spec §7).
 const KEY_ORDER = ["title", "date", "excerpt", "tags", "updated"] as const;
 
+// YAML's double-quoted scalars accept JSON's escape syntax exactly, so
+// JSON.stringify already produces a valid — and deterministic — YAML scalar:
+// it escapes quotes, backslashes, newlines, and every C0 control character as
+// \uXXXX. That matters because Notion property values are free text: a title
+// pasted with a line break used to fold into a space, and one containing a
+// line reading `---` ended the frontmatter block early, since gray-matter
+// splits on that delimiter before YAML ever runs.
+//
+// JSON leaves a few characters literal that YAML treats as non-printable (DEL,
+// the C1 range) or as line breaks (U+2028/U+2029, plus the BOM), so those are
+// escaped on top.
+const EXTRA_ESCAPES = /[\u007f-\u009f\u2028\u2029\ufeff]/g;
+
 function quote(value: string): string {
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return JSON.stringify(value).replace(
+    EXTRA_ESCAPES,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
 }
 
 export function serializePost(fm: PostFrontmatter, body: string): string {
