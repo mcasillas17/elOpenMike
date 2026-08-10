@@ -36,9 +36,10 @@ import { FakeNotion, livePages } from "./fixtures/fake-notion";
 //     exactly the proof a clean promotion gets, and is demoted on any mismatch.
 //   * Draft: proved, so the failure can be reported as the plain failure it is.
 //   * anything else: reported as what it actually reads.
-//   * unreadable: reported as unknown. The page is demoted where that is safe,
-//     because a page that may be published without proof must not stay on the
-//     site, and the message says which of the two happened.
+//   * unreadable: reported as unknown, and nothing is written. A Status written
+//     over a page nothing here could read is the same guess in the other
+//     direction — see migration-demotion.test.ts — so the run says which two
+//     possibilities it is stuck between and what to look at to tell them apart.
 
 const statusSchema: DataSourceSchema = {
   Name: { type: "title" },
@@ -251,33 +252,27 @@ describe("a promotion whose outcome cannot be read back", () => {
     expect(error.message).toMatch(/one\.mdx/);
   });
 
-  it("takes the page off the site rather than leaving it maybe-published", async () => {
+  it("writes no Status over a page it could not read", async () => {
     const notion = new FakeNotion();
 
     const error = await failure(migrate(notion, blind(notion)));
 
+    // Both spellings of the two possibilities, so the operator is told what to
+    // look for rather than what this run decided to assume.
     expect(error.message).toMatch(/"Draft"/);
-    expect(livePages(notion)[0].status).toBe("Draft");
-    expect(statusWrites(notion)).toEqual(["publish:page-1", "status:page-1:Draft"]);
+    expect(error.message).toMatch(/"Published"/);
+    expect(livePages(notion)[0].status).toBe("Published");
+    expect(statusWrites(notion)).toEqual(["publish:page-1"]);
   });
 
-  it("says so, loudly, when it cannot take it off either", async () => {
+  it("says what to open and what each answer means", async () => {
     const notion = new FakeNotion();
 
-    const error = await failure(
-      migrate(
-        notion,
-        blind(notion, () => {
-          notion.beforeWrite = () => {
-            throw new Error("connection reset");
-          };
-        }),
-      ),
-    );
+    const error = await failure(migrate(notion, blind(notion)));
 
     expect(error.message).toMatch(/by hand/i);
-    expect(error.message).toMatch(/may still be published|might still be published/i);
-    expect(livePages(notion)[0].status).toBe("Published");
+    expect(error.message).toMatch(/page-1/);
+    expect(error.message).toMatch(/unknown/i);
   });
 
   it("retries the read before giving up on it", async () => {

@@ -281,6 +281,12 @@ publish what it finds:
 Publish the page yourself, give it another slug, or move it to the trash, then
 run the migration again.
 
+The same holds for a page the run has just published: if you set its Status
+back, move it somewhere else, or trash it in that moment, the run reports what
+it read and leaves the page exactly as you left it. It only ever sets a Status
+back to **Draft** after a read has just shown the page is Published and is not
+this post — never on a page it could not read.
+
 ## If Notion answers a listing only halfway
 
 Notion returns long lists a page at a time: `has_more` says another page

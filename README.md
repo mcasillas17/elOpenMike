@@ -214,10 +214,17 @@ refuse anything that has moved:
   gets exactly the proof above, demotion included, and the run carries on.
   **Draft**: proved, and reported as the plain failure it is. **Anything else**:
   reported as what it actually reads, and left alone. **Unreadable**: reported as
-  unknown, and the page is set back to Draft anyway, because a page that may be
-  published without proof must not stay on the site — if that write fails too,
-  the message says the page may still be published and has to be checked by
-  hand. The run never calls a page a Draft it has not read.
+  unknown, and *nothing is written* — a `Status` set over a page nothing here
+  could read is the same guess in the other direction, and it would silently
+  overwrite a state somebody else has since chosen. The message says which two
+  possibilities the run is stuck between and what each answer means when the
+  page is opened. The run never calls a page a Draft it has not read, and never
+  writes one it cannot justify;
+- **the demotion is only ever made off a read that has just proved the page is
+  Published and not in the trash.** That is the one state it is the undo for. A
+  page somebody demoted, moved into a status of their own, or trashed inside the
+  promotion's window is not on the site — there is nothing to take off it — so
+  it is reported as what it now reads and left exactly as it is.
 
 Two runs inside one process are serialized against each other by a lock, so
 they cannot interleave their reads and writes.

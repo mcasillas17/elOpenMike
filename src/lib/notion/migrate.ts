@@ -1258,6 +1258,15 @@ async function agreeOnMetadata(
 // is now one of two claimants — goes straight back to Draft, which is the one
 // write that takes it off the site again, and the run fails saying so.
 //
+// The demotion is only ever made off the back of a read that has just said the
+// page is Published and is not in the trash. That is the one state it is the
+// undo for. A page somebody demoted, moved into a status of their own or
+// trashed inside the promotion's window is not on the site, so there is nothing
+// to take off it, and `Status: Draft` written over it would be an edit nobody
+// asked for; a page that cannot be read at all is a page nothing here knows
+// anything about, and the guess used to be made in exactly the direction it
+// could not be checked. Both are reported as what they are and left alone.
+//
 // `known` is the state a caller has already read — the recheck after a lost
 // promotion has just read exactly this — so the proof is the same one either
 // way and the page is not walked twice.
@@ -1267,14 +1276,34 @@ async function provePublished(
   pageId: string,
   known?: PageState,
 ): Promise<void> {
-  let problem: string | undefined;
+  let state: PageState;
   try {
-    const state = known ?? (await executor.readPage(pageId));
-    const verdict = checkPublishedState(write, state);
-    if (!verdict.ok) problem = verdict.reason;
+    state = known ?? (await executor.readPage(pageId));
   } catch (error: unknown) {
-    problem = `it could not be read back at all (${reasonFor(error)})`;
+    throw new Error(
+      `${write.file}: page ${pageId} was published and could not then be read ` +
+        `back at all (${reasonFor(error)}), so whether it is this post is ` +
+        `unknown — its Status has been left exactly as it is, because "` +
+        `${DRAFT_STATUS}" written over a page nothing here could read is a ` +
+        "guess; open the page, and if it is not this post set its Status back " +
+        "by hand",
+    );
   }
+
+  // Not on the site, and not this run's to move: whatever it reads now,
+  // somebody put it there after the promotion landed.
+  if (state.trashed || state.status !== PUBLISHED_STATUS) {
+    throw new Error(
+      `${write.file}: page ${pageId} was published by this run and now reads ` +
+        `${describeStanding(state)} — somebody else has moved it, so nothing ` +
+        "this run wrote is on the site and its Status has been left exactly " +
+        "as it is; check the page by hand and run the migration again",
+    );
+  }
+
+  let problem: string | undefined;
+  const verdict = checkPublishedState(write, state);
+  if (!verdict.ok) problem = `is not this post (${verdict.reason})`;
 
   if (problem === undefined) {
     // The page is this post, and it is Published — which is exactly what makes
@@ -1301,8 +1330,6 @@ async function provePublished(
     problem =
       "is one of two live pages claiming this post's slug " +
       `(${describeClaimants(others)}), which the sync refuses to publish at all`;
-  } else {
-    problem = `is not this post (${problem})`;
   }
 
   try {
@@ -1373,7 +1400,7 @@ async function resolveLostPromotion(
   try {
     state = await readAgain(executor, pageId, sleep);
   } catch (error: unknown) {
-    return unreadableAfterPromotion(write, executor, pageId, cause, error);
+    unreadableAfterPromotion(write, pageId, cause, error);
   }
 
   // The write landed; only its answer was lost. This is the promotion having
@@ -1408,40 +1435,34 @@ function describeStanding(state: PageState): string {
 
 // Neither outcome could be established: the promotion may or may not have
 // landed, and the page cannot be read to find out. Saying "still a Draft" here
-// is the guess that started all of this, so it is not said.
+// is the guess that started all of this, so it is not said — and neither is it
+// written.
 //
-// A page that may have been published without proof must not be left on the
-// site, and the demote is safe in both worlds this is stuck between: over a
-// Draft it is a no-op, and over a page this run published it is exactly the
-// undo. If it goes through, the page is Draft — proved by the write. If it does
-// not, nothing is known at all, and the message says so in the one place an
-// operator will read it.
-async function unreadableAfterPromotion(
+// Demoting used to happen anyway, on the grounds that a page which may be
+// published without proof should not stay on the site. But `Status: Draft` over
+// a page nothing here can read is the same guess in the other direction, and it
+// is wrong in every world except the one it was aimed at: over a promotion that
+// never landed it rewrites a page this run has no further business with, and
+// over a page somebody else has since moved it overwrites their deliberate
+// state — silently, because the write that would prove otherwise is the one
+// thing that cannot be read back.
+//
+// So nothing is written, and the message says exactly which two possibilities
+// the run is stuck between and what to look at to tell them apart.
+function unreadableAfterPromotion(
   write: MigrationWrite,
-  executor: MigrationExecutor,
   pageId: string,
   cause: unknown,
   readError: unknown,
-): Promise<never> {
-  const preamble =
-    `${write.file}: the promotion of page ${pageId} failed ` +
-    `(${reasonFor(cause)}) and the page could not be read back afterwards ` +
-    `(${reasonFor(readError)}), so whether the promotion landed is unknown`;
-
-  try {
-    await executor.demoteToDraft(pageId);
-  } catch (error: unknown) {
-    throw new Error(
-      `${preamble}, and setting its Status back to "${DRAFT_STATUS}" failed ` +
-        `too (${reasonFor(error)}) — it may still be published on the site; ` +
-        "check the page by hand before anything else",
-    );
-  }
-
+): never {
   throw new Error(
-    `${preamble} — its Status has been set back to "${DRAFT_STATUS}", so ` +
-      "nothing this run wrote is published; check the page by hand and run " +
-      "the migration again",
+    `${write.file}: the promotion of page ${pageId} failed ` +
+      `(${reasonFor(cause)}) and the page could not be read back afterwards ` +
+      `(${reasonFor(readError)}), so whether the promotion landed is unknown ` +
+      "— its Status has been left exactly as it is, because writing one over a " +
+      "page nothing here could read is a guess; open the page by hand: if it " +
+      `reads "${PUBLISHED_STATUS}", check it holds the whole post, and if it ` +
+      `reads "${DRAFT_STATUS}", run the migration again to finish it`,
   );
 }
 
