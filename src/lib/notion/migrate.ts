@@ -5,6 +5,8 @@ import { slugify, isValidSlug, slugFilenameProblems } from "./slug";
 import {
   titlePropertyName,
   buildStatusProperty,
+  describePropertyType,
+  describeStatus,
   schemaProblems,
   DRAFT_STATUS,
   PUBLISHED_STATUS,
@@ -464,7 +466,7 @@ export function planMigration(
     if (existing.status !== DRAFT_STATUS) {
       errors.push(
         `${post.file}: page ${existing.pageId} claims this post's slug and ` +
-          `is ${existing.status === "" ? "in no status at all" : `"${existing.status}"`} — ` +
+          `is ${describeStatus(existing.status)} — ` +
           `the migration only finishes its own "${DRAFT_STATUS}" pages and only ` +
           `skips "${PUBLISHED_STATUS}" ones, so this page is left alone; publish ` +
           "it, change its slug, or move it to the trash and run again",
@@ -564,7 +566,7 @@ export function migrationRequests(
     };
 
     problems.push(...blockProblems(blocks, post.file));
-    problems.push(...propertyProblems(properties, post.file));
+    problems.push(...propertyProblems(properties, post.file, titleProperty));
 
     const pageBase: Omit<CreatePageRequest, "children"> = {
       parent: { type: "data_source_id", data_source_id: dataSourceId },
@@ -627,19 +629,26 @@ export function migrationRequests(
 
 // A property value holds rich text under a key named after its own type, and
 // the same element and character limits apply to it as to a block's.
+//
+// Every property this writes into is one docs/authoring.md names — except the
+// title, which Notion lets anybody rename to anything. That name is a value out
+// of the workspace like a status option or a tag, so the field is said by what
+// it is rather than by what it is called.
 function propertyProblems(
   properties: Record<string, unknown>,
   file: string,
+  titleProperty: string,
 ): string[] {
   const problems: string[] = [];
 
   for (const [name, value] of Object.entries(properties)) {
     if (typeof value !== "object" || value === null) continue;
+    const field = name === titleProperty ? "title" : name;
     for (const key of ["title", "rich_text"] as const) {
       const rich = (value as Record<string, unknown>)[key];
       if (Array.isArray(rich)) {
         problems.push(
-          ...richTextProblems(rich as RichTextInput, `${file}: ${name}`),
+          ...richTextProblems(rich as RichTextInput, `${file}: ${field}`),
         );
       }
     }
@@ -838,8 +847,8 @@ export function compareMetadata(
   }
   if (actual.statusType !== desired.statusType) {
     identity.push(
-      `its Status is a ${actual.statusType === "" ? "missing" : actual.statusType} ` +
-        `property where the database schema says ${desired.statusType}`,
+      `its Status is ${describePropertyType(actual.statusType)} where the ` +
+        `database schema says ${desired.statusType}`,
     );
   }
 
@@ -911,7 +920,7 @@ export function checkDraftState(
     return {
       ok: false,
       reason:
-        `it is ${state.status === "" ? "in no status at all" : `"${state.status}"`}, ` +
+        `it is ${describeStatus(state.status)}, ` +
         `not the "${DRAFT_STATUS}" this run left it in`,
     };
   }
@@ -945,7 +954,7 @@ export function checkPublishedState(
     return {
       ok: false,
       reason:
-        `it reads ${state.status === "" ? "no status at all" : `"${state.status}"`} ` +
+        `it is ${describeStatus(state.status)} ` +
         `rather than "${PUBLISHED_STATUS}"`,
     };
   }
@@ -1186,15 +1195,15 @@ async function proveSoleClaimant(
   );
 }
 
+// The pages claiming a slug, said by id and by what category of status each one
+// is in. The id is generated rather than typed and is where the page can be
+// opened; the status name is not repeated. See properties.ts.
 function describeClaimants(
   claimants: readonly { pageId: string; status: string }[],
 ): string {
   if (claimants.length === 0) return "no live page";
   return claimants
-    .map(
-      (page) =>
-        `page ${page.pageId} (${page.status === "" ? "no status" : page.status})`,
-    )
+    .map((page) => `page ${page.pageId} (${describeStatus(page.status)})`)
     .sort()
     .join(", ");
 }
@@ -1294,7 +1303,7 @@ async function provePublished(
   // somebody put it there after the promotion landed.
   if (state.trashed || state.status !== PUBLISHED_STATUS) {
     throw new Error(
-      `${write.file}: page ${pageId} was published by this run and now reads ` +
+      `${write.file}: page ${pageId} was published by this run and is now ` +
         `${describeStanding(state)} — somebody else has moved it, so nothing ` +
         "this run wrote is on the site and its Status has been left exactly " +
         "as it is; check the page by hand and run the migration again",
@@ -1430,7 +1439,7 @@ async function resolveLostPromotion(
 
 function describeStanding(state: PageState): string {
   if (state.trashed) return "in the Notion trash";
-  return state.status === "" ? "in no status at all" : `"${state.status}"`;
+  return describeStatus(state.status);
 }
 
 // Neither outcome could be established: the promotion may or may not have

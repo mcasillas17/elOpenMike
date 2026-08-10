@@ -109,10 +109,15 @@ describe("the options the migration writes by name", () => {
     ).toThrow(/no "Published" option/);
   });
 
-  it("lists the options the database does offer", () => {
+  it("counts the options the database does offer without naming them", () => {
+    // An option name is a word somebody typed into a picker; the count is what
+    // says the property is set up for somebody else's workflow.
     expect(() =>
       buildStatusProperty(withOptions("select", "Idea", "Live"), "Draft"),
-    ).toThrow(/"Idea", "Live"/);
+    ).toThrow(/2 options, none of them named that/);
+    expect(() =>
+      buildStatusProperty(withOptions("select", "Idea", "Live"), "Draft"),
+    ).not.toThrow(/Idea|Live/);
   });
 
   // Only the shape is checked when the schema carries no options at all, which

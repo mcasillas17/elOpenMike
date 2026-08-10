@@ -217,7 +217,9 @@ describe("a promotion that never happened", () => {
       })),
     );
 
-    expect(error.message).toMatch(/In progress/);
+    // The category, not the name: a status option is a word somebody typed.
+    expect(error.message).toMatch(/a status this run does not write/);
+    expect(error.message).not.toMatch(/In progress/);
     expect(livePages(notion)[0].status).toBe("In progress");
     // Somebody else's deliberate status is not overwritten: nothing this run
     // did is on the site, so there is nothing to take off it.

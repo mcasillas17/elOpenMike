@@ -210,8 +210,11 @@ one, and both `pnpm sync:notion` and `pnpm migrate:to-notion` resolve it from
 way, so they always read and write the same rows.
 
 If the database ever exposes more than one data source, neither command guesses:
-the run stops, lists the sources it found, and asks for `NOTION_DATA_SOURCE_ID`.
-Set it to the id of the source the blog publishes from. It is checked against
+the run stops, lists the **ids** of the sources it found, and asks for
+`NOTION_DATA_SOURCE_ID`. It lists ids rather than names because a data source's
+name is something somebody typed and these messages end up in a public Actions
+log — and the id is what the variable is set to anyway. Set it to the id of the
+source the blog publishes from. It is checked against
 the database before anything is read, so an id belonging to another database
 fails immediately rather than quietly publishing somebody else's rows.
 

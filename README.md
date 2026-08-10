@@ -156,6 +156,10 @@ drift apart:
 - and the **database schema** itself: a title property, `Slug`, `Excerpt`,
   `Tags` and `Published` each of the type the migration writes into, and a
   `Status` in one of its two shapes carrying both of the options the run needs.
+  A schema that is set up for something else is reported by property, by type
+  and by how many options the `Status` offers — never by the option names
+  themselves, which are words somebody typed into a picker and which these
+  messages would otherwise print into a log.
 
 Every problem across every post and the schema is reported together, and a run
 that finds one **writes nothing at all**.

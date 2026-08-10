@@ -283,7 +283,10 @@ describe("what the plan says about the database it read", () => {
     expectNoSecrets(errors);
     expect(errors[0]).toContain("a-good-post.mdx");
     expect(errors[0]).toContain("page-1");
-    expect(errors[0]).toContain("In review");
+    // A status option is a word somebody typed into a picker, so the message
+    // says the category rather than the name. See workspace-name-redaction.
+    expect(errors[0]).not.toContain("In review");
+    expect(errors[0]).toMatch(/status/i);
   });
 
   // The title mismatch: the one message that used to print two titles, one of

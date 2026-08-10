@@ -83,7 +83,7 @@ describe("resolving without an explicit id", () => {
     );
   });
 
-  it("refuses to pick between two, and names both", async () => {
+  it("refuses to pick between two, and names both by id", async () => {
     const { client } = fakeClient([
       database("db-1", [source("ds-1", "Posts"), source("ds-2", "Archive")]),
     ]);
@@ -94,8 +94,10 @@ describe("resolving without an explicit id", () => {
 
     expect(failure).toMatch(/ds-1/);
     expect(failure).toMatch(/ds-2/);
-    expect(failure).toMatch(/Posts/);
-    expect(failure).toMatch(/Archive/);
+    // A data source's name is a title somebody typed, and this message is
+    // printed into a public log. The id is what the fix is written in anyway.
+    expect(failure).not.toMatch(/Posts/);
+    expect(failure).not.toMatch(/Archive/);
     expect(failure).toMatch(/NOTION_DATA_SOURCE_ID/);
   });
 

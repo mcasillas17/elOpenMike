@@ -34,6 +34,72 @@ const STATUS_PROPERTY = "Status";
 export const DRAFT_STATUS = "Draft";
 export const PUBLISHED_STATUS = "Published";
 
+// Nothing below ever repeats a name somebody typed into the workspace.
+//
+// A Status option, like a page title or a tag, is free-form text in a picker,
+// and these messages are printed into a terminal and — for anything the sync
+// runs — into a public GitHub Actions log. The options that reach a refusal are
+// by definition the ones set up for somebody else's workflow, so listing them
+// published exactly the names worth not publishing.
+//
+// What a message may carry is what identifies the problem: the property this
+// repo documents by name, the category a value falls into, a count, and the two
+// Status values this repo defines itself. See validate.ts.
+
+// A page's Status, said as a category rather than as the name it holds.
+// "Draft" and "Published" are this repo's own constants — the value the
+// migration writes and the value the sync publishes on — so naming them repeats
+// nothing an editor typed, and they are the whole point of the message.
+export function describeStatus(status: string): string {
+  if (status === DRAFT_STATUS || status === PUBLISHED_STATUS) {
+    return `"${status}"`;
+  }
+  return status === ""
+    ? "in no status at all"
+    : "in a status this run does not write";
+}
+
+// Every property type Notion documents. A type is chosen from this list rather
+// than typed, so naming one says nothing about the workspace — and it is the
+// difference between "add the column" and "change the column". Anything else
+// did not come from the API this code knows how to read, and is described
+// rather than repeated.
+const PROPERTY_TYPES = new Set([
+  "button",
+  "checkbox",
+  "created_by",
+  "created_time",
+  "date",
+  "email",
+  "files",
+  "formula",
+  "last_edited_by",
+  "last_edited_time",
+  "multi_select",
+  "number",
+  "people",
+  "phone_number",
+  "place",
+  "relation",
+  "rich_text",
+  "rollup",
+  "select",
+  "status",
+  "title",
+  "unique_id",
+  "url",
+  "verification",
+]);
+
+// The phrase that follows "is": "a date property", "a missing property", or the
+// category a value nothing here recognises falls into.
+export function describePropertyType(type: string): string {
+  if (type === "") return "a missing property";
+  return PROPERTY_TYPES.has(type)
+    ? `a ${type} property`
+    : "a property of a type this repo does not recognise";
+}
+
 // Notion names the title property "Name" by default and only calls it something
 // else if you rename it. Every data source has exactly one property of type
 // `title`, so it is found by type — matching how fetch-post.ts reads it back.
@@ -75,7 +141,7 @@ export function buildStatusProperty(
   }
   if (property.type !== "status" && property.type !== "select") {
     throw new Error(
-      `"${STATUS_PROPERTY}" is a ${property.type} property — ${expected}`,
+      `"${STATUS_PROPERTY}" is ${describePropertyType(property.type)} — ${expected}`,
     );
   }
 
@@ -87,9 +153,15 @@ export function buildStatusProperty(
     );
   }
   if (names && !names.includes(option)) {
+    // The options it does offer are names somebody typed into a picker, so they
+    // are counted rather than listed: the count says the property is set up for
+    // something else, which is what sends a person to look at it.
+    const offered =
+      names.length === 0
+        ? "no options at all"
+        : `${names.length} option${names.length === 1 ? "" : "s"}, none of them named that`;
     throw new Error(
-      `"${STATUS_PROPERTY}" has no "${option}" option (it offers ` +
-        `${names.length > 0 ? names.map((name) => `"${name}"`).join(", ") : "none"}) — ` +
+      `"${STATUS_PROPERTY}" has no "${option}" option (it offers ${offered}) — ` +
         `the migration creates every page as "${DRAFT_STATUS}" and promotes it to ` +
         `"${PUBLISHED_STATUS}" only once all of its blocks have landed, so both ` +
         "options have to exist before it runs",
@@ -145,8 +217,9 @@ export function schemaProblems(schema: DataSourceSchema): string[] {
     }
     if (property.type !== expected) {
       problems.push(
-        `"${name}" is a ${property.type} property where the migration writes a ` +
-          `${expected} — Notion refuses a value written into another type`,
+        `"${name}" is ${describePropertyType(property.type)} where the ` +
+          `migration writes a ${expected} — Notion refuses a value written ` +
+          "into another type",
       );
     }
   }

@@ -132,7 +132,7 @@ describe("a draft that moved before the check looked at it", () => {
     [
       "moved into another status",
       (notion, pageId) => notion.setStatus(pageId, "In progress"),
-      /is "In progress", not the "Draft"/,
+      /is in a status this run does not write, not the "Draft"/,
     ],
     [
       "stripped of its status",
@@ -192,6 +192,9 @@ describe("a draft that moved before the check looked at it", () => {
       // this message is printed into a log. See validate.ts.
       expect(failure?.message).not.toContain("Somebody else's post");
       expect(failure?.message).not.toContain("not-one");
+      // A status option is a name somebody typed into a picker, exactly like a
+      // title. Only this repo's own two values are ever spelled out.
+      expect(failure?.message).not.toContain("In progress");
 
       expect(notion.published).toEqual([]);
       expect(notion.mutations.filter((m) => m.startsWith("publish"))).toEqual(
@@ -280,9 +283,13 @@ describe("a draft that moved before the check looked at it", () => {
       notion.setStatus(pageId, "Archived"),
     );
 
-    await expect(migrate(notion, [long])).rejects.toThrow(
-      /one\.mdx[\s\S]*page-1/,
+    const failure = await migrate(notion, [long]).then(
+      () => undefined,
+      (error: unknown) => error as Error,
     );
+
+    expect(failure?.message).toMatch(/one\.mdx[\s\S]*page-1/);
+    expect(failure?.message).not.toContain("Archived");
   });
 
   // A truncated read is not a shorter page: reading it as one would append

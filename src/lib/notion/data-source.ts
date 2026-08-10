@@ -42,10 +42,14 @@ function canonical(id: string): string {
   return id.replace(/-/g, "").toLowerCase();
 }
 
+// The sources a message may name: their ids, and nothing else. A data source's
+// *name* is a title somebody typed — an archive, a duplicate, a view split off
+// a database — and these messages are printed into a terminal and into a public
+// Actions log. A Notion id is generated rather than typed, is what the fix
+// (`NOTION_DATA_SOURCE_ID=…`) is written in, and is the one part of a database
+// that is safe to print. See validate.ts.
 function describe(sources: readonly DataSourceRef[]): string {
-  return sources
-    .map((source) => `${source.id}${source.name === "" ? "" : ` ("${source.name}")`}`)
-    .join(", ");
+  return sources.map((source) => source.id).join(", ");
 }
 
 // The data sources a database exposes. `databases.retrieve` answers with either
