@@ -3,6 +3,8 @@
 // delimiter run of the same length, so both delimiters have to be chosen from
 // the content rather than fixed.
 
+import { escapeMarkdown } from "./escape";
+
 export function longestBacktickRun(text: string): number {
   let longest = 0;
   let current = 0;
@@ -30,4 +32,32 @@ export function inlineCodeSpan(text: string): string {
     (text.startsWith(" ") && text.endsWith(" ") && text.trim() !== "");
   const pad = padded ? " " : "";
   return `${delimiter}${pad}${text}${pad}${delimiter}`;
+}
+
+// A line ending is the one thing a code span cannot carry: CommonMark converts
+// every one of them to a space before the span is rendered, so `` `a\nb` ``
+// reaches the reader as "a b" and the newline is gone — from the page, and from
+// the next migration back into Notion.
+//
+// The `<code>` element carries it. MDX parses a JSX element's children as
+// markdown, which is what makes the element usable rather than merely raw HTML:
+// the text is escaped exactly the way any other literal text is, and the line
+// endings are written as the character references they already render as, so
+// CRLF and a lone carriage return stay distinguishable. Nothing about the run
+// is lost, the generated file still holds one line per block, and
+// md-to-rich-text reads this one shape back — and refuses every other `<code>`.
+const LINE_ENDING = /[\r\n]/;
+const LINE_ENDING_REFERENCES: Record<string, string> = {
+  "\n": "&#10;",
+  "\r": "&#13;",
+};
+
+export function inlineCode(text: string): string {
+  if (!LINE_ENDING.test(text)) return inlineCodeSpan(text);
+
+  const escaped = escapeMarkdown(text, false).replace(
+    /[\r\n]/g,
+    (char) => LINE_ENDING_REFERENCES[char],
+  );
+  return `<code>${escaped}</code>`;
 }

@@ -1,5 +1,5 @@
 import type { Annotations, RichText } from "./types";
-import { inlineCodeSpan } from "./code-span";
+import { inlineCode } from "./code-span";
 import { endsAtLineStart, escapeMarkdown } from "./escape";
 import { markdownDestination } from "./link-destination";
 import {
@@ -146,16 +146,21 @@ function renderGroup(
   for (const piece of pieces) {
     // Inline code must preserve raw text so snippets like `<T>` render
     // literally instead of being MDX-escaped, and its delimiter outgrows any
-    // backtick run inside, or the span would close on the first one.
+    // backtick run inside, or the span would close on the first one. A line
+    // ending is the one thing no span can hold, and inlineCode writes the
+    // element that can.
     //
     // Anything else is literal prose and is escaped, so Markdown the author
     // never typed cannot appear. Every wrapper below is generated after the
     // escape pass has finished, so a wrapper is never escaped.
     inner += piece.code
-      ? inlineCodeSpan(piece.text)
+      ? inlineCode(piece.text)
       : escapeMarkdown(piece.text, lineStart && !opensWithDelimiter);
-    lineStart =
-      piece.text.trim() !== "" && (opensWithDelimiter || piece.code)
+    // Code always writes its own delimiters, so whatever follows one is never
+    // at the start of a line — not even where the code is a line break itself.
+    lineStart = piece.code
+      ? false
+      : opensWithDelimiter && piece.text.trim() !== ""
         ? false
         : endsAtLineStart(piece.text, lineStart);
   }

@@ -229,15 +229,26 @@ function parse(
         );
       }
       flush();
-      budget.descend(index, () =>
-        parse(
-          scan,
-          element.contentStart,
-          element.contentEnd,
-          annotate(context, element.annotation),
-          enclosing,
-        ),
-      );
+      // `<code>` holds a code run's text, which is not markdown: reading it as
+      // markdown would turn the snippet's own asterisks into emphasis.
+      if (element.annotation === "code") {
+        scan.items.push(
+          textItem(
+            readCodeElementText(scan, element.contentStart, element.contentEnd),
+            annotate(context, "code"),
+          ),
+        );
+      } else {
+        budget.descend(index, () =>
+          parse(
+            scan,
+            element.contentStart,
+            element.contentEnd,
+            annotate(context, element.annotation),
+            enclosing,
+          ),
+        );
+      }
       index = element.end;
       continue;
     }
@@ -620,9 +631,13 @@ const GENERATED_ELEMENTS: Record<string, Annotation> = {
   strong: "bold",
   em: "italic",
   del: "strikethrough",
+  // A code run carrying a line ending, which no backtick span can hold: see
+  // code-span.ts. Its children are literal text rather than markdown, so
+  // readCodeElementText below reads them instead of parse().
+  code: "code",
 };
 
-const OPENING_TAG = /^<(strong|em|del)>/;
+const OPENING_TAG = /^<(strong|em|del|code)>/;
 
 type GeneratedElement = {
   annotation: Annotation;
@@ -700,7 +715,9 @@ function readCodeSpan(
     while (scanned + run < end && source[scanned + run] === "`") run += 1;
     if (run === opener) {
       return {
-        content: stripPadding(source.slice(index + opener, scanned)),
+        content: stripPadding(
+          flattenLineEndings(source.slice(index + opener, scanned)),
+        ),
         end: scanned + run,
       };
     }
@@ -708,6 +725,77 @@ function readCodeSpan(
   }
 
   return undefined;
+}
+
+// CommonMark converts every line ending inside a code span to a space, and only
+// then strips the padding. A span spread over two lines therefore reaches the
+// reader as one line, so one line is what Notion is told the page says —
+// storing the newline would put text into the database that the page never
+// showed, and the next sync would write it back as a `<code>` element nobody
+// asked for. The element is how a line ending is carried on purpose; a span is
+// not.
+const CODE_SPAN_LINE_ENDING = /\r\n|\r|\n/g;
+
+function flattenLineEndings(content: string): string {
+  return content.replace(CODE_SPAN_LINE_ENDING, " ");
+}
+
+// The children of a generated `<code>` element: the literal text of a code run,
+// written by escapeMarkdown and with its line endings written as character
+// references. Every character markdown would read as syntax is escaped there,
+// so an unescaped one here is not this converter's output — it is raw HTML, or
+// a hand-written tag, and it is refused rather than half-read. That is what
+// keeps `<code><script>…</script></code>` and `<code>a<strong>b</strong></code>`
+// out of a Notion page.
+const FOREIGN_IN_CODE = new Set(["<", "{", "}", "`", "*", "[", "]", "~"]);
+
+function readCodeElementText(scan: Scan, start: number, end: number): string {
+  const { source, budget } = scan;
+  let text = "";
+  let index = start;
+
+  while (index < end) {
+    budget.spend(index);
+    const char = source[index];
+
+    if (char === "\\") {
+      const escaped = source[index + 1];
+      // escapeMarkdown writes a literal backslash as `\\`, so a backslash
+      // before anything else was never written by it.
+      if (index + 1 >= end || escaped === undefined || !isEscapable(escaped)) {
+        throw new UnsupportedInlineMarkdownError(
+          "a backslash inside a code element that escapes nothing",
+          source,
+          index,
+        );
+      }
+      text += escaped;
+      index += 2;
+      continue;
+    }
+
+    if (char === "&") {
+      const reference = readReference(source, index, end);
+      if (reference) {
+        text += reference.value;
+        index += reference.length;
+        continue;
+      }
+    }
+
+    if (FOREIGN_IN_CODE.has(char)) {
+      throw new UnsupportedInlineMarkdownError(
+        `an unescaped "${char}" inside a code element, which this converter never writes`,
+        source,
+        index,
+      );
+    }
+
+    text += char;
+    index += 1;
+  }
+
+  return text;
 }
 
 // One space is dropped from each side when the span has both and is not made of
