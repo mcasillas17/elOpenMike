@@ -9,6 +9,14 @@
 // landed, so a run that dies partway leaves drafts rather than half-published
 // posts, and running it again finishes them. See src/lib/notion/migrate.ts.
 //
+// Safe, too, against the page being edited underneath it: every page is read
+// back in full immediately before each append and before the promotion, and
+// once more after it, and anything that is no longer exactly this post stops
+// the run — or, if it was already published, is demoted straight back to Draft.
+// The one window that cannot be closed is the round-trip between a read and the
+// write it justified; Notion has no conditional write to close it with. See the
+// migration section of README.md.
+//
 // Pause .github/workflows/sync-content.yml first. That sync runs every ten
 // minutes and removes the content/blog/*.mdx of any post Notion has not
 // published — which, mid-migration, means the very file a killed run needs in
@@ -23,18 +31,14 @@ import {
 } from "../src/lib/notion/client";
 import { pageSlug, pageStatus, pageTitle } from "../src/lib/notion/fetch-post";
 import { withRetry } from "../src/lib/notion/retry";
-import {
-  buildStatusProperty,
-  PUBLISHED_STATUS,
-  type DataSourceSchema,
-} from "../src/lib/notion/properties";
+import type { DataSourceSchema } from "../src/lib/notion/properties";
 import {
   toLocalPost,
   prepareMigration,
   runMigration,
-  type MigrationExecutor,
   type RemotePage,
 } from "../src/lib/notion/migrate";
+import { createMigrationExecutor } from "../src/lib/notion/migrate-executor";
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
 
@@ -106,36 +110,13 @@ async function main(): Promise<void> {
     console.log(`· already published in Notion, skipped ${slug}`);
   }
 
-  const published = buildStatusProperty(dataSource.properties, PUBLISHED_STATUS);
-
   // Notion takes 100 children per request, so a long post is one create and
-  // then a series of appends, and one more request to publish it. Each call
-  // retries a 429 the way every other call in this repo does; nothing is run
-  // concurrently, because a post's batches are the order of its blocks and the
-  // integration gets ~3 requests/second.
-  const executor: MigrationExecutor = {
-    async createPage(body) {
-      const page = await withRetry(() =>
-        client.request<{ id: string }>({ path: "pages", method: "post", body }),
-      );
-      return page.id;
-    },
-    async appendChildren(pageId, children) {
-      await withRetry(() =>
-        client.blocks.children.append({ block_id: pageId, children }),
-      );
-    },
-    // The last write a page gets, and the only one that makes it visible to the
-    // sync: everything it holds is already there.
-    async publishPage(pageId) {
-      await withRetry(() =>
-        client.pages.update({
-          page_id: pageId,
-          properties: { Status: published },
-        }),
-      );
-    },
-  };
+  // then a series of appends, and one more request to publish it — plus the
+  // reads that earn each of them: every page is read back in full immediately
+  // before each append, before the promotion, and once more after it. That is
+  // the whole protocol, and it lives beside the migration rather than here so
+  // the tests drive the same wiring this script does.
+  const executor = createMigrationExecutor(client, dataSource.properties);
 
   const written = await runMigration(
     prepared.writes,

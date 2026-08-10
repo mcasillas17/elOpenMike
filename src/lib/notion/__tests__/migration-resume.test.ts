@@ -1,7 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import type { Client, BlockObjectRequest } from "@notionhq/client";
 import { queryPages, fetchBlockTree } from "@/lib/notion/client";
 import { pageSlug, pageStatus, pageTitle } from "@/lib/notion/fetch-post";
 import {
@@ -11,14 +10,14 @@ import {
   planResumes,
   runMigration,
   toLocalPost,
-  type CreatePageRequest,
   type LocalPost,
-  type MigrationExecutor,
   type RemotePage,
 } from "@/lib/notion/migrate";
-import { buildStatusProperty, type DataSourceSchema } from "@/lib/notion/properties";
+import { createMigrationExecutor } from "@/lib/notion/migrate-executor";
+import type { DataSourceSchema } from "@/lib/notion/properties";
 import { MAX_CHILDREN_PER_REQUEST } from "@/lib/notion/limits";
 import { MAX_CONCURRENT_REQUESTS } from "@/lib/notion/pool";
+import { FakeNotion, livePages } from "./fixtures/fake-notion";
 
 // A migration that creates a page and then appends the rest of its blocks has a
 // window it cannot close with a try/catch: the process can be killed — SIGKILL,
@@ -61,288 +60,6 @@ const local = (slug: string, content: string): LocalPost => ({
 const paragraphs = (count: number) =>
   Array.from({ length: count }, (_, index) => `Line ${index + 1}.`).join("\n\n");
 
-// ---------------------------------------------------------------------------
-// A Notion that can be killed.
-//
-// It stores pages and blocks in the shapes the API answers with — annotations
-// spelled out in full, plain_text beside the text, children paginated at 100 —
-// so what a re-run reads back is what Notion would have given it, not an echo
-// of the request. `killAfter` lets a test end the process after the nth write:
-// the write lands, and every call after it fails, exactly as it would if the
-// process were gone.
-// ---------------------------------------------------------------------------
-
-type StoredBlock = {
-  id: string;
-  type: string;
-  payload: Record<string, unknown>;
-  children: StoredBlock[];
-};
-
-type StoredPage = {
-  id: string;
-  properties: Record<string, unknown>;
-  blocks: StoredBlock[];
-  in_trash: boolean;
-};
-
-class ProcessKilled extends Error {
-  constructor() {
-    super("the process was killed");
-  }
-}
-
-function storedRuns(runs: unknown): unknown {
-  return (runs as Array<Record<string, unknown>>).map((item) => {
-    const text = item.text as { content: string; link?: { url: string } | null };
-    const annotations = (item.annotations ?? {}) as Record<string, boolean>;
-    return {
-      type: "text",
-      text: { content: text.content, link: text.link ?? null },
-      annotations: {
-        bold: annotations.bold === true,
-        italic: annotations.italic === true,
-        strikethrough: annotations.strikethrough === true,
-        underline: annotations.underline === true,
-        code: annotations.code === true,
-        color: "default",
-      },
-      plain_text: text.content,
-      href: text.link?.url ?? null,
-    };
-  });
-}
-
-let storedIds = 0;
-
-// A property value as Notion stores and re-serves it: named by its own type,
-// with plain_text beside every run. A request carries neither.
-function storedProperties(
-  properties: Record<string, unknown>,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(properties).map(([name, value]) => {
-      const [type, payload] = Object.entries(
-        value as Record<string, unknown>,
-      )[0];
-      if (type === "title" || type === "rich_text") {
-        return [name, { type, [type]: storedRuns(payload) }];
-      }
-      return [name, { type, [type]: payload }];
-    }),
-  );
-}
-
-// One request block as Notion stores and re-serves it, defaults and all.
-function store(block: BlockObjectRequest): StoredBlock {
-  const record = block as unknown as Record<string, unknown>;
-  const type = String(record.type);
-  const body = { ...(record[type] as Record<string, unknown>) };
-  const children = (body.children as BlockObjectRequest[] | undefined) ?? [];
-  delete body.children;
-
-  if (Array.isArray(body.rich_text)) body.rich_text = storedRuns(body.rich_text);
-  if (Array.isArray(body.cells)) {
-    body.cells = (body.cells as unknown[]).map(storedRuns);
-  }
-
-  // The fields Notion fills in that no migration request carries.
-  if (type === "code") body.caption = body.caption ?? [];
-  else if (type === "table") body.has_row_header = body.has_row_header ?? false;
-  else if (type !== "table_row" && type !== "divider") {
-    body.color = body.color ?? "default";
-    if (type.startsWith("heading_")) body.is_toggleable = false;
-  }
-
-  storedIds += 1;
-  return {
-    id: `block-${storedIds}`,
-    type,
-    payload: body,
-    children: children.map(store),
-  };
-}
-
-class FakeNotion {
-  readonly pages = new Map<string, StoredPage>();  readonly mutations: string[] = [];
-  // How many blocks a page held each time it was promoted to Published.
-  readonly published: Array<{ pageId: string; blocks: number }> = [];
-  childPageReads = 0;
-  private dead = false;
-  private killAt: number | undefined;
-  private nextPage = 0;
-
-  killAfter(mutations: number): void {
-    this.killAt = mutations;
-  }
-
-  // A new process against the same database: state survives, the run does not.
-  restart(): void {
-    this.dead = false;
-    this.killAt = undefined;
-  }
-
-  private alive(): void {
-    if (this.dead) throw new ProcessKilled();
-  }
-
-  private wrote(mutation: string): void {
-    this.mutations.push(mutation);
-    if (this.killAt !== undefined && this.mutations.length >= this.killAt) {
-      this.dead = true;
-      throw new ProcessKilled();
-    }
-  }
-
-  seed(page: {
-    slug: string;
-    title: string;
-    status: string;
-    blocks?: BlockObjectRequest[];
-    in_trash?: boolean;
-  }): string {
-    this.nextPage += 1;
-    const id = `seeded-${this.nextPage}`;
-    this.pages.set(id, {
-      id,
-      properties: properties(page.slug, page.title, page.status),
-      blocks: (page.blocks ?? []).map(store),
-      in_trash: page.in_trash === true,
-    });
-    return id;
-  }
-
-  createPage(body: CreatePageRequest): string {
-    this.alive();
-    if (body.children.length > MAX_CHILDREN_PER_REQUEST) {
-      throw new Error("Notion takes at most 100 children in one request");
-    }
-    this.nextPage += 1;
-    const id = `page-${this.nextPage}`;
-    this.pages.set(id, {
-      id,
-      properties: storedProperties(body.properties),
-      blocks: body.children.map(store),
-      in_trash: false,
-    });
-    this.wrote(`create:${id}:${body.children.length}`);
-    return id;
-  }
-
-  appendChildren(pageId: string, children: BlockObjectRequest[]): void {
-    this.alive();
-    if (children.length > MAX_CHILDREN_PER_REQUEST) {
-      throw new Error("Notion takes at most 100 children in one request");
-    }
-    const page = this.pages.get(pageId);
-    if (!page) throw new Error(`no such page ${pageId}`);
-    page.blocks.push(...children.map(store));
-    this.wrote(`append:${pageId}:${children.length}`);
-  }
-
-  publishPage(pageId: string, status: Record<string, unknown>): void {
-    this.alive();
-    const page = this.pages.get(pageId);
-    if (!page) throw new Error(`no such page ${pageId}`);
-    page.properties = {
-      ...page.properties,
-      ...storedProperties({ Status: status }),
-    };
-    this.published.push({ pageId, blocks: page.blocks.length });
-    this.wrote(`publish:${pageId}`);
-  }
-
-  // Structurally what the two reads the migration makes need from a Client.
-  get client(): Client {
-    const live = () =>
-      [...this.pages.values()].filter((page) => !page.in_trash);
-
-    return {
-      dataSources: {
-        query: async () => {
-          this.alive();
-          return {
-            results: live().map((page) => ({
-              object: "page",
-              id: page.id,
-              last_edited_time: "2026-05-20T00:00:00.000Z",
-              properties: page.properties,
-            })),
-            has_more: false,
-            next_cursor: null,
-            request_status: { type: "complete" },
-          };
-        },
-      },
-      blocks: {
-        children: {
-          list: async ({
-            block_id,
-            start_cursor,
-          }: {
-            block_id: string;
-            start_cursor?: string;
-          }) => {
-            this.alive();
-            this.childPageReads += 1;
-            const blocks = this.childrenOf(block_id);
-            const from = start_cursor ? Number(start_cursor) : 0;
-            const slice = blocks.slice(from, from + MAX_CHILDREN_PER_REQUEST);
-            const next = from + slice.length;
-            return {
-              results: slice.map((block) => ({
-                object: "block",
-                id: block.id,
-                type: block.type,
-                has_children: block.children.length > 0,
-                [block.type]: block.payload,
-              })),
-              has_more: next < blocks.length,
-              next_cursor: next < blocks.length ? String(next) : null,
-            };
-          },
-        },
-      },
-    } as unknown as Client;
-  }
-
-  private childrenOf(id: string): StoredBlock[] {
-    const page = this.pages.get(id);
-    if (page) return page.blocks;
-
-    const find = (blocks: StoredBlock[]): StoredBlock[] | undefined => {
-      for (const block of blocks) {
-        if (block.id === id) return block.children;
-        const nested = find(block.children);
-        if (nested) return nested;
-      }
-      return undefined;
-    };
-    return find([...this.pages.values()].flatMap((entry) => entry.blocks)) ?? [];
-  }
-
-  get executor(): MigrationExecutor {
-    const published = buildStatusProperty(statusSchema, "Published");
-    return {
-      createPage: async (page) => this.createPage(page),
-      appendChildren: async (pageId, children) =>
-        this.appendChildren(pageId, children),
-      publishPage: async (pageId) => this.publishPage(pageId, published),
-    };
-  }
-}
-
-function properties(slug: string, title: string, status: string) {
-  return {
-    Name: { type: "title", title: [{ plain_text: title }] },
-    Slug: { type: "rich_text", rich_text: [{ plain_text: slug }] },
-    Status:
-      status === ""
-        ? { type: "status", status: null }
-        : { type: "status", status: { name: status } },
-  };
-}
-
 // One whole run of the migration script, from reading the database to the last
 // write. Every test builds a fresh one — nothing carries over but Notion.
 async function migrate(notion: FakeNotion, posts: LocalPost[]) {
@@ -362,33 +79,11 @@ async function migrate(notion: FakeNotion, posts: LocalPost[]) {
   );
   if (prepared.errors.length > 0) return { ...prepared, written: [] };
 
-  const written = await runMigration(prepared.writes, notion.executor);
+  const written = await runMigration(
+    prepared.writes,
+    createMigrationExecutor(notion.client, statusSchema),
+  );
   return { ...prepared, written };
-}
-
-// What the database looks like from the outside once the dust settles.
-function livePages(notion: FakeNotion) {
-  return [...notion.pages.values()]
-    .filter((page) => !page.in_trash)
-    .map((page) => ({
-      id: page.id,
-      slug: (
-        (page.properties.Slug as { rich_text: { plain_text: string }[] })
-          .rich_text[0] ?? { plain_text: "" }
-      ).plain_text,
-      status:
-        ((page.properties.Status as { status?: { name?: string } }).status ?? {})
-          .name ?? "",
-      texts: page.blocks.map(
-        (block) =>
-          (
-            (block.payload.rich_text as { plain_text: string }[] | undefined) ??
-            []
-          )
-            .map((run) => run.plain_text)
-            .join(""),
-      ),
-    }));
 }
 
 const expected = (count: number) =>

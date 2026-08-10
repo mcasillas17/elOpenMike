@@ -50,6 +50,15 @@ export function pageStatus(page: PageObject): string {
   );
 }
 
+// Which of the two shapes the page's Status property actually is. Writing the
+// other one is refused by the API, so the migration checks the page it is about
+// to promote still carries the shape the schema said it did.
+export function pageStatusType(page: PageObject): string {
+  const property = (page.properties as Record<string, Property>).Status;
+  const type = property?.type;
+  return typeof type === "string" ? type : "";
+}
+
 // True when the page's Status (or Select) property reads "Published".
 export function isPublished(page: PageObject): boolean {
   return pageStatus(page) === "Published";

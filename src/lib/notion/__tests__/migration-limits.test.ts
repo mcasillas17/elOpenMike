@@ -4,9 +4,10 @@ import {
   migrationRequests,
   runMigration,
   type LocalPost,
-  type MigrationExecutor,
   type MigrationWrite,
 } from "@/lib/notion/migrate";
+import { createMigrationExecutor } from "@/lib/notion/migrate-executor";
+import { FakeNotion } from "./fixtures/fake-notion";
 import {
   MAX_CHILDREN_PER_REQUEST,
   MAX_RICH_TEXT_ITEMS,
@@ -61,36 +62,48 @@ const writesFor = (content: string, slug = "one"): MigrationWrite[] =>
 const paragraphs = (count: number) =>
   Array.from({ length: count }, (_, index) => `Line ${index + 1}.`).join("\n\n");
 
-// A fake Notion that records every call and can be told to fail one of them.
+// A Notion that records every write it accepts and can be told to refuse one of
+// them. The double is the real one (see fixtures/fake-notion.ts) driven through
+// the real executor, so what these tests measure is the batching the script
+// actually performs — reads, checks and all. A refused write is not recorded,
+// because it did not land.
 function recorder(
   fail: { on?: "create" | "append" | "publish"; at?: number } = {},
 ) {
-  const calls: string[] = [];
+  const notion = new FakeNotion();
   let appends = 0;
-  let created = 0;
 
-  const executor: MigrationExecutor = {
-    async createPage() {
-      created += 1;
-      calls.push(`create:${created}`);
-      if (fail.on === "create") throw new Error("notion said no");
-      return `page-${created}`;
-    },
-    async appendChildren(pageId, children) {
+  notion.beforeWrite = (kind) => {
+    if (kind === "create" && fail.on === "create") {
+      throw new Error("notion said no");
+    }
+    if (kind === "append") {
       appends += 1;
-      calls.push(`append:${pageId}:${children.length}`);
       if (fail.on === "append" && appends === (fail.at ?? 1)) {
         throw new Error("notion said no");
       }
-    },
-    async publishPage(pageId) {
-      calls.push(`publish:${pageId}`);
-      if (fail.on === "publish") throw new Error("notion said no");
-    },
+    }
+    if (kind === "update" && fail.on === "publish") {
+      throw new Error("notion said no");
+    }
   };
 
-  return { executor, calls };
+  return {
+    notion,
+    executor: createMigrationExecutor(notion.client, resumableSchema),
+    calls: notion.mutations,
+  };
 }
+
+// The same schema, with the two status options the executor checks for before
+// it makes a single request.
+const resumableSchema: DataSourceSchema = {
+  ...statusSchema,
+  Status: {
+    type: "status",
+    status: { options: [{ name: "Draft" }, { name: "Published" }] },
+  },
+};
 
 describe("the limits every request is measured against", () => {
   it("names the ones Notion actually enforces", () => {
@@ -269,7 +282,7 @@ describe("sending a run", () => {
     const done = await runMigration(writes, executor);
 
     expect(calls).toEqual([
-      "create:1",
+      "create:page-1:100",
       "append:page-1:100",
       "append:page-1:50",
       "publish:page-1",
@@ -284,7 +297,7 @@ describe("sending a run", () => {
 
     await runMigration(writesFor("Body.\n"), executor);
 
-    expect(calls).toEqual(["create:1", "publish:page-1"]);
+    expect(calls).toEqual(["create:page-1:1", "publish:page-1"]);
   });
 
   // The page is not trashed. Trashing it would throw away the blocks that did
@@ -297,11 +310,7 @@ describe("sending a run", () => {
     await expect(runMigration(writes, executor)).rejects.toThrow(
       /draft|re-?run|again/i,
     );
-    expect(calls).toEqual([
-      "create:1",
-      "append:page-1:100",
-      "append:page-1:50",
-    ]);
+    expect(calls).toEqual(["create:page-1:100", "append:page-1:100"]);
     expect(calls).not.toContain("publish:page-1");
   });
 
@@ -321,21 +330,29 @@ describe("sending a run", () => {
     await expect(runMigration(writesFor("Body.\n"), executor)).rejects.toThrow(
       /again/i,
     );
-    expect(calls).toEqual(["create:1", "publish:page-1"]);
+    expect(calls).toEqual(["create:page-1:1"]);
   });
 
   it("appends into a page a previous run left, rather than creating another", async () => {
     const [write] = writesFor(paragraphs(250));
-    const { executor, calls } = recorder();
+    const { notion, executor, calls } = recorder();
+    // The draft a killed run left: this post's metadata, and the 200 blocks it
+    // managed to write.
+    const pageId = notion.seed({
+      slug: "one",
+      title: "Title one",
+      status: "Draft",
+      blocks: write.blocks.slice(0, 200),
+    });
 
     const done = await runMigration(
-      [{ ...write, appends: [write.blocks.slice(200)], resume: { pageId: "page-9" } }],
+      [{ ...write, appends: [write.blocks.slice(200)], resume: { pageId } }],
       executor,
     );
 
-    expect(calls).toEqual(["append:page-9:50", "publish:page-9"]);
+    expect(calls).toEqual([`append:${pageId}:50`, `publish:${pageId}`]);
     expect(done).toEqual([
-      { slug: "one", pageId: "page-9", batches: 1, resumed: true },
+      { slug: "one", pageId, batches: 1, resumed: true },
     ]);
   });
 
@@ -348,7 +365,7 @@ describe("sending a run", () => {
     const { executor, calls } = recorder({ on: "append", at: 1 });
 
     await expect(runMigration(writes, executor)).rejects.toThrow();
-    expect(calls).not.toContain("create:2");
+    expect(calls).not.toContain("create:page-2:1");
   });
 });
 

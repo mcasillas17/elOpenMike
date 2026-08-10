@@ -101,6 +101,44 @@ A re-run reads the whole database first and then finishes what it finds:
 All of that reading happens before the first write, so a run either has a clean
 plan for every post or changes nothing.
 
+### What the run checks while it is writing
+
+The plan above is built from a read that is already old by the time the first
+block is appended, and a Notion page can be edited between any two requests —
+by you on your phone, by a second copy of this script, by anything else holding
+the token. Notion has no transaction, no conditional write and no if-match, so
+the strongest protocol available is to look again, as late as possible, and to
+refuse anything that has moved:
+
+- **before every append** and **immediately before the promotion**, the page is
+  read back in full — its metadata, its status, its `last_edited_time` either
+  side of the block walk, and its whole paginated block tree. It has to still be
+  a **Draft**, still carry this post's title and slug, still have its Status in
+  the shape the database schema said, and hold exactly the blocks this run has
+  written so far and nothing else. Anything else stops the run without another
+  write, naming the file and the page;
+- **after the promotion**, everything is read once more. A page that is not
+  exactly this post — wrong status, wrong metadata, a block somebody added — is
+  **demoted straight back to Draft**, which takes it off the site again, and the
+  run fails saying so. If even the demotion fails, the message says the page is
+  still Published and has to be put back by hand.
+
+Two runs inside one process are serialized against each other by a lock, so
+they cannot interleave their reads and writes.
+
+**The limit, honestly.** Between the last read and the write it justified there
+is one round-trip in which somebody else can still change the page, and Notion
+offers no way to say "apply this only if the page is still the version I read".
+That window cannot be closed from here. What the protocol does is make it one
+request wide instead of a whole run wide, re-examine it at every later check,
+and catch whatever fell into the last one with the read after the promotion —
+which is why that page is demoted rather than left published. Two runs in two
+*processes* meet exactly these checks and nothing stronger.
+
+The checking costs requests: every append and the promotion are each preceded by
+a full read of the page. This is a one-shot script, so that trade is made
+without hesitation.
+
 A page in the Notion trash holds no slug, so trashing a page and re-running is
 how a single post is redone from scratch.
 

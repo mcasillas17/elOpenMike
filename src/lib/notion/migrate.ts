@@ -129,10 +129,44 @@ export type MigrationWrite = {
   blocks: BlockObjectRequest[];
   page: CreatePageRequest;
   appends: BlockObjectRequest[][];
+  // Everything the page's properties are supposed to say, in the shape the
+  // page reads back as. Every check made against a live page compares this.
+  metadata: PageMetadata;
   // Set once a same-slug draft has been found and proved to be an unfinished
   // copy of this post: the page already exists, and `appends` holds only what
   // is missing from it.
   resume?: { pageId: string };
+};
+
+// A page's properties as the sync reads them back, which is the only shape
+// both sides of a comparison can be put in: a request says
+// `{ rich_text: [{ text: { content } }] }`, a response says something else
+// again, and neither is comparable to a local file's frontmatter.
+export type PageMetadata = {
+  // Identity. A page under another title or slug is not this post, and no
+  // amount of writing makes it one.
+  title: string;
+  slug: string;
+  // "status" or "select": which of the two property shapes the page's Status
+  // is. Notion refuses the value written in the other one, so promoting a page
+  // whose shape has changed underneath the run would fail — or, worse, write a
+  // property the sync then cannot read.
+  statusType: string;
+};
+
+// Everything about a live page a write has to be justified by, read back in
+// one go.
+export type PageState = {
+  metadata: PageMetadata;
+  status: string;
+  trashed: boolean;
+  // last_edited_time as it read *before* the block tree was walked and again
+  // after it. Notion cannot serve a page "as of" a version, so the two being
+  // equal is the only thing that says the metadata and the blocks below
+  // describe the same page rather than two moments of it.
+  versionBefore: string;
+  version: string;
+  blocks: MdBlock[];
 };
 
 // Reads one content/blog/*.mdx file into the shape the migration writes. The
@@ -356,6 +390,14 @@ export function migrationRequests(
       file: post.file,
       title: post.title,
       blocks,
+      metadata: {
+        // Trimmed because that is what fetch-post does when it reads a title
+        // back, and a page can only ever be compared against what it reads
+        // back as.
+        title: post.title.trim(),
+        slug: post.slug,
+        statusType: "status" in draft ? "status" : "select",
+      },
       page: {
         parent: { type: "data_source_id" as const, data_source_id: dataSourceId },
         properties,
@@ -491,15 +533,26 @@ export async function prepareMigration(
   };
 }
 
-// What one page takes to write.
+// What one page takes to write, and everything it takes to justify a write.
+//
+// Reading is part of this interface because every write here has to be earned
+// again immediately before it is made: Notion offers no transaction, no
+// conditional update and no if-match, so the only thing standing between this
+// migration and somebody else's editing is how recently it looked.
 export type MigrationExecutor = {
   // Creates the page — as a draft, because that is what the request says — and
   // answers with its id.
   createPage(page: CreatePageRequest): Promise<string>;
   appendChildren(pageId: string, children: BlockObjectRequest[]): Promise<void>;
+  // The page exactly as Notion holds it now: metadata, status, trash flag,
+  // version either side of the walk, and the whole paginated block tree.
+  readPage(pageId: string): Promise<PageState>;
   // Promotes a finished page to Published. The one write that makes a post
   // visible to the sync, and the last one made for it.
   publishPage(pageId: string): Promise<void>;
+  // Puts a page back where it was. Only ever called when the page that was
+  // just published turns out not to be this post.
+  demoteToDraft(pageId: string): Promise<void>;
 };
 
 export type MigrationProgress = {
@@ -509,20 +562,181 @@ export type MigrationProgress = {
   resumed: boolean;
 };
 
+export type StateCheck = { ok: true } | { ok: false; reason: string };
+
+// What says a live page is not this post at all. Nothing here is repairable:
+// overwriting a title or a slug is exactly how one post's page becomes
+// another's, and writing a Status in the shape the property is not is refused
+// by the API.
+export function compareMetadata(
+  desired: PageMetadata,
+  actual: PageMetadata,
+): string[] {
+  const differences: string[] = [];
+
+  if (actual.title !== desired.title) {
+    differences.push(`its title reads "${actual.title}", not "${desired.title}"`);
+  }
+  if (actual.slug !== desired.slug) {
+    differences.push(`its slug reads "${actual.slug}", not "${desired.slug}"`);
+  }
+  if (actual.statusType !== desired.statusType) {
+    differences.push(
+      `its Status is a ${actual.statusType === "" ? "missing" : actual.statusType} ` +
+        `property where the database schema says ${desired.statusType}`,
+    );
+  }
+
+  return differences;
+}
+
+function blockCheck(
+  write: MigrationWrite,
+  state: PageState,
+  expected: number,
+  whole: boolean,
+): string | undefined {
+  const match = matchBlockPrefix(write.blocks, state.blocks);
+  if (match.kind === "diverged") return match.reason;
+  if (match.matched !== expected) {
+    return (
+      `it holds ${match.matched} of the post's blocks where ${expected} ` +
+      `${whole ? "is the whole post" : "were written to it"}`
+    );
+  }
+  return undefined;
+}
+
+// Everything that has to still be true of a draft before one more write is sent
+// to it: the same page, in the same state, holding exactly what this run put
+// there and nothing else. `expected` is how many top-level blocks the run has
+// written so far — a page holding fewer lost some, and one holding more grew
+// them somewhere else.
+export function checkDraftState(
+  write: MigrationWrite,
+  state: PageState,
+  expected: number,
+): StateCheck {
+  if (state.trashed) {
+    return { ok: false, reason: "it has been moved to the Notion trash" };
+  }
+  if (state.version !== state.versionBefore) {
+    return {
+      ok: false,
+      reason:
+        `it was edited while it was being read (last_edited_time ` +
+        `${state.versionBefore} → ${state.version}), so its properties and its ` +
+        "blocks are two different moments of it",
+    };
+  }
+  if (state.status !== DRAFT_STATUS) {
+    return {
+      ok: false,
+      reason:
+        `it is ${state.status === "" ? "in no status at all" : `"${state.status}"`}, ` +
+        `not the "${DRAFT_STATUS}" this run left it in`,
+    };
+  }
+
+  const differences = compareMetadata(write.metadata, state.metadata);
+  if (differences.length > 0) {
+    return { ok: false, reason: differences.join("; ") };
+  }
+
+  const blocks = blockCheck(write, state, expected, false);
+  return blocks === undefined ? { ok: true } : { ok: false, reason: blocks };
+}
+
+// Everything that has to be true of the page the run has just published. This
+// one admits no repairable divergence at all: the page is visible to the site
+// from here on, so it is either exactly this post or it is demoted.
+export function checkPublishedState(
+  write: MigrationWrite,
+  state: PageState,
+): StateCheck {
+  if (state.trashed) {
+    return { ok: false, reason: "it has been moved to the Notion trash" };
+  }
+  if (state.version !== state.versionBefore) {
+    return {
+      ok: false,
+      reason:
+        `it was edited while it was being read back (last_edited_time ` +
+        `${state.versionBefore} → ${state.version})`,
+    };
+  }
+  if (state.status !== PUBLISHED_STATUS) {
+    return {
+      ok: false,
+      reason:
+        `it reads ${state.status === "" ? "no status at all" : `"${state.status}"`} ` +
+        `rather than "${PUBLISHED_STATUS}"`,
+    };
+  }
+
+  const differences = compareMetadata(write.metadata, state.metadata);
+  if (differences.length > 0) {
+    return { ok: false, reason: differences.join("; ") };
+  }
+
+  const blocks = blockCheck(write, state, write.blocks.length, true);
+  return blocks === undefined ? { ok: true } : { ok: false, reason: blocks };
+}
+
+// Two runs of this in one process would interleave their reads and writes, and
+// every check below would then be validating a page the other run is in the
+// middle of changing. There is no lock to take in Notion, so the one that can
+// be taken is taken: migrations run one after another in this process, whatever
+// order they were started in. Two runs in two *processes* are outside anything
+// this code can arrange — the checks below are what they meet instead.
+let migrations: Promise<unknown> = Promise.resolve();
+
+function withMigrationLock<T>(run: () => Promise<T>): Promise<T> {
+  const result = migrations.then(run, run);
+  migrations = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
 // Writes the planned pages, in order. A post's batches are strictly sequential
 // because they are the order of its blocks, and the posts themselves are too,
 // so the run stays inside the ~3 requests/second Notion allows an integration.
 //
-// Every page goes through the same three phases — exist, fill, publish — and a
-// resumed page simply starts partway through the second. Nothing is published
-// until it is whole, so a run that stops anywhere leaves drafts: invisible to
-// the site, and finished by running the migration again.
+// Every page goes through the same phases — exist, fill, agree, publish, prove
+// — and a resumed page simply starts partway through the second. Nothing is
+// published until it is whole, so a run that stops anywhere leaves drafts:
+// invisible to the site, and finished by running the migration again.
 //
-// There is deliberately no rollback. Trashing a half-written page would throw
-// away the blocks that did land, which the next run would otherwise pick up and
-// carry on from — and it could never run at all for the failure that motivates
-// all of this, a process that is killed rather than one that throws.
-export async function runMigration(
+// The plan this works from was read before the first page was created and is
+// already old. Notion has no transaction, no conditional write and no if-match,
+// so the page is read again — metadata, status, version and whole block tree —
+// immediately before every append and immediately before the promotion, and it
+// has to be exactly what this run left there. Anything else stops the run
+// without a further write.
+//
+// That leaves one window nothing here can close: between the last read and the
+// write it justified there is a round-trip in which somebody else can edit the
+// page, and Notion offers no way to say "apply this only if the page is still
+// the version I read". The window is one request wide, every later check
+// re-examines it, and the check after the promotion catches what fell into the
+// last one — which is why that page is demoted rather than left published.
+//
+// There is deliberately no rollback of content. Trashing a half-written page
+// would throw away the blocks that did land, which the next run would otherwise
+// pick up and carry on from — and it could never run at all for the failure
+// that motivates all of this, a process that is killed rather than one that
+// throws.
+export function runMigration(
+  writes: readonly MigrationWrite[],
+  executor: MigrationExecutor,
+  onPage?: (progress: MigrationProgress) => void,
+): Promise<MigrationProgress[]> {
+  return withMigrationLock(() => writePages(writes, executor, onPage));
+}
+
+async function writePages(
   writes: readonly MigrationWrite[],
   executor: MigrationExecutor,
   onPage?: (progress: MigrationProgress) => void,
@@ -532,15 +746,28 @@ export async function runMigration(
   for (const write of writes) {
     const resumed = write.resume !== undefined;
     const pageId = write.resume?.pageId ?? (await executor.createPage(write.page));
+    // Whatever is on the page before the first append: the create request's own
+    // children, or the prefix planResumes proved a resumed draft already holds.
+    let held =
+      write.blocks.length -
+      write.appends.reduce((count, batch) => count + batch.length, 0);
 
     try {
       for (const batch of write.appends) {
+        await proveDraft(write, executor, pageId, held);
         await executor.appendChildren(pageId, batch);
+        held += batch.length;
       }
+
+      // The promotion is the write that puts the page on the site, so it goes
+      // out against a page proved whole a single request ago.
+      await proveDraft(write, executor, pageId, held);
       await executor.publishPage(pageId);
     } catch (error: unknown) {
       throw unfinished(write, pageId, resumed, error);
     }
+
+    await provePublished(write, executor, pageId);
 
     const progress = {
       slug: write.slug,
@@ -553,6 +780,64 @@ export async function runMigration(
   }
 
   return written;
+}
+
+// Reads the page and refuses to go on unless it is still exactly the draft this
+// run is filling.
+async function proveDraft(
+  write: MigrationWrite,
+  executor: MigrationExecutor,
+  pageId: string,
+  held: number,
+): Promise<PageState> {
+  const state = await executor.readPage(pageId);
+  const verdict = checkDraftState(write, state, held);
+  if (!verdict.ok) {
+    throw new Error(
+      `page ${pageId} is no longer the draft this run was filling: ` +
+        `${verdict.reason} — nothing further was written to it`,
+    );
+  }
+  return state;
+}
+
+// The page is visible to the site from here on, so what it holds is read back
+// in full one last time. A page that is not exactly this post goes straight
+// back to Draft, which is the one write that takes it off the site again, and
+// the run fails saying so.
+async function provePublished(
+  write: MigrationWrite,
+  executor: MigrationExecutor,
+  pageId: string,
+): Promise<void> {
+  let problem: string | undefined;
+  try {
+    const state = await executor.readPage(pageId);
+    const verdict = checkPublishedState(write, state);
+    if (!verdict.ok) problem = verdict.reason;
+  } catch (error: unknown) {
+    problem = `it could not be read back at all (${reasonFor(error)})`;
+  }
+  if (problem === undefined) return;
+
+  try {
+    await executor.demoteToDraft(pageId);
+  } catch (error: unknown) {
+    throw new Error(
+      `${write.file}: page ${pageId} was published and is not this post ` +
+        `(${problem}), and it could not be demoted back to "${DRAFT_STATUS}" ` +
+        `either (${reasonFor(error)}) — it is still Published on the site under ` +
+        `the slug "${write.slug}"; set its Status back by hand before anything ` +
+        "else",
+    );
+  }
+
+  throw new Error(
+    `${write.file}: page ${pageId} was published and is not this post ` +
+      `(${problem}) — it has been demoted back to "${DRAFT_STATUS}", so nothing ` +
+      `is published under the slug "${write.slug}"; check the page by hand and ` +
+      "run the migration again",
+  );
 }
 
 function reasonFor(error: unknown): string {
