@@ -167,6 +167,41 @@ describe("a Notion paragraph pushed back into Notion", () => {
   });
 });
 
+// A whole document pushed up and pulled back down, block shapes and all. The
+// migration writes the blocks Notion stores; the sync writes them back out as
+// markdown, and what comes out has to be what went in.
+describe("a document pushed into Notion and pulled back out", () => {
+  const roundTrip = (markdown: string) =>
+    blocksToMarkdown(markdownToBlocks(markdown).map(asSyncedBlock), {
+      imagePath: (id) => `/images/${id}.png`,
+    });
+
+  const CASES: Array<[string, string]> = [
+    ["a numbered list", "1. One\n2. Two\n"],
+    ["a to-do list", "- [x] Done\n- [ ] Todo\n"],
+    ["a divider between paragraphs", "Before.\n\n---\n\nAfter.\n"],
+    ["every heading level the sync writes", "## One\n\n### Two\n\n#### Three\n"],
+    ["a quote", "> Quoted\n"],
+    ["a quote with blocks inside it", "> Quoted\n>\n> - a\n> - b\n"],
+    ["a nested bullet list", "- outer\n  - inner\n"],
+    ["a list nested under a numbered item", "1. outer\n   - inner\n"],
+    ["a table", "| A | B |\n| --- | --- |\n| 1 | 2 |\n"],
+    ["a bookmark's link", "[Example](https://example.com/)\n"],
+    ["a fenced block", "```ts\nconst a = 1;\n```\n"],
+    ["a paragraph of two lines", "first line\nsecond line\n"],
+    [
+      "a toggle, whose summary and children are siblings in markdown",
+      "Summary\n\n- a child\n",
+    ],
+  ];
+
+  for (const [name, markdown] of CASES) {
+    it(`re-renders ${name} unchanged`, () => {
+      expect(roundTrip(markdown)).toBe(markdown);
+    });
+  }
+});
+
 describe("the committed posts", () => {
   const dir = path.join(process.cwd(), "content", "blog");
   const names = readdirSync(dir).filter((name) => name.endsWith(".mdx"));
@@ -205,9 +240,49 @@ describe("the committed posts", () => {
 
 // One migrated block in the shape the sync reads it back in.
 function asSyncedBlock(migrated: MigrationBlock): MdBlock {
-  const { type, rich } = bodyOf(migrated);
-  const rich_text = asRichText(rich);
-  return "code" in migrated
-    ? block("code", { rich_text, language: migrated.code.language })
-    : block(type, { rich_text });
+  const type = migratedType(migrated);
+  const payload = (migrated as unknown as Record<string, Record<string, unknown>>)[
+    type
+  ];
+
+  if (type === "divider") return block("divider", {});
+  if (type === "code") {
+    return block("code", {
+      rich_text: asRichText(payload.rich_text as RichTextInput),
+      language: payload.language,
+    });
+  }
+  if (type === "table_row") {
+    return block("table_row", {
+      cells: (payload.cells as RichTextInput[]).map(asRichText),
+    });
+  }
+
+  const children = (payload.children as MigrationBlock[] | undefined) ?? [];
+  if (type === "table") {
+    return block(
+      "table",
+      {
+        table_width: payload.table_width,
+        has_column_header: payload.has_column_header,
+      },
+      children.map(asSyncedBlock),
+    );
+  }
+
+  const data: Record<string, unknown> = {
+    rich_text: asRichText((payload.rich_text as RichTextInput) ?? []),
+  };
+  if (type === "to_do") data.checked = payload.checked === true;
+  return block(type, data, children.map(asSyncedBlock));
+}
+
+// A migration block names its own type twice: once in `type`, once as the key
+// its body hangs off.
+function migratedType(migrated: MigrationBlock): string {
+  const type = (migrated as { type?: string }).type;
+  if (typeof type !== "string") {
+    throw new Error(`no type in ${JSON.stringify(migrated)}`);
+  }
+  return type;
 }

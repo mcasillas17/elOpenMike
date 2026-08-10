@@ -181,9 +181,237 @@ describe("markdownToBlocks", () => {
   });
 
   it("refuses markdown it would silently drop", () => {
-    for (const line of ["# Title", "> Quote", "| a | b |"]) {
+    for (const line of ["# Title", "##### Deeper", "    indented code"]) {
       expect(() => markdownToBlocks(line)).toThrow(/unsupported markdown/);
     }
+  });
+
+  // Every block blocks-to-md writes has to read back as the block it came
+  // from. Anything that came back as a paragraph instead lost the shape the
+  // author gave it, silently and permanently.
+  describe("the blocks the sync writes", () => {
+    const only = (markdown: string) => markdownToBlocks(markdown)[0];
+
+    it("reads a numbered item as a numbered item", () => {
+      expect(markdownToBlocks("1. One\n2. Two\n")).toEqual([
+        {
+          object: "block",
+          type: "numbered_list_item",
+          numbered_list_item: {
+            rich_text: [{ type: "text", text: { content: "One" } }],
+          },
+        },
+        {
+          object: "block",
+          type: "numbered_list_item",
+          numbered_list_item: {
+            rich_text: [{ type: "text", text: { content: "Two" } }],
+          },
+        },
+      ]);
+    });
+
+    it("reads a checkbox as a to-do, checked or not", () => {
+      expect(only("- [x] Done")).toEqual({
+        object: "block",
+        type: "to_do",
+        to_do: {
+          rich_text: [{ type: "text", text: { content: "Done" } }],
+          checked: true,
+        },
+      });
+      expect(only("- [ ] Todo")).toEqual({
+        object: "block",
+        type: "to_do",
+        to_do: {
+          rich_text: [{ type: "text", text: { content: "Todo" } }],
+          checked: false,
+        },
+      });
+      // A bracket the escaper defused is text, not a checkbox.
+      expect(only("- \\[x\\] escaped").type).toBe("bulleted_list_item");
+      // GFM needs whitespace after the checkbox for it to be one.
+      expect(only("- \\[x\\]no space").type).toBe("bulleted_list_item");
+    });
+
+    it("reads a rule as a divider", () => {
+      expect(only("---")).toEqual({
+        object: "block",
+        type: "divider",
+        divider: {},
+      });
+    });
+
+    it("reads the fourth heading level the sync writes", () => {
+      expect(only("#### Deep")).toEqual({
+        object: "block",
+        type: "heading_3",
+        heading_3: {
+          rich_text: [{ type: "text", text: { content: "Deep" } }],
+        },
+      });
+    });
+
+    it("reads a blockquote as a quote, with what follows it as children", () => {
+      expect(only("> Quoted")).toEqual({
+        object: "block",
+        type: "quote",
+        quote: { rich_text: [{ type: "text", text: { content: "Quoted" } }] },
+      });
+
+      const withChildren = only("> Quoted\n>\n> - a\n> - b");
+      expect(withChildren).toEqual({
+        object: "block",
+        type: "quote",
+        quote: {
+          rich_text: [{ type: "text", text: { content: "Quoted" } }],
+          children: [
+            {
+              object: "block",
+              type: "bulleted_list_item",
+              bulleted_list_item: {
+                rich_text: [{ type: "text", text: { content: "a" } }],
+              },
+            },
+            {
+              object: "block",
+              type: "bulleted_list_item",
+              bulleted_list_item: {
+                rich_text: [{ type: "text", text: { content: "b" } }],
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    it("nests a sub-list under the item it is indented into", () => {
+      expect(only("- outer\n  - inner")).toEqual({
+        object: "block",
+        type: "bulleted_list_item",
+        bulleted_list_item: {
+          rich_text: [{ type: "text", text: { content: "outer" } }],
+          children: [
+            {
+              object: "block",
+              type: "bulleted_list_item",
+              bulleted_list_item: {
+                rich_text: [{ type: "text", text: { content: "inner" } }],
+              },
+            },
+          ],
+        },
+      });
+
+      // A numbered item's content column is the width of "1." plus its space.
+      const numbered = only("1. outer\n   - inner");
+      expect(numbered.type).toBe("numbered_list_item");
+      expect(
+        (numbered as { numbered_list_item: { children?: unknown[] } })
+          .numbered_list_item.children,
+      ).toHaveLength(1);
+
+      const todo = only("- [x] outer\n  - inner");
+      expect(todo.type).toBe("to_do");
+      expect(
+        (todo as { to_do: { children?: unknown[] } }).to_do.children,
+      ).toHaveLength(1);
+    });
+
+    it("reads a GFM table as a table with its rows", () => {
+      expect(only("| A | B |\n| --- | --- |\n| 1 | 2 |")).toEqual({
+        object: "block",
+        type: "table",
+        table: {
+          table_width: 2,
+          has_column_header: true,
+          children: [
+            {
+              object: "block",
+              type: "table_row",
+              table_row: {
+                cells: [
+                  [{ type: "text", text: { content: "A" } }],
+                  [{ type: "text", text: { content: "B" } }],
+                ],
+              },
+            },
+            {
+              object: "block",
+              type: "table_row",
+              table_row: {
+                cells: [
+                  [{ type: "text", text: { content: "1" } }],
+                  [{ type: "text", text: { content: "2" } }],
+                ],
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    it("leaves a pipe line that opens no table as the paragraph it renders as", () => {
+      expect(only("| a | b | and no delimiter row").type).toBe("paragraph");
+    });
+
+    it("keeps a bookmark's link, which markdown spells as a paragraph", () => {
+      expect(only("[Example](https://example.com/)")).toEqual({
+        object: "block",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              type: "text",
+              text: {
+                content: "Example",
+                link: { url: "https://example.com/" },
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    it("joins the lines of one paragraph rather than splitting it", () => {
+      expect(only("first line\nsecond line")).toEqual({
+        object: "block",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            { type: "text", text: { content: "first line\nsecond line" } },
+          ],
+        },
+      });
+    });
+  });
+
+  describe("block syntax with no Notion equivalent", () => {
+    const rejects = (markdown: string) =>
+      expect(() => markdownToBlocks(markdown)).toThrow(/unsupported markdown/);
+
+    it("throws rather than downgrading it to a paragraph", () => {
+      rejects("# Title");
+      rejects("##### Five");
+      rejects("###### Six");
+      rejects("    an indented code block");
+      rejects("\tan indented code block");
+      rejects("Heading\n===");
+      rejects("Heading\n---");
+      // Notion creates one level of nesting per request.
+      rejects("- a\n  - b\n    - c");
+      rejects("> quoted\n>\n> - a\n>   - b");
+    });
+
+    it("refuses an image, which points at a path Notion cannot fetch", () => {
+      expect(() => markdownToBlocks("![A diagram](/images/x.png)")).toThrow(
+        /unsupported inline markdown/,
+      );
+    });
+
+    it("names the line it refused", () => {
+      expect(() => markdownToBlocks("# Title")).toThrow(/"# Title"/);
+    });
   });
 
   it("keeps the inline formatting a line carries", () => {

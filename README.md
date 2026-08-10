@@ -70,9 +70,20 @@ single post is redone.
 
 Inline formatting travels with the text: code spans, bold, italic,
 strikethrough and links become the annotations a Notion page stores rather than
-the characters that spell them. Inline markdown that has no equivalent in a
-Notion run — an image, a reference link, a link title, raw HTML — stops the run
-before the first page is created, naming the line and the offset it choked on.
+the characters that spell them. Block structure travels too — headings,
+numbered and bulleted lists (nested included), to-dos, quotes, dividers, code
+fences and tables all migrate as the blocks they are.
+
+Markdown cannot tell some Notion blocks apart, so three come back as the shape
+that renders identically rather than as a guess: a callout migrates back as a
+quote (its icon is already part of the text), a bookmark as a paragraph holding
+its link, and a toggle as its summary followed by its children as siblings.
+
+Anything with no equivalent in a Notion block or run — an image, a reference
+link, a link title, arbitrary HTML, a `#` heading, an indented code block, a
+list nested three deep, a fence that never closes — stops the run before the
+first page is created, naming the line and the offset it choked on. Nothing is
+downgraded to a paragraph behind your back.
 
 ## Deploy (Fly.io)
 
