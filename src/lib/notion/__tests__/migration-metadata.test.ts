@@ -310,9 +310,15 @@ describe("a draft that turns out to be another post", () => {
       });
     };
 
-    await expect(migrate(notion, [post])).rejects.toThrow(
-      /its slug reads "somebody-elses-slug", not "one"/,
+    const failure = await migrate(notion, [post]).then(
+      () => undefined,
+      (error: unknown) => (error as Error).message,
     );
+
+    expect(failure).toMatch(/its slug is not this post's/);
+    // The slug it was changed to came out of a property somebody wrote, and
+    // this message is printed into a log. See validate.ts.
+    expect(failure).not.toContain("somebody-elses-slug");
 
     const slug = propertyOf(notion, "page-1", "Slug") as {
       rich_text: { plain_text: string }[];

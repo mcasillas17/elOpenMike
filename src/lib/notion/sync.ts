@@ -104,6 +104,7 @@ export async function renderPosts(
       for (const [file, bytes] of files) outcome.images.set(file, bytes);
       outcome.warnings.push(...warnings);
       outcome.rendered.push({
+        pageId: post.pageId,
         slug: post.slug,
         frontmatter: post.frontmatter,
         body,
@@ -270,10 +271,14 @@ export function checkVerdict(
   const lines: string[] = [];
 
   if (failures.length > 0) {
-    const slugs = failures.map((failure) => failure.slug).sort();
+    // Named by page rather than by slug: a slug is a value somebody typed into
+    // a Notion property, and a post that failed may never have reached disk at
+    // all — so the log is the only place that value would appear. The page id
+    // is opaque and is what an operator opens anyway.
+    const pages = failures.map((failure) => failure.pageId).sort();
     lines.push(
       `\u2717 ${failures.length} post(s) could not be read from Notion, so ` +
-        `nothing on disk could be verified against them: ${slugs.join(", ")}`,
+        `nothing on disk could be verified against them: ${pages.join(", ")}`,
     );
   }
 

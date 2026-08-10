@@ -284,6 +284,19 @@ key, a paragraph pasted out of a terminal. A category and a location say where
 to look without saying what is there. Every post is checked, not just the first
 bad one, and nothing is downgraded to a paragraph behind your back.
 
+The same rule holds for **metadata**, in both directions. A post's title, date,
+excerpt, tags and slug are values somebody typed into a page or a frontmatter
+block, and the ones that reach a refusal are the odd ones — the date that will
+not parse because a query string is still stuck to it, the tag with a comma in
+it because it came out of a config file, the title of the draft that turns out
+not to be this post. So a validation or migration error names the **field**, the
+**file** or the **page id** it is on, an **index** into a list, a **length**, a
+**count** and a **category** of what is wrong, and never the value itself: `page
+<id>: excerpt is 540 chars (max 200)`, `page <id>: tag #2 contains a comma`, `2
+different Notion pages claim one slug (<id>, <id>)`. Everything needed to open
+the right page and fix the right line, and nothing that republishes what is
+already being refused.
+
 ## Deploy (Fly.io)
 
 Runs as a Next.js standalone server in a container (`Dockerfile` + `fly.toml`;

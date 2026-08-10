@@ -99,17 +99,16 @@ async function main(): Promise<void> {
   if (prepared.errors.length > 0) {
     console.error(`\n✗ ${prepared.errors.length} problem(s) — nothing written:\n`);
     for (const error of prepared.errors) console.error(`  ${error}`);
-    for (const { slug, pageId } of prepared.orphanDrafts) {
+    for (const { pageId } of prepared.orphanDrafts) {
       console.error(
-        `  note: draft page ${pageId} claims slug "${slug}", which no ` +
-          "content/blog file does",
+        `  note: draft page ${pageId} claims a slug no content/blog file does`,
       );
     }
     process.exit(1);
   }
 
-  for (const { slug } of prepared.skip) {
-    console.log(`· already published in Notion, skipped ${slug}`);
+  for (const { pageId } of prepared.skip) {
+    console.log(`· already published in Notion, skipped page ${pageId}`);
   }
 
   // Notion takes 100 children per request, so a long post is one create and
@@ -151,11 +150,11 @@ async function main(): Promise<void> {
   // a draft can outlive its own source file. Saying which file is missing is
   // the difference between "restore it from git and run again" and a post that
   // is simply gone.
-  for (const { slug, pageId } of prepared.orphanDrafts) {
+  for (const { pageId } of prepared.orphanDrafts) {
     console.warn(
-      `! draft page ${pageId} claims slug "${slug}", which no content/blog ` +
-        "file does — if a killed run left it, restore " +
-        `content/blog/${slug}.mdx from git and run this again`,
+      `! draft page ${pageId} claims a slug no content/blog file does — if a ` +
+        "killed run left it, open the page, read its Slug, and restore that " +
+        "content/blog/<slug>.mdx from git before running this again",
     );
   }
 }

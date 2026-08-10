@@ -9,6 +9,10 @@ import type { ReconcilePlan } from "./reconcile";
 import { POST_FILE_EXTENSION } from "./slug";
 
 export type RenderedPost = {
+  // Carried through rendering so validation can name a post by the page it came
+  // off rather than by its slug, which is itself a value somebody typed. See
+  // validate.ts.
+  pageId: string;
   slug: string;
   frontmatter: PostFrontmatter;
   body: string;

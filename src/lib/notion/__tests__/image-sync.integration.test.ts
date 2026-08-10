@@ -27,6 +27,7 @@ const SCRATCH = path.join(process.cwd(), ".tmp-tests");
 let root: string;
 
 const post = (slug: string): RenderedPost => ({
+  pageId: `page-${slug}`,
   slug,
   frontmatter: {
     title: `Title ${slug}`,

@@ -146,7 +146,7 @@ describe("a draft that moved before the check looked at it", () => {
           type: "title",
           title: [{ plain_text: "Somebody else's post" }],
         }),
-      /its title reads "Somebody else's post"/,
+      /its title is not this post's/,
     ],
     [
       "given another slug",
@@ -155,7 +155,7 @@ describe("a draft that moved before the check looked at it", () => {
           type: "rich_text",
           rich_text: [{ plain_text: "not-one" }],
         }),
-      /its slug reads "not-one"/,
+      /its slug is not this post's/,
     ],
     [
       "moved to the trash",
@@ -188,6 +188,10 @@ describe("a draft that moved before the check looked at it", () => {
       // reason could not pass for this one.
       expect(failure?.message).toMatch(reason);
       expect(failure?.message).toMatch(/one\.mdx/);
+      // Whatever the page was changed to is a value out of a property, and
+      // this message is printed into a log. See validate.ts.
+      expect(failure?.message).not.toContain("Somebody else's post");
+      expect(failure?.message).not.toContain("not-one");
 
       expect(notion.published).toEqual([]);
       expect(notion.mutations.filter((m) => m.startsWith("publish"))).toEqual(
@@ -442,7 +446,7 @@ describe("two migrations running in one process", () => {
         prepared.writes,
         createMigrationExecutor(notion.client, "ds-1", statusSchema),
       ),
-    ).rejects.toThrow(/seeded-1[\s\S]*slug "one"|slug "one"[\s\S]*seeded-1/);
+    ).rejects.toThrow(/one\.mdx[\s\S]*seeded-1|seeded-1[\s\S]*one\.mdx/);
 
     expect(notion.mutations).toEqual([]);
   });

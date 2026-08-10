@@ -178,8 +178,11 @@ describe("tags the blog could not build a url from", () => {
     ]);
 
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/C\+\+/);
-    expect(errors[0]).toMatch(/C#/);
+    // The names are the thing to change and the thing that may not be printed;
+    // the files carrying them are named instead. See validate.ts.
+    expect(errors[0]).toContain("one.mdx");
+    expect(errors[0]).toContain("two.mdx");
+    expect(errors[0]).not.toMatch(/C\+\+|C#/);
   });
 
   it("refuses a tag Notion cannot store under that name", async () => {
@@ -254,16 +257,19 @@ describe("raw frontmatter tags", () => {
     expect(await rejectsRaw('["AI", "", "   "]')).toMatch(/blank|empty/i);
   });
 
-  it("rejects duplicate options in one post", async () => {
-    expect(await rejectsRaw('["AI", "AI"]')).toMatch(/duplicate.*AI|AI.*duplicate/i);
+  it("rejects duplicate options in one post, by position", async () => {
+    const errors = await rejectsRaw('["AI", "AI"]');
+
+    expect(errors).toMatch(/tag #2/);
+    expect(errors).not.toContain("AI");
   });
 
   it("rejects two options whose slugs collide", async () => {
     const errors = await rejectsRaw('["C++", "C#"]');
 
     expect(errors).toMatch(/tag slug/i);
-    expect(errors).toMatch(/C\+\+/);
-    expect(errors).toMatch(/C#/);
+    expect(errors).toMatch(/raw-tags\.mdx/);
+    expect(errors).not.toMatch(/C\+\+|C#/);
   });
 
   it("accepts exactly 100 options and rejects the 101st", async () => {
@@ -555,6 +561,7 @@ describe("the invariants both directions are measured against", () => {
 
     const migration = validateLocalPosts([post]);
     const sync: ValidatablePost = {
+      pageId: "page-one",
       slug: post.slug,
       frontmatter: {
         title: post.title,

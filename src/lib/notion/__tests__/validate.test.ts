@@ -6,6 +6,7 @@ import {
 } from "@/lib/notion/validate";
 
 const ok: ValidatablePost = {
+  pageId: "page-good",
   slug: "a-good-post",
   frontmatter: {
     title: "A good post",
@@ -29,9 +30,12 @@ describe("validatePosts", () => {
     expect(validatePosts([ok])).toEqual([]);
   });
 
-  it("rejects an empty title", () => {
+  // Named by the page it came off rather than by its slug: a slug is a value
+  // somebody typed into a property, and these lines are printed into a public
+  // log. See the note in validate.ts.
+  it("rejects an empty title, naming the page it is on", () => {
     expect(validatePosts([withFm({ title: "  " })])).toEqual([
-      "a-good-post: title is empty",
+      "page page-good: title is empty",
     ]);
   });
 
@@ -57,9 +61,19 @@ describe("validatePosts", () => {
     expect(validatePosts([{ ...ok, slug: "Not A Slug" }])[0]).toContain("slug");
   });
 
-  it("rejects duplicate slugs, naming the slug once", () => {
-    const errors = validatePosts([ok, { ...ok, body: "Other.\n" }]);
-    expect(errors).toEqual(["a-good-post: duplicate slug (2 posts share it)"]);
+  it("rejects two pages on one slug, naming the pages and not the slug", () => {
+    const errors = validatePosts([
+      ok,
+      { ...ok, pageId: "page-other", body: "Other.\n" },
+    ]);
+
+    expect(errors).toEqual([
+      "2 posts share one slug (pages page-good, page-other)",
+    ]);
+  });
+
+  it("reads the same page twice in one query as one post", () => {
+    expect(validatePosts([ok, { ...ok, body: "Other.\n" }])).toEqual([]);
   });
 
   it("rejects an empty body", () => {
@@ -68,6 +82,7 @@ describe("validatePosts", () => {
 
   it("accumulates every error rather than stopping at the first", () => {
     const broken: ValidatablePost = {
+      pageId: "page-broken",
       slug: "BAD SLUG",
       frontmatter: {
         title: "",
@@ -104,18 +119,32 @@ describe("validatePosts tags", () => {
 
   it("rejects distinct tags that collapse onto the same slug", () => {
     const errors = validatePosts([
-      { ...ok, slug: "a", frontmatter: { ...ok.frontmatter, tags: ["C++"] } },
-      { ...ok, slug: "b", frontmatter: { ...ok.frontmatter, tags: ["C#"] } },
+      {
+        ...ok,
+        pageId: "page-a",
+        slug: "a",
+        frontmatter: { ...ok.frontmatter, tags: ["C++"] },
+      },
+      {
+        ...ok,
+        pageId: "page-b",
+        slug: "b",
+        frontmatter: { ...ok.frontmatter, tags: ["C#"] },
+      },
     ]);
     expect(errors.length).toBe(1);
-    expect(errors[0]).toContain("c");
-    expect(errors[0]).toMatch(/C\+\+|C#/);
+    // The names are what has to change and exactly what may not be printed;
+    // the pages carrying them are where they can be read.
+    expect(errors[0]).toContain("page-a");
+    expect(errors[0]).toContain("page-b");
+    expect(errors[0]).not.toMatch(/C\+\+|C#/);
   });
 
-  it("rejects duplicate tags within one post", () => {
+  it("rejects duplicate tags within one post, by position", () => {
     const errors = validatePosts([withFm({ tags: ["AI", "AI"] })]);
 
-    expect(errors.join("\n")).toMatch(/duplicate.*AI|AI.*duplicate/i);
+    expect(errors.join("\n")).toMatch(/tag #2/);
+    expect(errors.join("\n")).not.toContain("AI");
   });
 
   it("accepts 100 tags and rejects 101", () => {
@@ -159,7 +188,7 @@ describe("validateSourceSlugs", () => {
     ]);
 
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain("dup");
+    expect(errors[0]).not.toContain("dup");
     expect(errors[0]).toContain("page-a");
     expect(errors[0]).toContain("page-b");
   });
@@ -173,9 +202,12 @@ describe("validateSourceSlugs", () => {
       { pageId: "page-e", slug: "alpha" },
     ]);
 
+    // Sorted by the slug they collide on, which is not itself printed: the
+    // pages are, and they are what an author opens.
     expect(errors).toHaveLength(2);
-    expect(errors[0]).toContain("alpha");
-    expect(errors[1]).toContain("zeta");
+    expect(errors[0]).toContain("page-c, page-d, page-e");
+    expect(errors[1]).toContain("page-a, page-b");
+    expect(errors.join("\n")).not.toMatch(/alpha|zeta/);
   });
 
   it("tolerates the same page appearing twice in one query", () => {

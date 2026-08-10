@@ -18,6 +18,7 @@ const frontmatter: PostFrontmatter = {
 };
 
 const post = (over: Partial<RenderedPost> = {}): RenderedPost => ({
+  pageId: "page-grounding-agents",
   slug: "grounding-agents",
   frontmatter,
   body: "Body.\n",

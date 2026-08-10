@@ -157,7 +157,9 @@ describe("planMigration", () => {
 
     expect(plan.create).toEqual([]);
     expect(plan.errors).toHaveLength(1);
-    expect(plan.errors[0]).toContain('"one"');
+    // The pages, not the slug: a slug is a value somebody typed into a
+    // property and this message is printed into a log. See validate.ts.
+    expect(plan.errors[0]).not.toContain('"one"');
     expect(plan.errors[0]).toContain("page-one");
     expect(plan.errors[0]).toContain("page-one-again");
   });
@@ -246,7 +248,12 @@ describe("planMigration", () => {
     expect(plan.create).toEqual([]);
     expect(plan.resume).toEqual([]);
     expect(plan.errors).toHaveLength(1);
-    expect(plan.errors[0]).toContain("Someone else's post");
+    // Neither title is repeated: one of them belongs to a page this very
+    // message concludes is somebody else's.
+    expect(plan.errors[0]).not.toContain("Someone else's post");
+    expect(plan.errors[0]).toMatch(/title/i);
+    expect(plan.errors[0]).toContain("page-one");
+    expect(plan.errors[0]).toContain("one.mdx");
   });
 
   // Neither finished nor ours: publishing it would put a stranger's writing on

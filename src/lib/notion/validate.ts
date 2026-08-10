@@ -2,6 +2,11 @@ import type { PostFrontmatter } from "./types";
 import { isValidSlug, slugFilenameProblems, slugify } from "./slug";
 
 export type ValidatablePost = {
+  // Notion's own id for the page this post came off. Opaque, stable, and the
+  // one identifier for a post that is not itself something an author typed —
+  // which is what makes it the one safe thing to put in front of a message. See
+  // the note above validatePosts.
+  pageId: string;
   slug: string;
   frontmatter: PostFrontmatter;
   body: string;
@@ -41,6 +46,24 @@ export type PostMetadata = {
   tags: unknown;
   updated?: unknown;
 };
+
+// Nothing below ever repeats a value.
+//
+// Every message here is printed into a public GitHub Actions log, and every
+// value it could quote came out of a Notion page or a frontmatter block that
+// anyone with edit access can write: a slug is a url someone pasted before it
+// was tidied, a title is whatever was typed, an excerpt is a paste out of a
+// document, a tag is a word from a picker. The ones that reach a refusal are by
+// definition the odd ones — the date that will not parse because a query string
+// is still stuck to it, the tag with a comma in it because it came out of a
+// config file — so quoting them published exactly the values worth not
+// publishing.
+//
+// What a message may carry is what identifies the problem rather than what it
+// holds: the field's name, the page id or file it is on, an index into a list,
+// a length, a count, and a category of what is wrong. Everything a person needs
+// in order to open the right page and look at the right line, and nothing they
+// could not already see there.
 
 // What a value is, without repeating what it says.
 function describeType(value: unknown): string {
@@ -107,6 +130,11 @@ export function metadataProblems(meta: PostMetadata): string[] {
 // A day, or the reason this is not one. A value that is not text at all cannot
 // be narrowed to a day and must never be stringified into something that looks
 // like one — `["2026-05-20"]` stringifies to exactly the day it is not.
+//
+// The value itself is never repeated: a date that will not parse is very often
+// one with something else stuck to it, which is precisely the case where what
+// is stuck to it should not be published. Saying which of the two ways it is
+// wrong is what fixing it needs, and it is more than quoting ever said.
 function dateProblems(value: unknown, name: string): string[] {
   if (typeof value !== "string") {
     return [
@@ -114,13 +142,23 @@ function dateProblems(value: unknown, name: string): string[] {
         `frontmatter holds ${describeType(value)})`,
     ];
   }
-  return isValidDate(value)
-    ? []
-    : [`${name} must be a valid YYYY-MM-DD value (got ${JSON.stringify(value)})`];
+  if (isValidDate(value)) return [];
+
+  const shaped = ISO_DATE.test(value);
+  return [
+    `${name} must be a valid YYYY-MM-DD value (` +
+      (shaped
+        ? "it is written as YYYY-MM-DD but names a day that does not exist"
+        : `the frontmatter holds a ${value.length}-character string that is ` +
+          "not a YYYY-MM-DD day") +
+      ")",
+  ];
 }
 
 // Tag names become both /blog/tag/<slug> urls and Notion multi-select options,
-// so they have to survive both.
+// so they have to survive both. Each one is named by its position in the list —
+// a name is a value like any other, and a tag that reaches a refusal is the one
+// somebody pasted.
 function tagProblems(tags: unknown): string[] {
   const problems: string[] = [];
   if (!Array.isArray(tags)) {
@@ -135,81 +173,90 @@ function tagProblems(tags: unknown): string[] {
   const seen = new Set<string>();
 
   for (const [index, tag] of tags.entries()) {
+    const at = `tag #${index + 1}`;
     if (typeof tag !== "string") {
-      problems.push(`tag #${index + 1} must be a string`);
+      problems.push(`${at} must be a string`);
       continue;
     }
     if (seen.has(tag)) {
-      problems.push(`duplicate tag ${JSON.stringify(tag)}`);
+      problems.push(`${at} repeats a tag already on this post`);
       continue;
     }
     seen.add(tag);
 
     if (tag.trim() === "") {
-      problems.push("a tag is blank");
+      problems.push(`${at} is blank`);
       continue;
     }
     if (tag.includes(",")) {
       problems.push(
-        `tag ${JSON.stringify(tag)} contains a comma, which Notion uses to ` +
-          "separate multi-select options and cannot store inside one",
+        `${at} contains a comma, which Notion uses to separate multi-select ` +
+          "options and cannot store inside one",
       );
     }
     if (tag.length > MAX_TAG_NAME) {
-      problems.push(
-        `tag ${JSON.stringify(tag)} is ${tag.length} chars (max ${MAX_TAG_NAME})`,
-      );
+      problems.push(`${at} is ${tag.length} chars (max ${MAX_TAG_NAME})`);
     }
     // A name with no alphanumerics slugifies to "" and renders a link to
     // /blog/tag/ — a 404 on every card that carries it, and a 404 url in the
     // sitemap.
     if (slugify(tag) === "") {
-      problems.push(`tag ${JSON.stringify(tag)} has no url-safe characters`);
+      problems.push(`${at} has no url-safe characters`);
     }
   }
 
   return problems;
 }
 
+// One post's tags, named by whatever the caller identifies a post with: a page
+// id on the way out of Notion, a file name on the way in.
+export type TaggedSource = { id: string; tags: unknown };
+
 // Distinct names collapsing onto one slug (e.g. "C++" and "C#" both -> "c")
 // would silently merge two tags onto a single page under one of the names.
 // Only meaningful across a whole set of posts, so it is a pass of its own.
-export function tagSlugCollisions(
-  tagLists: readonly unknown[],
-): string[] {
-  const namesBySlug = new Map<string, Set<string>>();
+//
+// The colliding names are what a person has to change, and they are exactly
+// what this may not print — so it names the posts carrying them instead, which
+// is where those names can be read and edited anyway.
+export function tagSlugCollisions(sources: readonly TaggedSource[]): string[] {
+  const bySlug = new Map<string, { names: Set<string>; ids: Set<string> }>();
 
-  for (const tags of tagLists) {
+  for (const { id, tags } of sources) {
     if (!Array.isArray(tags)) continue;
     for (const tag of tags) {
       if (typeof tag !== "string") continue;
       const slug = slugify(tag);
       if (slug === "") continue;
-      const names = namesBySlug.get(slug) ?? new Set<string>();
-      names.add(tag);
-      namesBySlug.set(slug, names);
+      const entry = bySlug.get(slug) ?? { names: new Set(), ids: new Set() };
+      entry.names.add(tag);
+      entry.ids.add(id);
+      bySlug.set(slug, entry);
     }
   }
 
-  return [...namesBySlug]
-    .filter(([, names]) => names.size > 1)
+  return [...bySlug]
+    .filter(([, entry]) => entry.names.size > 1)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(
-      ([slug, names]) =>
-        `tag slug "${slug}" is shared by ${[...names]
-          .sort()
-          .map((name) => JSON.stringify(name))
-          .join(", ")}`,
+      ([, entry]) =>
+        `${entry.names.size} different tag names collapse onto one tag slug ` +
+        `(on ${[...entry.ids].sort().join(", ")}) — /blog/tag/ has one page ` +
+        "for them all, so rename all but one",
     );
 }
 
 // Collects every problem across every post. The sync writes nothing unless this
 // returns an empty array, so a malformed post can never reach production.
+//
+// Keyed by the page's Notion id rather than by its slug: a slug is a value
+// somebody typed into the page, and this is the one message that has to name a
+// post whose metadata is the thing being refused.
 export function validatePosts(posts: ValidatablePost[]): string[] {
   const errors: string[] = [];
 
   for (const post of posts) {
-    const at = (message: string) => `${post.slug}: ${message}`;
+    const at = (message: string) => `page ${post.pageId}: ${message}`;
 
     errors.push(...metadataProblems(post.frontmatter).map(at));
 
@@ -222,14 +269,24 @@ export function validatePosts(posts: ValidatablePost[]): string[] {
     if (post.body.trim() === "") errors.push(at("body is empty after conversion"));
   }
 
-  errors.push(...tagSlugCollisions(posts.map((post) => post.frontmatter.tags)));
+  errors.push(
+    ...tagSlugCollisions(
+      posts.map((post) => ({ id: `page ${post.pageId}`, tags: post.frontmatter.tags })),
+    ),
+  );
 
-  const counts = new Map<string, number>();
+  const pagesBySlug = new Map<string, Set<string>>();
   for (const post of posts) {
-    counts.set(post.slug, (counts.get(post.slug) ?? 0) + 1);
+    const ids = pagesBySlug.get(post.slug) ?? new Set<string>();
+    ids.add(post.pageId);
+    pagesBySlug.set(post.slug, ids);
   }
-  for (const [slug, count] of counts) {
-    if (count > 1) errors.push(`${slug}: duplicate slug (${count} posts share it)`);
+  for (const [, ids] of [...pagesBySlug].sort(([a], [b]) => a.localeCompare(b))) {
+    if (ids.size > 1) {
+      errors.push(
+        `${ids.size} posts share one slug (pages ${[...ids].sort().join(", ")})`,
+      );
+    }
   }
 
   return errors;
@@ -299,7 +356,11 @@ export function validateLocalPosts(posts: readonly MigratablePost[]): string[] {
     if (post.content.trim() === "") errors.push(at("body is empty"));
   }
 
-  errors.push(...tagSlugCollisions(posts.map(localTagInput)));
+  errors.push(
+    ...tagSlugCollisions(
+      posts.map((post) => ({ id: post.file, tags: localTagInput(post) })),
+    ),
+  );
 
   return errors;
 }
@@ -315,6 +376,9 @@ export type PublishedSource = { pageId: string; slug: string };
 // block is fetched* so a collision costs nothing and changes nothing.
 //
 // The same page id twice is a query artifact, not a collision: it is one post.
+//
+// The pages are named and the slug they are fighting over is not: it is a value
+// somebody typed into a property, and the pages are where it can be read.
 export function validateSourceSlugs(sources: PublishedSource[]): string[] {
   const pageIdsBySlug = new Map<string, Set<string>>();
 
@@ -328,8 +392,8 @@ export function validateSourceSlugs(sources: PublishedSource[]): string[] {
     .filter(([, ids]) => ids.size > 1)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(
-      ([slug, ids]) =>
-        `slug "${slug}" is claimed by ${ids.size} different Notion pages ` +
+      ([, ids]) =>
+        `${ids.size} different Notion pages claim one slug ` +
         `(${[...ids].sort().join(", ")}) — give each page its own Slug`,
     );
 }

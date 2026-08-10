@@ -391,13 +391,17 @@ export function planMigration(
   // Matching against either one would bless it, so the run stops instead — and
   // that holds whether they are drafts, published, or one of each, because
   // nothing here can tell which of them the post is supposed to become.
-  for (const [slug, claimants] of [...bySlug].sort(([a], [b]) =>
+  //
+  // The pages are named; the slug is not. A slug is a value somebody typed into
+  // a property, these messages are printed into a log anyone can read, and the
+  // pages are where the value can be seen and changed anyway.
+  for (const [, claimants] of [...bySlug].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
     if (claimants.length > 1) {
       errors.push(
-        `slug "${slug}" is already claimed by ${claimants.length} pages in the ` +
-          `database (${claimants
+        `${claimants.length} pages in the database already claim one slug ` +
+          `(${claimants
             .map((page) => page.pageId)
             .sort()
             .join(", ")}) — delete the duplicates before migrating`,
@@ -425,12 +429,12 @@ export function planMigration(
   }
 
   // Two files on one slug would migrate to two pages the sync then refuses.
-  for (const [slug, files] of [...filesBySlug].sort(([a], [b]) =>
+  for (const [, files] of [...filesBySlug].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
     if (files.length > 1) {
       errors.push(
-        `${files.sort().join(" and ")} both map to slug "${slug}" — ` +
+        `${files.sort().join(" and ")} both map to the same slug — ` +
           "rename one before migrating",
       );
     }
@@ -459,7 +463,7 @@ export function planMigration(
 
     if (existing.status !== DRAFT_STATUS) {
       errors.push(
-        `${post.file}: page ${existing.pageId} claims slug "${post.slug}" and ` +
+        `${post.file}: page ${existing.pageId} claims this post's slug and ` +
           `is ${existing.status === "" ? "in no status at all" : `"${existing.status}"`} — ` +
           `the migration only finishes its own "${DRAFT_STATUS}" pages and only ` +
           `skips "${PUBLISHED_STATUS}" ones, so this page is left alone; publish ` +
@@ -471,11 +475,14 @@ export function planMigration(
     // A draft under this slug is only this post's if it is also under this
     // post's title. The blocks are checked separately, once they have been
     // read (see planResumes).
+    //
+    // Neither title is repeated: one of them is this run's own, and the other
+    // belongs to a page this very message is concluding is somebody else's.
     if (existing.title !== post.title) {
       errors.push(
-        `${post.file}: draft page ${existing.pageId} claims slug "${post.slug}" ` +
-          `under the title "${existing.title}", not "${post.title}" — it is not ` +
-          "an unfinished copy of this post, so it was left alone",
+        `${post.file}: draft page ${existing.pageId} claims this post's slug ` +
+          "but carries a different title — it is not an unfinished copy of " +
+          "this post, so it was left alone",
       );
       continue;
     }
@@ -667,8 +674,8 @@ export async function planResumes(
       return {
         write,
         error:
-          `${write.file}: draft page ${write.resume.pageId} claims slug ` +
-          `"${write.slug}" but is not an unfinished copy of this post ` +
+          `${write.file}: draft page ${write.resume.pageId} claims this ` +
+          `post's slug but is not an unfinished copy of it ` +
           `(${match.reason}) — it was left exactly as it is; publish it, change ` +
           "its slug, or move it to the trash, then run again",
       };
@@ -813,7 +820,10 @@ export type MetadataDivergence = {
   repairable: RepairableField[];
 };
 
-// What a live page's properties say, against what this post's say.
+// What a live page's properties say, against what this post's say. Named, never
+// quoted: a title and a slug are values somebody typed, and the page a
+// divergence is about is exactly the page whose values must not be republished
+// into a log. See validate.ts.
 export function compareMetadata(
   desired: PageMetadata,
   actual: PageMetadata,
@@ -821,10 +831,10 @@ export function compareMetadata(
   const identity: string[] = [];
 
   if (actual.title !== desired.title) {
-    identity.push(`its title reads "${actual.title}", not "${desired.title}"`);
+    identity.push("its title is not this post's");
   }
   if (actual.slug !== desired.slug) {
-    identity.push(`its slug reads "${actual.slug}", not "${desired.slug}"`);
+    identity.push("its slug is not this post's");
   }
   if (actual.statusType !== desired.statusType) {
     identity.push(
@@ -1100,10 +1110,10 @@ async function createUnclaimed(
   if (claimants.length > 0) {
     throw new Error(
       `${write.file}: ${describeClaimants(claimants)} already ` +
-        `${claimants.length === 1 ? "claims" : "claim"} the slug ` +
-        `"${write.slug}" — the run planned to create a page for it, and a ` +
-        "second page under one slug is one the sync will not publish, so " +
-        "nothing was created; check the database and run the migration again",
+        `${claimants.length === 1 ? "claims" : "claim"} this post's slug — ` +
+        "the run planned to create a page for it, and a second page under one " +
+        "slug is one the sync will not publish, so nothing was created; check " +
+        "the database and run the migration again",
     );
   }
   return executor.createPage(write.page);
@@ -1121,7 +1131,7 @@ async function proveStillOnlyClaimant(
   if (others.length > 0 || claimants.length === 0) {
     throw new Error(
       `${write.file}: the draft page ${pageId} is no longer the only page ` +
-        `claiming the slug "${write.slug}" (${describeClaimants(claimants)}) — ` +
+        `claiming this post's slug (${describeClaimants(claimants)}) — ` +
         "nothing was written to it",
     );
   }

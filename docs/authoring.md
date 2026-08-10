@@ -231,8 +231,10 @@ read before the body was fetched.
 
 Two published pages with the same **Slug** (or, with no Slug, the same title)
 would publish to one url, and the file on disk cannot say which page it came
-from. The run stops with `slug "..." is claimed by 2 different Notion pages`
-and writes nothing. Give one of them its own Slug.
+from. The run stops with `2 different Notion pages claim one slug (…)`, naming
+the pages rather than the slug — every message the sync prints ends up in a
+public Actions log, and a Slug is a value somebody typed into a property — and
+writes nothing. Open the pages it names and give one of them its own Slug.
 
 ## If you edit a draft the migration left behind
 

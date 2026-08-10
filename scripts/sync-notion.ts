@@ -80,13 +80,18 @@ function reportFailures(
   const annotate = process.env.GITHUB_ACTIONS === "true" ? "::error::" : "";
   console.error(`\n\u2717 ${failures.length} post(s) failed to sync:`);
   for (const failure of failures) {
+    // The page id, not the slug: a post that never reached disk has a slug
+    // nothing else has published, and this log is public. A file that was
+    // preserved is already committed, so naming it says nothing new.
     const fate = preserved.includes(failure.slug)
-      ? "kept the existing file"
+      ? `kept ${postPath(failure.slug)}`
       : "not published";
-    console.error(`  ${annotate}${failure.slug}: ${failure.message} (${fate})`);
+    console.error(`  ${annotate}page ${failure.pageId}: ${failure.message} (${fate})`);
   }
   if (skipped.length > 0) {
-    console.error(`  never published: ${skipped.join(", ")}`);
+    console.error(
+      `  ${skipped.length} of them have nothing on disk and were never published`,
+    );
   }
 }
 

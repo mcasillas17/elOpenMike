@@ -30,6 +30,7 @@ import { block, rt } from "./fixtures/blocks";
 const SCRATCH = path.join(process.cwd(), ".tmp-tests");
 
 const ok: ValidatablePost = {
+  pageId: "page-good",
   slug: "a-good-post",
   frontmatter: {
     title: "A good post",
