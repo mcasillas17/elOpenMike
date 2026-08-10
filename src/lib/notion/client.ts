@@ -82,6 +82,38 @@ export async function retrievePage(
   return page;
 }
 
+// Notion answers a query with `request_status`, and it can come back
+// `incomplete`: the query hit a server-side limit and what arrived is a subset
+// of the rows — reported with `has_more` false and no cursor, so nothing about
+// the pagination looks wrong. Reading that as the whole database is what turns
+// a truncated answer into deleted posts: a page that never arrived claims no
+// slug, its file on disk is therefore unclaimed, and an unclaimed file is one
+// the reconciler removes.
+//
+// There is nothing to recover — the API is saying it cannot give us the rest —
+// so the run stops here, before a desired set is built and long before a file
+// is compared or deleted. The migration reads the database through the same
+// call, where a short answer would instead mean creating a second page for a
+// post that is already there.
+type QueryStatus = {
+  type?: "complete" | "incomplete";
+  incomplete_reason?: string;
+};
+
+function assertQueryComplete(
+  status: QueryStatus | undefined,
+  dataSourceId: string,
+): void {
+  if (status?.type !== "incomplete") return;
+
+  const reason = status.incomplete_reason ?? "no reason given";
+  throw new Error(
+    `data source ${dataSourceId} returned an incomplete query result ` +
+      `(${reason}) — Notion truncated the rows rather than paginating them, ` +
+      "so nothing was read, planned, written or deleted this run",
+  );
+}
+
 // Walks every page in the data source. Notion's query does not return trashed
 // pages, so what comes back is the live contents of the database.
 export async function queryPages(
@@ -100,6 +132,8 @@ export async function queryPages(
         page_size: 100,
       }),
     );
+
+    assertQueryComplete(response.request_status, dataSourceId);
 
     for (const result of response.results) {
       const page = asPageObject(result);
