@@ -217,6 +217,15 @@ describe("emphasis", () => {
     rejects("****four****");
     rejects("~~~three~~~");
   });
+
+  // Each opener that turns out not to pair off used to re-scan the rest of the
+  // line for every other one, so a line of them cost exponential time: twenty
+  // took a quarter of a second, and the forty below would not have finished.
+  it("reads a line of unpaired delimiters without exploring every pairing", () => {
+    const line = `${"*.ts ".repeat(40)}and nothing else`;
+
+    expect(runs(line)).toEqual([{ text: line }]);
+  });
 });
 
 describe("links", () => {

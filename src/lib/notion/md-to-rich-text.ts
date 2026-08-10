@@ -60,7 +60,7 @@ export class UnsupportedInlineMarkdownError extends Error {
 // UnsupportedInlineMarkdownError for anything Notion's rich text cannot hold.
 export function inlineToRichText(markdown: string): RichTextInput {
   const items: TextItem[] = [];
-  parse(markdown, 0, markdown.length, { annotations: [] }, items);
+  parse(markdown, 0, markdown.length, { annotations: [] }, items, new Map());
   return items;
 }
 
@@ -70,6 +70,7 @@ function parse(
   end: number,
   context: Context,
   items: TextItem[],
+  closers: CloserMemo,
 ): void {
   let literal = "";
   let index = start;
@@ -169,6 +170,7 @@ function parse(
         link.labelEnd,
         { ...context, href: link.url },
         items,
+        closers,
       );
       index = link.end;
       continue;
@@ -184,7 +186,7 @@ function parse(
             index,
           );
         }
-        const closer = findCloser(source, index + run.length, end, run);
+        const closer = findCloser(source, index + run.length, end, run, closers);
         if (closer.index !== undefined) {
           flush();
           parse(
@@ -193,6 +195,7 @@ function parse(
             closer.index,
             annotate(context, ...emphasisOf(char, run.length)),
             items,
+            closers,
           );
           index = closer.index + run.length;
           continue;
@@ -317,11 +320,35 @@ type CloserSearch = {
   sawMismatch: boolean;
 };
 
+// Every answer is a pure function of where the search starts, where it stops
+// and which run it is looking for, and the same question is asked again for
+// every opener that turns out not to pair off. Remembering the answers is what
+// keeps a line of unpaired delimiters — "*.ts *.tsx *.js *.jsx …" — from taking
+// exponential time to refuse.
+type CloserMemo = Map<string, CloserSearch>;
+
 function findCloser(
   source: string,
   start: number,
   end: number,
   opener: DelimiterRun,
+  memo: CloserMemo,
+): CloserSearch {
+  const key = `${start}:${end}:${opener.char}:${opener.length}`;
+  const remembered = memo.get(key);
+  if (remembered) return remembered;
+
+  const found = scanForCloser(source, start, end, opener, memo);
+  memo.set(key, found);
+  return found;
+}
+
+function scanForCloser(
+  source: string,
+  start: number,
+  end: number,
+  opener: DelimiterRun,
+  memo: CloserMemo,
 ): CloserSearch {
   let index = start;
   let sawMismatch = false;
@@ -357,7 +384,7 @@ function findCloser(
       if (run.canOpen) {
         // Skip the pair this run opens, so emphasis nested inside is not
         // mistaken for the closer being looked for.
-        const inner = findCloser(source, index + run.length, end, run);
+        const inner = findCloser(source, index + run.length, end, run, memo);
         if (inner.index !== undefined) {
           index = inner.index + run.length;
           continue;
