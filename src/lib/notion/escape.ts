@@ -126,6 +126,16 @@ function isIntraword(text: string, index: number): boolean {
 function blockMarkerAt(text: string, index: number): BlockMarker | undefined {
   const char = text[index];
 
+  // A GFM table only exists if some line is a delimiter row, so defusing that
+  // one line is enough — and it is the one literal-text case that restructures
+  // the prose around it into cells instead of merely restyling it.
+  if (
+    (char === "|" || char === ":" || char === "-") &&
+    isTableDelimiterLine(text, index)
+  ) {
+    return { text: `\\${char}`, length: 1 };
+  }
+
   // A blockquote marker needs no trailing space, so any leading `>` counts.
   if (char === ">") return { text: "\\>", length: 1 };
 
@@ -182,6 +192,21 @@ function isRuleLine(text: string, index: number, char: string): boolean {
     if (text[i] !== char && !INDENT.test(text[i])) return false;
   }
   return true;
+}
+
+// Every shape GFM will read as a table's delimiter row, and then some: a line
+// of nothing but pipes, colons, spaces and at least one dash. `|` is left
+// literal everywhere else, so a cell's own pipes keep the escaping that
+// blocks-to-md already applies to them.
+function isTableDelimiterLine(text: string, index: number): boolean {
+  let dashes = 0;
+  for (let i = index; i < text.length; i++) {
+    const char = text[i];
+    if (char === "\n") break;
+    if (char === "-") dashes += 1;
+    else if (char !== "|" && char !== ":" && !INDENT.test(char)) return false;
+  }
+  return dashes > 0;
 }
 
 function runLength(text: string, index: number, char: string): number {

@@ -97,6 +97,24 @@ describe("literal text that looks like a block marker", () => {
     expect(text("Heading\n===")).toBe("Heading\n\\===");
     expect(text("Heading\n---")).toBe("Heading\n\\---");
   });
+
+  // A GFM table needs a delimiter row, so defusing that one line is enough —
+  // and it is the only literal-text case that would restructure the prose
+  // around it into cells rather than merely restyling it.
+  it("escapes a line shaped like a table delimiter row", () => {
+    expect(text("Name | Value\n---- | -----\nSlug | a-post")).toBe(
+      "Name | Value\n\\---- | -----\nSlug | a-post",
+    );
+    expect(text("| --- | --- |")).toBe("\\| --- | --- |");
+    expect(text("Name | Value\n:--: | ---:")).toBe(
+      "Name | Value\n\\:--: | ---:",
+    );
+  });
+
+  it("leaves a pipe that cannot build a table alone", () => {
+    expect(text("stdout | grep -c error")).toBe("stdout | grep -c error");
+    expect(text("a | b\nc | d")).toBe("a | b\nc | d");
+  });
 });
 
 describe("literal text that looks like inline syntax", () => {
@@ -259,6 +277,47 @@ describe("compiled through the post page's MDX pipeline", () => {
     const anchor = container.querySelector("a");
     expect(anchor?.getAttribute("href")).toBe("https://example.com");
     expect(anchor?.textContent).toBe("docs");
+  });
+
+  it("does not let literal pipes restructure prose into a table", async () => {
+    const container = await renderMdx(
+      paragraph(["Name | Value\n---- | -----\nSlug | a-post"]),
+    );
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.textContent).toContain("---- | -----");
+  });
+
+  it("does not build a table out of a list item's paragraph children", async () => {
+    const container = await renderMdx(
+      blocksToMarkdown(
+        [
+          block("bulleted_list_item", { rich_text: [rt("Header row syntax:")] }, [
+            block("paragraph", { rich_text: [rt("Name | Value")] }),
+            block("paragraph", { rich_text: [rt("---- | -----")] }),
+          ]),
+        ],
+        ctx,
+      ),
+    );
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.querySelectorAll("li")).toHaveLength(1);
+  });
+
+  it("still renders a real Notion table as a table", async () => {
+    const container = await renderMdx(
+      blocksToMarkdown(
+        [
+          block("table", { table_width: 2, has_column_header: true }, [
+            block("table_row", { cells: [[rt("Name")], [rt("Value")]] }),
+            block("table_row", { cells: [[rt("p99")], [rt("120 | ms")]] }),
+          ]),
+        ],
+        ctx,
+      ),
+    );
+    expect(container.querySelectorAll("table")).toHaveLength(1);
+    expect(container.querySelectorAll("th")).toHaveLength(2);
+    expect(container.querySelectorAll("td")[1].textContent).toBe("120 | ms");
   });
 
   it("keeps a literal marker inside a list item in that item", async () => {
