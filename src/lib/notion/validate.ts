@@ -87,6 +87,38 @@ function textProblems(value: unknown, name: string): string[] {
   return value.trim() === "" ? [`${name} is empty`] : [];
 }
 
+// A title is also a post's identity: the migration matches a page to a post by
+// it, and refuses to write to a page carrying somebody else's rather than
+// overwriting what it finds. That only works while both sides can hold the same
+// string, and one of them cannot — every reader of a Notion page property trims
+// what it reads, because a title is rich text and its edges are not content.
+//
+// So a title with whitespace on either end is a title the page can never agree
+// with: the file says " Ship it ", the page says "Ship it", and the two are
+// compared forever. It used to be written padded and compared trimmed, which
+// hid the disagreement in the ordinary case and made a draft left behind by a
+// killed run unresumable — and dropped the padding from the published post
+// without ever saying so.
+//
+// Neither end trims on the author's behalf. The value is refused, before
+// anything is written, and the file is fixed.
+function edgeWhitespaceProblems(value: unknown, name: string): string[] {
+  // A value that is nothing but whitespace is already reported as empty, and
+  // one message per problem is what makes a list of them fixable.
+  if (
+    typeof value !== "string" ||
+    value.trim() === "" ||
+    value === value.trim()
+  ) {
+    return [];
+  }
+  return [
+    `${name} begins or ends with whitespace, which Notion does not keep — ` +
+      "every reader of a page property trims it, so the page could never " +
+      "carry what the post says; remove it",
+  ];
+}
+
 // Every invariant one post's metadata has to satisfy, whichever direction it is
 // travelling in. Messages carry no identifier: the caller knows whether this
 // post is a slug or a file name, and says so.
@@ -102,6 +134,7 @@ export function metadataProblems(meta: PostMetadata): string[] {
   const { title, date, excerpt, updated } = meta;
 
   problems.push(...textProblems(title, "title"));
+  problems.push(...edgeWhitespaceProblems(title, "title"));
   problems.push(...dateProblems(date, "date"));
 
   problems.push(...textProblems(excerpt, "excerpt"));

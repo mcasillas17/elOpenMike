@@ -129,7 +129,12 @@ drift apart:
   holding a sequence, a mapping, a number, a boolean or a null is refused by
   name rather than becoming `A,B`, `[object Object]`, `42` or `true` and being
   published as though somebody had typed it. A file with no `title:` line at
-  all still falls back to its file name;
+  all still falls back to its file name. A title with whitespace on either end
+  is refused rather than trimmed: every reader of a Notion page property trims
+  what it reads, so a padded title is one the page can never carry — it made a
+  draft left behind by a killed run unresumable, and it dropped the padding
+  from the published post without ever saying so. Nothing here trims on the
+  author's behalf;
 - a **date** that is a real `YYYY-MM-DD` day. A date carrying a time is narrowed
   to its day as the file is read — but only when the *whole* value is a valid
   ISO-8601 timestamp, time, fraction and offset included, so `2026-05-20T`,

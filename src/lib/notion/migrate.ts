@@ -596,11 +596,19 @@ export function migrationRequests(
       metadata: {
         // Every value here is the one the *page* reads back as, because that is
         // the only thing a live page can be compared against: fetch-post trims
-        // a title and an excerpt, and slices a date property down to the ten
-        // characters of its day. A post whose own date carries a time would
-        // otherwise disagree with its page forever — rewritten, re-read, still
-        // different, and never published at all.
-        title: post.title.trim(),
+        // an excerpt, and slices a date property down to the ten characters of
+        // its day. A post whose own date carries a time would otherwise
+        // disagree with its page forever — rewritten, re-read, still different,
+        // and never published at all.
+        //
+        // The title is the exception, and deliberately so: it is what says the
+        // page is this post, so it is written and compared as the same string
+        // rather than normalized into agreement. validate.ts refuses a title
+        // with whitespace on its edges before any of this is built, which is
+        // what makes the two ends equal — and a padded one that somehow reached
+        // here would fail loudly against its own page rather than quietly
+        // publishing something the file does not say.
+        title: post.title,
         slug: post.slug,
         date: post.date.slice(0, 10),
         excerpt: post.excerpt.trim(),

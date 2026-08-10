@@ -218,6 +218,14 @@ source the blog publishes from. It is checked against
 the database before anything is read, so an id belonging to another database
 fails immediately rather than quietly publishing somebody else's rows.
 
+## If a title will not sync
+
+A **title** is what says which post a page is, and Notion trims one on the way
+out: a title with a space, a tab or a newline on either end is not a title a
+page can carry. Both commands refuse it by name — `title begins or ends with
+whitespace` — and write nothing, rather than quietly publishing a title the
+file does not say. Take the space off the end and run again.
+
 ## If one post fails to sync
 
 A post whose images can't be downloaded — an expired link, a file over the
