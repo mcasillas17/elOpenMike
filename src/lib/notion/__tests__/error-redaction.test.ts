@@ -7,6 +7,8 @@ import {
 import {
   migrationRequests,
   planMigration,
+  toLocalPost,
+  UnreadableFrontmatterError,
   type LocalPost,
 } from "@/lib/notion/migrate";
 import type { DataSourceSchema } from "@/lib/notion/properties";
@@ -272,5 +274,56 @@ describe("what the migration script prints", () => {
     expect(output).toContain("leaky-post.mdx");
     expect(output).not.toContain("SECRET-123");
     expect(output).not.toContain("internal.corp.example");
+  });
+});
+
+// Frontmatter is parsed by js-yaml, whose exception quotes the offending lines
+// in its message *and* keeps the entire document on `error.mark.buffer`. The
+// migration script prints the message it catches, so a file whose frontmatter
+// does not parse used to print its frontmatter — and anything a logger dumped
+// alongside the error printed all of it.
+describe("what an unreadable frontmatter block says", () => {
+  const leaky = [
+    "---",
+    "title: [unclosed",
+    "date: 2026-05-20",
+    "canonical: https://internal.corp.example/d?token=SECRET-123",
+    "---",
+    "",
+    "Body.",
+  ].join("\n");
+
+  function frontmatterFailure(): Error {
+    try {
+      toLocalPost("leaky-post.mdx", leaky);
+    } catch (error) {
+      return error as Error;
+    }
+    throw new Error("expected the frontmatter to be refused");
+  }
+
+  it("refuses it rather than reading half of it", () => {
+    expect(frontmatterFailure()).toBeInstanceOf(UnreadableFrontmatterError);
+  });
+
+  it("keeps the document out of the message and off the error", () => {
+    const failure = frontmatterFailure();
+    const said = everythingSaid(failure);
+
+    for (const secret of ["SECRET-123", "internal.corp.example", "canonical"]) {
+      expect(said).not.toContain(secret);
+    }
+    expect(said).not.toContain("unclosed");
+    // js-yaml keeps the whole document here; nothing may carry it out.
+    expect((failure as unknown as { mark?: unknown }).mark).toBeUndefined();
+    expect((failure as unknown as { cause?: unknown }).cause).toBeUndefined();
+  });
+
+  it("still says which file and where in it", () => {
+    const failure = frontmatterFailure();
+
+    expect(failure.message).toContain("leaky-post.mdx");
+    expect(failure.message).toMatch(/line \d+/);
+    expect(failure.message).toMatch(/frontmatter/i);
   });
 });

@@ -142,7 +142,10 @@ class ScanBudget {
   depth = 0;
   deepest = 0;
 
+  // The text is held only to count the line endings in front of an offset —
+  // see locate(). Nothing from it reaches an error.
   constructor(
+    private readonly source: string,
     private readonly line: number | undefined,
     private readonly maxSteps: number,
   ) {}
@@ -152,23 +155,25 @@ class ScanBudget {
   spend(index: number, count = 1): void {
     this.steps += count;
     if (this.steps > this.maxSteps) {
-      throw new UnsupportedInlineMarkdownError(
+      throw failure(
+        this.source,
+        this.line,
         "scan-budget",
         `inline markdown whose delimiters need more than ${this.maxSteps} scan ` +
           "steps to resolve — simplify the emphasis on this line",
         index,
-        this.line,
       );
     }
   }
 
   descend<T>(index: number, work: () => T): T {
     if (this.depth >= MAX_INLINE_DEPTH) {
-      throw new UnsupportedInlineMarkdownError(
+      throw failure(
+        this.source,
+        this.line,
         "nesting-depth",
         `inline markdown nested more than ${MAX_INLINE_DEPTH} levels deep`,
         index,
-        this.line,
       );
     }
     this.depth += 1;
@@ -202,7 +207,33 @@ function refuse(
   reason: string,
   index: number,
 ): never {
-  throw new UnsupportedInlineMarkdownError(category, reason, index, scan.line);
+  throw failure(scan.source, scan.line, category, reason, index);
+}
+
+// A paragraph, a table cell and a list item's text all reach the inline parser
+// as the block's lines joined back together, so an offset into that text is not
+// an offset into any line an editor can put a cursor on. Where the caller said
+// which line the block opened on, the line endings in front of the offset are
+// counted and the answer is the line the offset is really on, with a column
+// inside it. Where it did not, the offset stands on its own — there is nothing
+// to count from.
+function failure(
+  source: string,
+  startLine: number | undefined,
+  category: InlineMarkdownCategory,
+  reason: string,
+  index: number,
+): UnsupportedInlineMarkdownError {
+  if (startLine === undefined) {
+    return new UnsupportedInlineMarkdownError(category, reason, index);
+  }
+
+  const before = source.slice(0, index);
+  const lastBreak = before.lastIndexOf("\n");
+  const line = startLine + (before.length - before.replace(/\n/g, "").length);
+  const column = lastBreak === -1 ? index : index - lastBreak - 1;
+
+  return new UnsupportedInlineMarkdownError(category, reason, column, line);
 }
 
 // The runs one line of inline Markdown describes. Throws
@@ -213,6 +244,7 @@ export function inlineToRichText(
   { maxSteps, onMetrics, tableCell = false, line }: InlineParseOptions = {},
 ): RichTextInput {
   const budget = new ScanBudget(
+    markdown,
     line,
     maxSteps ?? inlineScanBudget(markdown.length),
   );

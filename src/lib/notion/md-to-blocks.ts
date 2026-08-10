@@ -144,6 +144,12 @@ function unsupported(reason: string, index: number): Error {
   );
 }
 
+// Where each block started, so a refusal about a block can name the block's own
+// line rather than its parent's. Kept beside the blocks rather than on them: a
+// block is a request body, and a line number is not something Notion is offered.
+// Weak, so it holds nothing alive after the conversion.
+const blockLines = new WeakMap<object, number>();
+
 const FENCE = /^(`{3,}|~{3,})(.*)$/;
 const HEADING = /^(#{1,6})(?:[ \t]+(.*?))?[ \t]*$/;
 const THEMATIC_BREAK = /^(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
@@ -243,6 +249,7 @@ function readBlocks(lines: string[], offset = 0): BlockObjectRequest[] {
     }
 
     const read = readBlock(lines, index, offset);
+    blockLines.set(read.block, offset + index);
     blocks.push(read.block);
     index = read.next;
   }
@@ -599,9 +606,11 @@ function asChildren(
       payload !== null &&
       "children" in payload
     ) {
+      // The block at fault is the one carrying children, not the one it was
+      // about to be nested under, so its own line is what gets named.
       throw unsupported(
         "a block nested three levels deep, which Notion's api cannot create in one request",
-        line,
+        blockLines.get(block) ?? line,
       );
     }
   }

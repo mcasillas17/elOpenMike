@@ -203,12 +203,55 @@ const FRONTMATTER_OPTIONS = {
   },
 };
 
+// A frontmatter block YAML cannot read, said without saying what was in it.
+//
+// js-yaml quotes the offending lines in its own message and keeps the entire
+// document on `error.mark.buffer`, so the exception it throws is the file. The
+// script prints the message it catches and a logger would print the rest, and a
+// post's frontmatter carries titles, canonical urls and whatever else an author
+// put there. Only the location survives — which is what fixing it needs.
+export class UnreadableFrontmatterError extends Error {
+  readonly file: string;
+  readonly line?: number;
+  readonly column?: number;
+
+  constructor(file: string, line?: number, column?: number) {
+    super(
+      `${file}: the frontmatter could not be parsed as YAML` +
+        (line === undefined ? "" : ` (line ${line}`) +
+        (line !== undefined && column !== undefined ? `, column ${column}` : "") +
+        (line === undefined ? "" : ")"),
+    );
+    this.name = "UnreadableFrontmatterError";
+    this.file = file;
+    this.line = line;
+    if (column !== undefined) this.column = column;
+  }
+}
+
+// js-yaml marks a failure with 0-based coordinates; an editor counts from 1.
+// Nothing else on the exception is read, and it is not kept as a `cause`: the
+// buffer hangs off it.
+function frontmatterFailure(file: string, error: unknown): never {
+  const mark = (error as { mark?: { line?: unknown; column?: unknown } }).mark;
+  const at = (value: unknown): number | undefined =>
+    typeof value === "number" && Number.isFinite(value) ? value + 1 : undefined;
+
+  throw new UnreadableFrontmatterError(file, at(mark?.line), at(mark?.column));
+}
+
 // Reads one content/blog/*.mdx file into the shape the migration writes. The
 // slug is normalized the same way fetch-post.ts reads it back, so a re-run
 // compares like with like.
 export function toLocalPost(file: string, raw: string): LocalPost {
   const stem = file.replace(/\.mdx$/, "");
-  const { data, content } = matter(raw, FRONTMATTER_OPTIONS);
+  let parsed: matter.GrayMatterFile<string>;
+  try {
+    parsed = matter(raw, FRONTMATTER_OPTIONS);
+  } catch (error: unknown) {
+    frontmatterFailure(file, error);
+  }
+  const { data, content } = parsed;
   const updated = frontmatterDate(data.updated);
   const rawTags: unknown = data.tags;
   const rawTitle: unknown = data.title;
