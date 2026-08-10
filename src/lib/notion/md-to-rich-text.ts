@@ -60,7 +60,7 @@ export class UnsupportedInlineMarkdownError extends Error {
 // UnsupportedInlineMarkdownError for anything Notion's rich text cannot hold.
 export function inlineToRichText(markdown: string): RichTextInput {
   const items: TextItem[] = [];
-  parse(markdown, 0, markdown.length, { annotations: [] }, items, new Map());
+  parse(markdown, 0, markdown.length, { annotations: [] }, items, new Map(), []);
   return items;
 }
 
@@ -71,6 +71,9 @@ function parse(
   context: Context,
   items: TextItem[],
   closers: CloserMemo,
+  // The characters of the delimiter runs still open around this text. A run of
+  // one of them inside is a pair crossing this one rather than nesting in it.
+  enclosing: readonly string[],
 ): void {
   let literal = "";
   let index = start;
@@ -172,6 +175,7 @@ function parse(
         { ...context, href: link.url },
         items,
         closers,
+        enclosing,
       );
       index = link.end;
       continue;
@@ -187,7 +191,28 @@ function parse(
             index,
           );
         }
-        const closer = findCloser(source, index + run.length, end, run, closers);
+        const closer = findCloser(
+          source,
+          index + run.length,
+          end,
+          run,
+          closers,
+          enclosing,
+        );
+        if (closer.sawMismatch) {
+          throw new UnsupportedInlineMarkdownError(
+            `emphasis opened with "${char.repeat(run.length)}" and a run of another length between it and its closer`,
+            source,
+            index,
+          );
+        }
+        if (closer.sawCrossing) {
+          throw new UnsupportedInlineMarkdownError(
+            `emphasis opened with "${char.repeat(run.length)}" and crossed by another delimiter's pair rather than containing it`,
+            source,
+            index,
+          );
+        }
         if (closer.index !== undefined) {
           flush();
           parse(
@@ -197,16 +222,10 @@ function parse(
             annotate(context, ...emphasisOf(char, run.length)),
             items,
             closers,
+            [...enclosing, char],
           );
           index = closer.index + run.length;
           continue;
-        }
-        if (closer.sawMismatch) {
-          throw new UnsupportedInlineMarkdownError(
-            `emphasis opened with "${char.repeat(run.length)}" and closed with a run of another length`,
-            source,
-            index,
-          );
         }
       }
       // Nothing can pair with it, so it is the character the author typed —
@@ -275,7 +294,17 @@ type DelimiterRun = {
 // CommonMark's flanking rules, which are what keep `last_edited_time` an
 // identifier and "2 * 3 = 6" a multiplication. The character before the run and
 // the character after it decide whether it can open emphasis, close it, both or
-// neither; the edges of the surrounding text count as whitespace.
+// neither; the edges of the line count as whitespace.
+//
+// One exception on top, which the site's pipeline has: the delimiters
+// themselves are "attention markers", so a `*` or `_` run touching one of them
+// may open or close even though they are punctuation. `~` joins the set when
+// GFM strikethrough is on, which is what makes "prose**~~struck~~**" bold and
+// struck rather than four literal asterisks. Strikethrough's own runs get no
+// such exemption. Mirrors micromark-core-commonmark's attention tokenizer, the
+// default attentionMarkers, and micromark-extension-gfm-strikethrough.
+const ATTENTION_MARKERS = new Set(["*", "_", "~"]);
+
 function delimiterRunAt(
   source: string,
   index: number,
@@ -285,40 +314,51 @@ function delimiterRunAt(
   let length = 0;
   while (index + length < end && source[index + length] === char) length += 1;
 
+  // The real neighbours, not the ends of the range being parsed: markdown
+  // classified them against the whole line.
   const before = index > 0 ? source[index - 1] : undefined;
-  const after = index + length < end ? source[index + length] : undefined;
+  const after = source[index + length];
 
   const beforeWhitespace = before === undefined || isWhitespace(before);
   const afterWhitespace = after === undefined || isWhitespace(after);
   const beforePunctuation = before !== undefined && isPunctuation(before);
   const afterPunctuation = after !== undefined && isPunctuation(after);
+  const beforeOther = !beforeWhitespace && !beforePunctuation;
+  const afterOther = !afterWhitespace && !afterPunctuation;
 
-  const leftFlanking =
-    !afterWhitespace &&
-    (!afterPunctuation || beforeWhitespace || beforePunctuation);
-  const rightFlanking =
-    !beforeWhitespace &&
-    (!beforePunctuation || afterWhitespace || afterPunctuation);
+  // Strikethrough is tokenized by an extension of its own, which does not
+  // consult the marker set.
+  const marked = char !== "~";
+  const opens =
+    afterOther ||
+    (afterPunctuation && !beforeOther) ||
+    (marked && after !== undefined && ATTENTION_MARKERS.has(after));
+  const closes =
+    beforeOther ||
+    (beforePunctuation && !afterOther) ||
+    (marked && before !== undefined && ATTENTION_MARKERS.has(before));
 
   // An underscore may only open or close where it is not sitting inside a word.
   const canOpen =
-    char === "_"
-      ? leftFlanking && (!rightFlanking || beforePunctuation)
-      : leftFlanking;
+    char === "_" ? opens && (!beforeOther || !closes) : opens;
   const canClose =
-    char === "_"
-      ? rightFlanking && (!leftFlanking || afterPunctuation)
-      : rightFlanking;
+    char === "_" ? closes && (!afterOther || !opens) : closes;
 
   return { char, length, canOpen, canClose };
 }
 
 type CloserSearch = {
   index?: number;
-  // A run of the same character that could close, but not at this length.
-  // CommonMark would split it across two delimiters; which half belongs to
-  // which is exactly the guess this converter refuses to make.
+  // A run of the same character that could close, but not at this length —
+  // whether or not a closer was found after it. CommonMark splits such a run
+  // across two delimiters, and which half belongs to which is exactly the
+  // guess this converter refuses to make: "*foo **bar*" is a literal "*foo *"
+  // and an italic "bar", not the italic "foo **bar" it looks like.
   sawMismatch: boolean;
+  // A run of a delimiter still open further out, closing inside this one.
+  // Markdown gives that pair the characters; this converter would have to take
+  // them from it, so the line is refused instead.
+  sawCrossing: boolean;
 };
 
 // Every answer is a pure function of where the search starts, where it stops
@@ -334,12 +374,13 @@ function findCloser(
   end: number,
   opener: DelimiterRun,
   memo: CloserMemo,
+  enclosing: readonly string[],
 ): CloserSearch {
-  const key = `${start}:${end}:${opener.char}:${opener.length}`;
+  const key = `${start}:${end}:${opener.char}:${opener.length}:${enclosing.join("")}`;
   const remembered = memo.get(key);
   if (remembered) return remembered;
 
-  const found = scanForCloser(source, start, end, opener, memo);
+  const found = scanForCloser(source, start, end, opener, memo, enclosing);
   memo.set(key, found);
   return found;
 }
@@ -350,9 +391,12 @@ function scanForCloser(
   end: number,
   opener: DelimiterRun,
   memo: CloserMemo,
+  enclosing: readonly string[],
 ): CloserSearch {
+  const inside = [...enclosing, opener.char];
   let index = start;
   let sawMismatch = false;
+  let sawCrossing = false;
 
   while (index < end) {
     const char = source[index];
@@ -377,18 +421,34 @@ function scanForCloser(
     if (isDelimiter(char)) {
       const run = delimiterRunAt(source, index, end);
       if (run.char === opener.char && run.canClose) {
-        if (run.length === opener.length) return { index, sawMismatch };
+        if (run.length === opener.length) {
+          return { index, sawMismatch, sawCrossing };
+        }
         sawMismatch = true;
         index += run.length;
         continue;
+      }
+      // A run that closes a pair opened outside this one: the two overlap
+      // instead of nesting, and markdown resolves that in a way no set of
+      // annotations reproduces.
+      if (run.canClose && enclosing.includes(run.char)) {
+        sawCrossing = true;
       }
       if (run.canOpen) {
         // Skip the pair this run opens, so emphasis nested inside is not
         // mistaken for the closer being looked for. What it could not pair off
         // carries out: in "*foo **bar* baz**" the runs interleave rather than
         // nest, and CommonMark splits them across both pairs.
-        const inner = findCloser(source, index + run.length, end, run, memo);
+        const inner = findCloser(
+          source,
+          index + run.length,
+          end,
+          run,
+          memo,
+          inside,
+        );
         sawMismatch = sawMismatch || inner.sawMismatch;
+        sawCrossing = sawCrossing || inner.sawCrossing;
         if (inner.index !== undefined) {
           index = inner.index + run.length;
           continue;
@@ -401,7 +461,7 @@ function scanForCloser(
     index += 1;
   }
 
-  return { sawMismatch };
+  return { sawMismatch, sawCrossing };
 }
 
 type CodeSpan = { content: string; end: number };

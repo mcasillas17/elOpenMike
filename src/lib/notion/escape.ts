@@ -77,16 +77,30 @@ const ESM_KEYWORDS = { import: "&#105;mport", export: "&#101;xport" };
 // word; and a blank line ends the paragraph, so what follows it opens a block
 // of its own and lands back in column one.
 export function defuseEsmKeyword(text: string): string {
+  // Markdown ends a line on a lone carriage return as readily as on a newline,
+  // and a pasted run can carry either.
+  const lineEnding = /\r\n|\r|\n/g;
+  let out = "";
+  let position = 0;
   let flowStart = true;
 
-  return text
-    .split("\n")
-    .map((line) => {
-      const defused = flowStart ? defuseLine(line) : line;
-      flowStart = line.trim() === "";
-      return defused;
-    })
-    .join("\n");
+  for (
+    let ending = lineEnding.exec(text);
+    ending !== null;
+    ending = lineEnding.exec(text)
+  ) {
+    const line = text.slice(position, ending.index);
+    out += (flowStart ? defuseLine(line) : line) + ending[0];
+    flowStart = isBlank(line);
+    position = ending.index + ending[0].length;
+  }
+
+  const last = text.slice(position);
+  return out + (flowStart ? defuseLine(last) : last);
+}
+
+function isBlank(line: string): boolean {
+  return [...line].every((char) => INDENT.test(char));
 }
 
 function defuseLine(line: string): string {

@@ -218,6 +218,45 @@ describe("emphasis", () => {
     ]);
   });
 
+  // GFM registers `~` as an attention marker, which exempts it from the rule
+  // that a delimiter cannot open emphasis against punctuation. So a bold run
+  // wrapped straight around a struck one pairs off where "a**`x`**" would not.
+  it("pairs emphasis against a tilde the way GFM does", () => {
+    expect(runs("prose**~~struck~~**")).toEqual([
+      { text: "prose" },
+      { text: "struck", bold: true, strikethrough: true },
+    ]);
+    expect(runs("~~struck~~*italic*")).toEqual([
+      { text: "struck", strikethrough: true },
+      { text: "italic", italic: true },
+    ]);
+    expect(runs("a**~~struck~~**b")).toEqual([
+      { text: "a" },
+      { text: "struck", bold: true, strikethrough: true },
+      { text: "b" },
+    ]);
+  });
+
+  it("refuses pairs that cross instead of nesting", () => {
+    // Markdown gives the overlap to one pair and the leftovers to the other,
+    // moving delimiter characters into the text. Notion annotations nest or
+    // they do not apply, so there is nothing honest to store.
+    rejects("~~struck **and~~ bold**");
+    rejects("*italic ~~and* struck~~");
+    rejects("**bold ~~and** struck~~");
+  });
+
+  it("still reads one kind of emphasis nested in another", () => {
+    for (const [source, inner] of [
+      ["~~a **b** c~~", { strikethrough: true, bold: true }],
+      ["**a ~~b~~ c**", { bold: true, strikethrough: true }],
+      ["*a `b` c*", { italic: true, code: true }],
+      ["**a *b* c**", { bold: true, italic: true }],
+    ] as const) {
+      expect(runs(source)[1]).toEqual({ text: "b", ...inner });
+    }
+  });
+
   it("ignores a delimiter hiding inside code", () => {
     expect(runs("*emphasis around `a*b` code*")).toEqual([
       { text: "emphasis around ", italic: true },
@@ -235,6 +274,8 @@ describe("emphasis", () => {
     // Interleaved rather than nested: CommonMark splits the runs across both
     // pairs, which is not a shape Notion annotations can hold.
     rejects("*foo **bar* baz**");
+    rejects("*foo **bar*");
+    rejects("**a *b c**");
   });
 
   // Each opener that turns out not to pair off used to re-scan the rest of the
@@ -244,6 +285,22 @@ describe("emphasis", () => {
     const line = `${"*.ts ".repeat(40)}and nothing else`;
 
     expect(runs(line)).toEqual([{ text: line }]);
+  });
+});
+
+// GFM turns a bare url, a www address and an email into a link when the page is
+// rendered, and the site says so in docs/authoring.md. The text is what the
+// author wrote and what the converters carry, in both directions: it is stored
+// literally, and the link is made again at render time.
+describe("bare urls", () => {
+  it("keeps them as the literal text they are", () => {
+    for (const value of [
+      "Visit https://example.com now",
+      "mail me at someone@example.com",
+      "see www.example.com",
+    ]) {
+      expect(runs(value)).toEqual([{ text: value }]);
+    }
   });
 });
 

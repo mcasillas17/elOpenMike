@@ -184,6 +184,20 @@ describe("literal text that looks like MDX ESM", () => {
     );
   });
 
+  // Markdown ends a line on a lone carriage return as readily as on a newline,
+  // and a pasted run can carry either.
+  it("counts every line ending markdown counts", () => {
+    expect(text("before\r\rexport const config = 1")).toBe(
+      "before\r\r&#101;xport const config = 1",
+    );
+    expect(text("before\r\n\r\nimport the data")).toBe(
+      "before\r\n\r\n&#105;mport the data",
+    );
+    expect(text("a continuation\rimport the data")).toBe(
+      "a continuation\rimport the data",
+    );
+  });
+
   it("leaves an annotated run alone, which opens with its own delimiter", () => {
     expect(paragraphText(["import x", { code: true }])).toBe("`import x`");
     expect(paragraphText(["import x", { bold: true }])).toBe("**import x**");
