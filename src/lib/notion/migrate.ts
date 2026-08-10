@@ -20,6 +20,7 @@ import {
   batchBlocks,
   batchChildren,
   blockProblems,
+  createPageBody,
   normalizeBlocks,
   normalizeRichText,
   richTextProblems,
@@ -414,7 +415,26 @@ export function migrationRequests(
     problems.push(...blockProblems(blocks, post.file));
     problems.push(...propertyProblems(properties, post.file));
 
-    const { children, appends } = batchChildren(blocks);
+    const pageBase: Omit<CreatePageRequest, "children"> = {
+      parent: { type: "data_source_id", data_source_id: dataSourceId },
+      properties,
+    };
+    let children: BlockObjectRequest[];
+    let appends: BlockObjectRequest[][];
+    try {
+      if (pageId === "") {
+        ({ children, appends } = batchChildren(blocks, pageBase));
+      } else {
+        children = [];
+        appends = batchBlocks(blocks);
+      }
+    } catch (error: unknown) {
+      problems.push(
+        `${post.file}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      continue;
+    }
+
     writes.push({
       slug: post.slug,
       file: post.file,
@@ -434,16 +454,12 @@ export function migrationRequests(
         tags: post.tags,
         statusType: "status" in draft ? "status" : "select",
       },
-      page: {
-        parent: { type: "data_source_id" as const, data_source_id: dataSourceId },
-        properties,
-        children,
-      },
+      page: createPageBody(pageBase, children),
       // A page that already exists is assumed to hold nothing until its blocks
       // have actually been read: planResumes narrows this to whatever turns out
       // to be missing, and assuming the least in the meantime is the assumption
       // that cannot lose a block.
-      appends: pageId === "" ? appends : batchBlocks(blocks),
+      appends,
       ...(pageId === "" ? {} : { resume: { pageId } }),
     });
   }

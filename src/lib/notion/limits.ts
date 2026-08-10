@@ -1,27 +1,30 @@
 import type { BlockObjectRequest } from "@notionhq/client";
 import type { RichTextInput } from "./md-to-rich-text";
 
-// Notion's API is not only a shape, it is a size. A create-page request takes
-// at most 100 children, a rich-text array at most 100 elements, and one text
-// run at most 2000 characters — and the API rejects the whole request when any
-// of them is exceeded, so one long post used to fail as a unit.
+// Notion's API is not only a shape, it is a size. One request takes at most 100
+// top-level children, 1000 block elements across their complete subtrees, and a
+// 500KB serialized body; a rich-text array takes at most 100 elements, and one
+// text run at most 2000 characters. The API rejects the whole request when any
+// limit is exceeded, so one long post used to fail as a unit.
 //
-// Two of the three can be honored without losing anything, and are:
+// The splittable limits are honored without losing anything:
 //
 //   * a run longer than 2000 characters is split into as many runs as it needs,
 //     each carrying the same annotations and the same link, because Notion
 //     stores a paragraph as a sequence of runs and renders them back to back;
-//   * blocks past the hundredth are sent as append requests after the page
-//     exists, in batches of a hundred and in order.
+//   * blocks are sent in order across as many create/append requests as their
+//     top-level count, aggregate subtree count, and exact UTF-8 body size need.
 //
-// The third cannot: a rich-text array is one block's formatting, and splitting
-// it would split the block. So a paragraph that needs more than a hundred runs
-// is refused by name, before anything is created.
+// A rich-text array and one top-level block subtree are atomic: splitting either
+// would change the block. An atomic value that does not fit is therefore refused
+// by name, before anything is created.
 //
 // The character limits are Notion's published ones; the SDK types spell the
 // shapes but carry no lengths, so they are stated here with the reason each one
 // exists rather than derived.
 export const MAX_CHILDREN_PER_REQUEST = 100;
+export const MAX_BLOCK_ELEMENTS_PER_REQUEST = 1000;
+export const MAX_REQUEST_BODY_BYTES = 500 * 1024;
 export const MAX_RICH_TEXT_ITEMS = 100;
 export const MAX_TEXT_CONTENT = 2000;
 export const MAX_URL_LENGTH = 2000;
@@ -234,26 +237,128 @@ export type ChildBatches = {
   appends: BlockObjectRequest[][];
 };
 
-// Blocks in the order they were written, cut into whole requests. Used on its
-// own when the page already exists — a resumed migration appends everything it
-// is missing, including the first hundred.
+export type AppendChildrenBody = { children: BlockObjectRequest[] };
+
+// The SDK removes block_id into the request path and serializes this object as
+// the append request body. Keeping that shape here lets the preflight measure
+// the same bytes the executor sends.
+export function appendChildrenBody(
+  children: BlockObjectRequest[],
+): AppendChildrenBody {
+  return { children };
+}
+
+export function createPageBody<T extends object>(
+  page: T,
+  children: BlockObjectRequest[],
+): T & { children: BlockObjectRequest[] } {
+  return { ...page, children };
+}
+
+export function requestBodyBytes(body: unknown): number {
+  const serialized = JSON.stringify(body);
+  if (serialized === undefined) {
+    throw new Error("Notion request body cannot be serialized");
+  }
+  return new TextEncoder().encode(serialized).byteLength;
+}
+
+function nestedChildren(block: BlockObjectRequest): BlockObjectRequest[] {
+  const { payload } = payloadOf(block);
+  return Array.isArray(payload?.children)
+    ? (payload.children as BlockObjectRequest[])
+    : [];
+}
+
+export function blockElementCount(blocks: BlockObjectRequest[]): number {
+  return blocks.reduce(
+    (total, block) => total + 1 + blockElementCount(nestedChildren(block)),
+    0,
+  );
+}
+
+function requestFits(
+  children: BlockObjectRequest[],
+  body: unknown,
+): boolean {
+  return (
+    children.length <= MAX_CHILDREN_PER_REQUEST &&
+    blockElementCount(children) <= MAX_BLOCK_ELEMENTS_PER_REQUEST &&
+    requestBodyBytes(body) <= MAX_REQUEST_BODY_BYTES
+  );
+}
+
+function assertAppendable(block: BlockObjectRequest): void {
+  const elements = blockElementCount([block]);
+  if (elements > MAX_BLOCK_ELEMENTS_PER_REQUEST) {
+    throw new Error(
+      `one atomic block subtree contains ${elements} block elements, more than ` +
+        `Notion's ${MAX_BLOCK_ELEMENTS_PER_REQUEST} per request`,
+    );
+  }
+
+  const bytes = requestBodyBytes(appendChildrenBody([block]));
+  if (bytes > MAX_REQUEST_BODY_BYTES) {
+    throw new Error(
+      `one atomic block subtree needs ${bytes} bytes in an append request, more ` +
+        `than Notion's 500KB (${MAX_REQUEST_BODY_BYTES} bytes) per request`,
+    );
+  }
+}
+
+// Blocks stay in order and a top-level subtree stays atomic. Each candidate is
+// measured as the append body the SDK will serialize, so top-level count,
+// aggregate nested elements, UTF-8 bytes, and JSON overhead all constrain where
+// the next boundary falls.
 export function batchBlocks(
   blocks: BlockObjectRequest[],
 ): BlockObjectRequest[][] {
   const batches: BlockObjectRequest[][] = [];
+  let batch: BlockObjectRequest[] = [];
 
-  for (
-    let index = 0;
-    index < blocks.length;
-    index += MAX_CHILDREN_PER_REQUEST
-  ) {
-    batches.push(blocks.slice(index, index + MAX_CHILDREN_PER_REQUEST));
+  for (const block of blocks) {
+    assertAppendable(block);
+    const candidate = [...batch, block];
+    if (requestFits(candidate, appendChildrenBody(candidate))) {
+      batch = candidate;
+      continue;
+    }
+
+    if (batch.length > 0) batches.push(batch);
+    batch = [block];
   }
 
+  if (batch.length > 0) batches.push(batch);
   return batches;
 }
 
-export function batchChildren(blocks: BlockObjectRequest[]): ChildBatches {
-  const [children = [], ...appends] = batchBlocks(blocks);
-  return { children, appends };
+// A create request carries page properties that an append does not, so its
+// first batch must be measured against the complete create body independently.
+// A subtree that cannot fit beside those properties is left for an append; an
+// empty create is valid. The base request itself, however, must fit.
+export function batchChildren(
+  blocks: BlockObjectRequest[],
+  page: object,
+): ChildBatches {
+  const empty = createPageBody(page, []);
+  const baseBytes = requestBodyBytes(empty);
+  if (baseBytes > MAX_REQUEST_BODY_BYTES) {
+    throw new Error(
+      `the create-page request needs ${baseBytes} bytes before any blocks, more ` +
+        `than Notion's 500KB (${MAX_REQUEST_BODY_BYTES} bytes) per request`,
+    );
+  }
+
+  for (const block of blocks) assertAppendable(block);
+
+  let children: BlockObjectRequest[] = [];
+  let index = 0;
+  while (index < blocks.length) {
+    const candidate = [...children, blocks[index]];
+    if (!requestFits(candidate, createPageBody(page, candidate))) break;
+    children = candidate;
+    index += 1;
+  }
+
+  return { children, appends: batchBlocks(blocks.slice(index)) };
 }

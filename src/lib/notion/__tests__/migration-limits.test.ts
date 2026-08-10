@@ -1,3 +1,4 @@
+import type { BlockObjectRequest } from "@notionhq/client";
 import { describe, it, expect } from "vitest";
 import {
   planMigration,
@@ -10,9 +11,17 @@ import { createMigrationExecutor } from "@/lib/notion/migrate-executor";
 import { FakeNotion } from "./fixtures/fake-notion";
 import {
   MAX_CHILDREN_PER_REQUEST,
+  MAX_BLOCK_ELEMENTS_PER_REQUEST,
+  MAX_REQUEST_BODY_BYTES,
   MAX_RICH_TEXT_ITEMS,
   MAX_TEXT_CONTENT,
   MAX_URL_LENGTH,
+  appendChildrenBody,
+  batchBlocks,
+  batchChildren,
+  blockElementCount,
+  createPageBody,
+  requestBodyBytes,
 } from "@/lib/notion/limits";
 import type { DataSourceSchema } from "@/lib/notion/properties";
 
@@ -61,6 +70,96 @@ const writesFor = (content: string, slug = "one"): MigrationWrite[] =>
 
 const paragraphs = (count: number) =>
   Array.from({ length: count }, (_, index) => `Line ${index + 1}.`).join("\n\n");
+
+const paragraphBlock = (
+  content: string,
+  children: BlockObjectRequest[] = [],
+): BlockObjectRequest =>
+  ({
+    object: "block",
+    type: "paragraph",
+    paragraph: {
+      rich_text: [{ type: "text", text: { content } }],
+      ...(children.length === 0 ? {} : { children }),
+    },
+  }) as BlockObjectRequest;
+
+type MutableRun = {
+  type: "text";
+  text: { content: string };
+  annotations: { bold: boolean };
+};
+
+type MutableParagraph = {
+  object: "block";
+  type: "paragraph";
+  paragraph: { rich_text: MutableRun[] };
+};
+
+// Builds valid paragraph runs whose append body is exactly the requested byte
+// size. ASCII content contributes one byte at a time, so the final run can fill
+// the exact gap after JSON's object/array overhead is included.
+function appendBatchOfExactly(target: number): BlockObjectRequest[] {
+  const blocks: MutableParagraph[] = [];
+  let runIndex = 0;
+
+  for (;;) {
+    let block = blocks[blocks.length - 1];
+    if (!block || block.paragraph.rich_text.length === MAX_RICH_TEXT_ITEMS) {
+      block = {
+        object: "block",
+        type: "paragraph",
+        paragraph: { rich_text: [] },
+      };
+      blocks.push(block);
+    }
+
+    const run: MutableRun = {
+      type: "text",
+      text: { content: "x".repeat(MAX_TEXT_CONTENT) },
+      annotations: { bold: runIndex % 2 === 0 },
+    };
+    block.paragraph.rich_text.push(run);
+
+    const full = requestBodyBytes(
+      appendChildrenBody(blocks as unknown as BlockObjectRequest[]),
+    );
+    if (full <= target) {
+      runIndex += 1;
+      continue;
+    }
+
+    run.text.content = "";
+    const empty = requestBodyBytes(
+      appendChildrenBody(blocks as unknown as BlockObjectRequest[]),
+    );
+    if (empty <= target) {
+      run.text.content = "x".repeat(target - empty);
+    } else {
+      let excess = empty - target;
+      const previous = blocks
+        .flatMap((entry) => entry.paragraph.rich_text)
+        .slice(0, -1)
+        .reverse();
+      for (const candidate of previous) {
+        const remove = Math.min(excess, candidate.text.content.length);
+        candidate.text.content = candidate.text.content.slice(0, -remove);
+        excess -= remove;
+        if (excess === 0) break;
+      }
+      if (excess !== 0) throw new Error("could not construct exact request body");
+    }
+
+    if (
+      requestBodyBytes(
+        appendChildrenBody(blocks as unknown as BlockObjectRequest[]),
+      ) !== target
+    ) {
+      throw new Error("request body fixture is not exact");
+    }
+    return blocks as unknown as BlockObjectRequest[];
+  }
+}
 
 // A Notion that records every write it accepts and can be told to refuse one of
 // them. The double is the real one (see fixtures/fake-notion.ts) driven through
@@ -111,6 +210,93 @@ describe("the limits every request is measured against", () => {
     expect(MAX_RICH_TEXT_ITEMS).toBe(100);
     expect(MAX_TEXT_CONTENT).toBe(2000);
     expect(MAX_URL_LENGTH).toBe(2000);
+    expect(MAX_BLOCK_ELEMENTS_PER_REQUEST).toBe(1000);
+    expect(MAX_REQUEST_BODY_BYTES).toBe(500 * 1024);
+  });
+
+  it("keeps aggregate block elements at or below 1000", () => {
+    const exact = Array.from({ length: 10 }, (_, parent) =>
+      paragraphBlock(
+        `parent ${parent}`,
+        Array.from({ length: 99 }, (_, child) =>
+          paragraphBlock(`child ${parent}-${child}`),
+        ),
+      ),
+    );
+    const oneOver = [...exact, paragraphBlock("the 1001st element")];
+
+    expect(blockElementCount(exact)).toBe(MAX_BLOCK_ELEMENTS_PER_REQUEST);
+    expect(batchBlocks(exact)).toEqual([exact]);
+    expect(batchBlocks(oneOver).map((batch) => batch.length)).toEqual([10, 1]);
+  });
+
+  it("adaptively batches 100 parents with 100 children apiece", () => {
+    const blocks = Array.from({ length: 100 }, (_, parent) =>
+      paragraphBlock(
+        `parent ${parent}`,
+        Array.from({ length: 100 }, (_, child) =>
+          paragraphBlock(`child ${parent}-${child}`),
+        ),
+      ),
+    );
+
+    const batches = batchBlocks(blocks);
+
+    expect(batches.map((batch) => batch.length)).toEqual([
+      ...Array<number>(11).fill(9),
+      1,
+    ]);
+    expect(batches.flat()).toEqual(blocks);
+    for (const batch of batches) {
+      expect(batch.length).toBeLessThanOrEqual(MAX_CHILDREN_PER_REQUEST);
+      expect(blockElementCount(batch)).toBeLessThanOrEqual(
+        MAX_BLOCK_ELEMENTS_PER_REQUEST,
+      );
+    }
+  });
+
+  it("counts the UTF-8 bytes of the serialized append body, including overhead", () => {
+    const blocks = Array.from({ length: 100 }, (_, index) =>
+      paragraphBlock(`${index}:${"界".repeat(1990)}`),
+    );
+
+    const batches = batchBlocks(blocks);
+
+    expect(batches.length).toBeGreaterThan(1);
+    expect(batches.flat()).toEqual(blocks);
+    for (const batch of batches) {
+      expect(requestBodyBytes(appendChildrenBody(batch))).toBeLessThanOrEqual(
+        MAX_REQUEST_BODY_BYTES,
+      );
+    }
+  });
+
+  it("accepts a serialized body at exactly 500KB and splits one byte over", () => {
+    const exact = appendBatchOfExactly(MAX_REQUEST_BODY_BYTES);
+    const over = structuredClone(exact);
+    const adjustable = (
+      over as unknown as MutableParagraph[]
+    ).flatMap((block) => block.paragraph.rich_text).find(
+      (run) => run.text.content.length < MAX_TEXT_CONTENT,
+    );
+    if (!adjustable) throw new Error("exact fixture has no adjustable run");
+    adjustable.text.content += "x";
+
+    expect(requestBodyBytes(appendChildrenBody(exact))).toBe(
+      MAX_REQUEST_BODY_BYTES,
+    );
+    expect(requestBodyBytes(appendChildrenBody(over))).toBe(
+      MAX_REQUEST_BODY_BYTES + 1,
+    );
+    expect(batchBlocks(exact)).toEqual([exact]);
+    expect(batchBlocks(over).length).toBe(2);
+  });
+
+  it("refuses one atomic subtree that cannot fit in a 500KB body", () => {
+    const children = appendBatchOfExactly(MAX_REQUEST_BODY_BYTES);
+    const atomic = paragraphBlock("outer", children);
+
+    expect(() => batchBlocks([atomic])).toThrow(/500\s?KB|bytes/i);
   });
 });
 
@@ -141,6 +327,36 @@ describe("a post with more blocks than one request can carry", () => {
     expect(text(sent[0])).toBe("Line 1.");
     expect(text(sent[100])).toBe("Line 101.");
     expect(text(sent[249])).toBe("Line 250.");
+  });
+
+  it("accounts for create properties separately from append overhead", () => {
+    const blocks = Array.from({ length: 160 }, (_, index) =>
+      paragraphBlock(`${index}:${"界".repeat(1900)}`),
+    );
+    const page = {
+      parent: { type: "data_source_id", data_source_id: "ds-1" },
+      properties: {
+        Name: {
+          title: Array.from({ length: 90 }, () => ({
+            type: "text",
+            text: { content: "t".repeat(MAX_TEXT_CONTENT) },
+          })),
+        },
+      },
+    };
+
+    const batches = batchChildren(blocks, page);
+
+    expect(batches.children.length).toBeLessThan(batches.appends[0].length);
+    expect(
+      requestBodyBytes(createPageBody(page, batches.children)),
+    ).toBeLessThanOrEqual(MAX_REQUEST_BODY_BYTES);
+    for (const batch of batches.appends) {
+      expect(requestBodyBytes(appendChildrenBody(batch))).toBeLessThanOrEqual(
+        MAX_REQUEST_BODY_BYTES,
+      );
+    }
+    expect([...batches.children, ...batches.appends.flat()]).toEqual(blocks);
   });
 });
 
@@ -269,6 +485,27 @@ describe("content Notion has no way to store", () => {
 
     expect(() => migrationRequests(plan, options)).toThrow();
     // Nothing was built, so nothing can be sent: the executor is never reached.
+    await expect(runMigration([], executor)).resolves.toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects an oversized atomic subtree before any executor write", async () => {
+    const cell = "界".repeat(1900);
+    const table = [
+      `| ${cell} | ${cell} | ${cell} |`,
+      "| --- | --- | --- |",
+      ...Array.from(
+        { length: 99 },
+        () => `| ${cell} | ${cell} | ${cell} |`,
+      ),
+    ].join("\n");
+    const plan = planMigration(
+      [local("fine", "Body.\n"), local("oversized-table", table)],
+      [],
+    );
+    const { executor, calls } = recorder();
+
+    expect(() => migrationRequests(plan, options)).toThrow(/500\s?KB|bytes/i);
     await expect(runMigration([], executor)).resolves.toEqual([]);
     expect(calls).toEqual([]);
   });

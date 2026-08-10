@@ -15,6 +15,7 @@ import {
   PUBLISHED_STATUS,
   type DataSourceSchema,
 } from "./properties";
+import { appendChildrenBody } from "./limits";
 import { withRetry } from "./retry";
 import type { MigrationExecutor, PageState } from "./migrate";
 
@@ -74,7 +75,10 @@ export function createMigrationExecutor(
 
     async appendChildren(pageId, children) {
       await withRetry(() =>
-        client.blocks.children.append({ block_id: pageId, children }),
+        client.blocks.children.append({
+          block_id: pageId,
+          ...appendChildrenBody(children),
+        }),
       );
     },
 
