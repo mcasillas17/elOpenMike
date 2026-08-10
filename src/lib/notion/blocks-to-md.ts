@@ -46,19 +46,27 @@ export function blocksToMarkdown(blocks: MdBlock[], context: BlocksToMarkdownCon
 function renderSequence(blocks: MdBlock[], context: BlocksToMarkdownContext, depth: number, separator: string): string {
   const chunks: string[] = [];
   let numberedOrdinal = 0;
-  let previousType: string | undefined;
+  let previousRenderedType: string | undefined;
   let groupType: string | undefined;
 
   for (const block of blocks) {
     const isNumbered = block.type === "numbered_list_item";
-    numberedOrdinal = isNumbered && previousType === "numbered_list_item" ? numberedOrdinal + 1 : isNumbered ? 1 : 0;
-    previousType = block.type;
+    const candidateOrdinal = isNumbered && previousRenderedType === "numbered_list_item" ? numberedOrdinal + 1 : isNumbered ? 1 : 0;
 
-    const rendered = renderBlock(block, context, { depth, numberedOrdinal: isNumbered ? numberedOrdinal : undefined });
+    let rendered = renderBlock(block, context, { depth, numberedOrdinal: isNumbered ? candidateOrdinal : undefined });
     if (rendered === "") {
-      groupType = undefined;
+      if (!isListType(block.type)) {
+        numberedOrdinal = 0;
+        previousRenderedType = block.type;
+        groupType = undefined;
+      }
       continue;
     }
+    if (depth > 0 && !isListType(block.type)) {
+      rendered = indentBlock(rendered, "  ".repeat(depth));
+    }
+    numberedOrdinal = candidateOrdinal;
+    previousRenderedType = block.type;
 
     if (groupType === block.type && isListType(block.type)) {
       chunks[chunks.length - 1] = `${chunks[chunks.length - 1]}\n${rendered}`;
@@ -83,9 +91,9 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
       // Site pages already reserve the H1, so Notion headings shift down one level.
       return renderHeading(HEADING_MARKERS[block.type], data.rich_text);
     case "quote":
-      return renderQuote(data.rich_text);
+      return renderQuote(data.rich_text, block.children, context);
     case "callout":
-      return renderCallout(data);
+      return renderCallout(data, block.children, context);
     case "divider":
       return "---";
     case "bulleted_list_item":
@@ -104,7 +112,7 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
     case "link_preview":
       return renderLinkBlock(data);
     case "toggle":
-      return renderToggle(data, block.children, context, options.depth);
+      return renderToggle(data, block.children, context);
     default:
       context.onWarning?.(`skipped unsupported block: ${block.type}`);
       return "";
@@ -116,16 +124,20 @@ function renderHeading(marker: string, value: unknown): string {
   return isBlank(text) ? "" : `${marker} ${text}`;
 }
 
-function renderQuote(value: unknown): string {
+function renderQuote(value: unknown, children: MdBlock[], context: BlocksToMarkdownContext): string {
   const text = renderRichText(value);
-  return isBlank(text) ? "" : text.split("\n").map((line) => `> ${line}`).join("\n");
+  const renderedChildren = renderSequence(children, context, 0, "\n\n");
+  const content = [isBlank(text) ? "" : text, renderedChildren].filter(Boolean).join("\n\n");
+  return isBlank(content) ? "" : renderBlockquote(content);
 }
 
-function renderCallout(data: Record<string, unknown>): string {
+function renderCallout(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext): string {
   const text = renderRichText(data.rich_text);
   const emoji = readEmoji(data.icon);
-  const content = [emoji, text].filter(Boolean).join(" ");
-  return isBlank(content) ? "" : `> ${content}`;
+  const summary = [emoji, text].filter(Boolean).join(" ");
+  const renderedChildren = renderSequence(children, context, 0, "\n\n");
+  const content = [isBlank(summary) ? "" : summary, renderedChildren].filter(Boolean).join("\n\n");
+  return isBlank(content) ? "" : renderBlockquote(content);
 }
 
 function renderListItem(
@@ -196,9 +208,9 @@ function renderLinkBlock(data: Record<string, unknown>): string {
   return `[${caption === "" ? data.url : caption}](${data.url})`;
 }
 
-function renderToggle(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext, depth: number): string {
+function renderToggle(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext): string {
   const summary = renderRichText(data.rich_text);
-  const renderedChildren = renderSequence(children, context, depth, "\n\n");
+  const renderedChildren = renderSequence(children, context, 0, "\n\n");
   return [summary, renderedChildren].filter(Boolean).join("\n\n");
 }
 
@@ -265,7 +277,19 @@ function normalizeRow(row: string[], width: number): string[] {
 }
 
 function renderTableLine(cells: string[]): string {
-  return `| ${cells.join(" | ")} |`;
+  return `| ${cells.map(normalizeTableCell).join(" | ")} |`;
+}
+
+function normalizeTableCell(cell: string): string {
+  return cell.replace(/\|/g, "\\|").replace(/\r\n|\r|\n/g, "<br>");
+}
+
+function indentBlock(markdown: string, indent: string): string {
+  return markdown.split("\n").map((line) => (line === "" ? line : `${indent}${line}`)).join("\n");
+}
+
+function renderBlockquote(markdown: string): string {
+  return markdown.split("\n").map((line) => (line === "" ? ">" : `> ${line}`)).join("\n");
 }
 
 function isListType(type: string): boolean {
