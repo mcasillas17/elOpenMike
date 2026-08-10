@@ -1,6 +1,7 @@
 import type { Annotations, RichText } from "./types";
 import { inlineCodeSpan } from "./code-span";
 import { endsAtLineStart, escapeMarkdown } from "./escape";
+import { markdownDestination } from "./link-destination";
 import {
   classifyCharacter,
   firstCharacter,
@@ -14,6 +15,7 @@ export type RichTextOptions = {
   // False where the text cannot open a block: a heading's content, a table
   // cell, an image's alt text. See escape.ts.
   atLineStart?: boolean;
+  onWarning?: (message: string) => void;
 };
 
 // Notion's annotations are a property of a run; CommonMark's emphasis is a
@@ -55,13 +57,13 @@ type Segment = {
 
 export function richTextToMarkdown(
   rich: RichText[],
-  { atLineStart = true }: RichTextOptions = {},
+  { atLineStart = true, onWarning }: RichTextOptions = {},
 ): string {
   let lineStart = atLineStart;
   const segments: Segment[] = [];
 
   for (const group of groupRuns(rich)) {
-    const rendered = renderGroup(group, lineStart);
+    const rendered = renderGroup(group, lineStart, onWarning);
     segments.push(rendered.segment);
     lineStart = rendered.lineStart;
   }
@@ -118,11 +120,20 @@ function mergeByCode(runs: RichText[]): Array<{ code: boolean; text: string }> {
 function renderGroup(
   runs: RichText[],
   atLineStart: boolean,
+  onWarning?: (message: string) => void,
 ): { segment: Segment; lineStart: boolean } {
   const annotations = runs[0].annotations;
   const { bold, italic, strikethrough } = annotations;
   const href = runs[0].href;
-  const insideLink = typeof href === "string";
+  // A URL Markdown cannot spell as a destination, or one that is a way to run
+  // code rather than a place to go, leaves the text as text: dropping the link
+  // loses one attribute, writing it loses the reader's trust.
+  const destination =
+    typeof href === "string" ? markdownDestination(href) : undefined;
+  if (typeof href === "string" && destination === undefined) {
+    onWarning?.(`dropped a link to an unsupported url: ${href}`);
+  }
+  const insideLink = destination !== undefined;
   const emphasised = bold || italic || strikethrough;
   const pieces = mergeByCode(runs);
   // Whatever the group writes first: a delimiter of its own means the text no
@@ -157,7 +168,10 @@ function renderGroup(
 
   if (!emphasised) {
     return {
-      segment: plainSegment(insideLink ? `[${inner}](${href})` : inner, insideLink),
+      segment: plainSegment(
+        insideLink ? `[${inner}](${destination})` : inner,
+        insideLink,
+      ),
       lineStart: insideLink ? false : lineStart,
     };
   }
@@ -184,8 +198,12 @@ function renderGroup(
   // are punctuation and flank them for free.
   return {
     segment: {
-      markdown: insideLink ? `[${withDelimiters}](${href})` : withDelimiters,
-      asElements: insideLink ? `[${withElements}](${href})` : withElements,
+      markdown: insideLink
+        ? `[${withDelimiters}](${destination})`
+        : withDelimiters,
+      asElements: insideLink
+        ? `[${withElements}](${destination})`
+        : withElements,
       marker,
       openNeedsPunctuation:
         !insideLink &&

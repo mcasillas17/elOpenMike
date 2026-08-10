@@ -1,5 +1,6 @@
 import { richTextToMarkdown } from "./rich-text";
 import { defuseEsmKeyword, escapeMarkdown } from "./escape";
+import { markdownDestination } from "./link-destination";
 import { codeFence } from "./code-span";
 import type { MdBlock, RichText } from "./types";
 
@@ -89,12 +90,12 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
 
   switch (block.type) {
     case "paragraph":
-      return renderTextBlock(data.rich_text);
+      return renderTextBlock(data.rich_text, context);
     case "heading_1":
     case "heading_2":
     case "heading_3":
       // Site pages already reserve the H1, so Notion headings shift down one level.
-      return renderHeading(HEADING_MARKERS[block.type], data.rich_text);
+      return renderHeading(HEADING_MARKERS[block.type], data.rich_text, context);
     case "quote":
       return renderQuote(data.rich_text, block.children, context);
     case "callout":
@@ -116,10 +117,10 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
     case "image":
       return renderImage(block, data, context);
     case "table":
-      return renderTable(block);
+      return renderTable(block, context);
     case "bookmark":
     case "link_preview":
-      return renderLinkBlock(data);
+      return renderLinkBlock(data, context);
     case "toggle":
       return renderToggle(data, block.children, context);
     default:
@@ -128,22 +129,22 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
   }
 }
 
-function renderHeading(marker: string, value: unknown): string {
+function renderHeading(marker: string, value: unknown, context: BlocksToMarkdownContext): string {
   // A heading's content is inline-only, so a literal `#` or `-` in it cannot
   // open a block and needs no escaping.
-  const text = renderRichText(value, false);
+  const text = renderRichText(value, false, context);
   return isBlank(text) ? "" : `${marker} ${text}`;
 }
 
 function renderQuote(value: unknown, children: MdBlock[], context: BlocksToMarkdownContext): string {
-  const text = renderRichText(value);
+  const text = renderRichText(value, true, context);
   const renderedChildren = renderSequence(children, context, "", "\n\n");
   const content = [isBlank(text) ? "" : text, renderedChildren].filter(Boolean).join("\n\n");
   return isBlank(content) ? "" : renderBlockquote(content);
 }
 
 function renderCallout(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext): string {
-  const text = renderRichText(data.rich_text);
+  const text = renderRichText(data.rich_text, true, context);
   const emoji = readEmoji(data.icon);
   const summary = [emoji, text].filter(Boolean).join(" ");
   const renderedChildren = renderSequence(children, context, "", "\n\n");
@@ -159,7 +160,7 @@ function renderListItem(
   context: BlocksToMarkdownContext,
   indent: string,
 ): string {
-  const text = renderRichText(value);
+  const text = renderRichText(value, true, context);
   if (isBlank(text) && children.length === 0) {
     return "";
   }
@@ -187,14 +188,16 @@ function renderCode(data: Record<string, unknown>): string {
 }
 
 function renderImage(block: MdBlock, data: Record<string, unknown>, context: BlocksToMarkdownContext): string {
-  const alt = renderRichText(data.caption, false);
+  const alt = renderRichText(data.caption, false, context);
   // The converter stays pure by receiving already-resolved image paths from the caller.
   return `![${alt}](${context.imagePath(block.id)})`;
 }
 
-function renderTable(block: MdBlock): string {
+function renderTable(block: MdBlock, context: BlocksToMarkdownContext): string {
   const data = blockPayload(block);
-  const rows = block.children.filter((child) => child.type === "table_row").map(renderTableRow);
+  const rows = block.children
+    .filter((child) => child.type === "table_row")
+    .map((row) => renderTableRow(row, context));
   const width = tableWidth(data.table_width, rows);
   if (width === 0) {
     return "";
@@ -209,36 +212,49 @@ function renderTable(block: MdBlock): string {
   return [renderTableLine(header), renderTableLine(Array<string>(width).fill("---")), ...bodies.map(renderTableLine)].join("\n");
 }
 
-function renderTableRow(block: MdBlock): string[] {
+function renderTableRow(block: MdBlock, context: BlocksToMarkdownContext): string[] {
   const data = blockPayload(block);
   if (!Array.isArray(data.cells)) {
     return [];
   }
 
   // A cell is inline context; its line breaks become <br /> below.
-  return data.cells.map((cell) => renderRichText(cell, false));
+  return data.cells.map((cell) => renderRichText(cell, false, context));
 }
 
-function renderLinkBlock(data: Record<string, unknown>): string {
+function renderLinkBlock(
+  data: Record<string, unknown>,
+  context: BlocksToMarkdownContext,
+): string {
   if (typeof data.url !== "string" || data.url === "") {
     return "";
   }
 
-  const caption = renderRichText(data.caption, false);
+  const destination = markdownDestination(data.url);
+  if (destination === undefined) {
+    context.onWarning?.(
+      `kept a bookmark to an unsupported url as text: ${data.url}`,
+    );
+    // A block of its own now, so its first character does open a line.
+    const text = renderRichText(data.caption, true, context);
+    return text === "" ? escapeMarkdown(data.url) : text;
+  }
+
   // With no caption the url doubles as the link text, where it is literal prose
   // like any other and is escaped as such.
+  const caption = renderRichText(data.caption, false, context);
   const label = caption === "" ? escapeMarkdown(data.url, false) : caption;
-  return `[${label}](${data.url})`;
+  return `[${label}](${destination})`;
 }
 
 function renderToggle(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext): string {
-  const summary = renderFlowText(data.rich_text);
+  const summary = renderFlowText(data.rich_text, context);
   const renderedChildren = renderSequence(children, context, "", "\n\n");
   return [summary, renderedChildren].filter(Boolean).join("\n\n");
 }
 
-function renderTextBlock(value: unknown): string {
-  const text = renderFlowText(value);
+function renderTextBlock(value: unknown, context: BlocksToMarkdownContext): string {
+  const text = renderFlowText(value, context);
   return isBlank(text) ? "" : text;
 }
 
@@ -246,13 +262,20 @@ function renderTextBlock(value: unknown): string {
 // file's first character on that line. Every other block writes a marker in
 // front of its text — `## `, `- `, `> `, `| ` — which is enough to put the
 // line out of MDX's reach; these two do not. See escape.ts.
-function renderFlowText(value: unknown): string {
-  return defuseEsmKeyword(renderRichText(value));
+function renderFlowText(value: unknown, context: BlocksToMarkdownContext): string {
+  return defuseEsmKeyword(renderRichText(value, true, context));
 }
 
-function renderRichText(value: unknown, atLineStart = true): string {
+function renderRichText(
+  value: unknown,
+  atLineStart: boolean,
+  context: BlocksToMarkdownContext,
+): string {
   return normalizeLineEndings(
-    richTextToMarkdown(readRichText(value), { atLineStart }),
+    richTextToMarkdown(readRichText(value), {
+      atLineStart,
+      onWarning: context.onWarning,
+    }),
   );
 }
 
