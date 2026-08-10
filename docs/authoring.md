@@ -108,7 +108,9 @@ else is refused by host, because a blindly fetched URL turns the sync runner
 into a request-forwarding proxy for whatever the URL points at.
 
 Images larger than 10 MB are refused too; the post keeps whatever it had on
-disk and the run reports the failure.
+disk and the run reports the failure. Image failures name only a generic reason:
+the public log never repeats a hostname, IP or DNS result, credentials, path,
+query, or fragment from the rejected URL or one of its redirects.
 
 ## Known rough edge
 

@@ -222,13 +222,17 @@ quote (its icon is already part of the text), a bookmark as a paragraph holding
 its link, and a toggle — or a toggleable heading — as its own text followed by
 its children as siblings.
 
-Notion's size limits are measured before anything is sent. A post longer than
-one request creates the page with its first 100 blocks and appends the rest in
-batches of 100, in order; a run of text longer than 2000 characters is split
-into as many runs as it needs, each keeping the same annotations and link. If
-anything fails once the page exists, the page is left exactly as it is — an
-unpublished draft the site never shows — because the blocks that did land are
-what the next run resumes from. Run the migration again to finish it.
+Notion's size limits are measured before anything is sent. Every create or
+append carries at most 100 top-level blocks, 1000 block elements across their
+nested subtrees, and 500KB of serialized UTF-8 JSON. The create request's page
+properties count toward those bytes, so it may carry fewer blocks than a later
+append; batches are chosen adaptively and stay in order. A run of text longer
+than 2000 characters is split into as many runs as it needs, each keeping the
+same annotations and link. If one atomic subtree cannot fit, the whole run is
+refused before a page exists. If anything fails once a page does exist, it is
+left exactly as it is — an unpublished draft the site never shows — because the
+blocks that did land are what the next run resumes from. Run the migration again
+to finish it.
 
 Anything with no equivalent in a Notion block or run — an image, a reference
 link, a link title, arbitrary HTML, a `#` heading, an indented code block, a
