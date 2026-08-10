@@ -1,5 +1,6 @@
 import { getAllPosts, type PostMeta } from "@/lib/blog";
 import { site, absoluteUrl, routes } from "@/lib/site";
+import { escapeXml } from "@/lib/xml";
 
 // Prerendered with every other route so the site stays fully static.
 export const dynamic = "force-static";
@@ -7,15 +8,6 @@ export const dynamic = "force-static";
 const FEED_TITLE = `${site.name} — Blog`;
 const FEED_DESCRIPTION =
   "Notes on AI systems, distributed systems, and observability.";
-
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
 
 // RSS requires RFC 822 dates. Post dates are date-only, so pin them to UTC
 // midnight rather than letting the runtime's zone shift them a day.
@@ -26,7 +18,10 @@ function rfc822(date: string): string {
 export function buildFeedXml(posts: PostMeta[]): string {
   const items = posts
     .map((post) => {
-      const url = absoluteUrl(routes.blogPost(post.slug));
+      // The URL is built from a slug, which is a file name on disk and no more
+      // trustworthy than the title beside it, so it is escaped like everything
+      // else rather than interpolated raw.
+      const url = escapeXml(absoluteUrl(routes.blogPost(post.slug)));
       return [
         "    <item>",
         `      <title>${escapeXml(post.title)}</title>`,
@@ -47,10 +42,10 @@ export function buildFeedXml(posts: PostMeta[]): string {
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
     "  <channel>",
     `    <title>${escapeXml(FEED_TITLE)}</title>`,
-    `    <link>${absoluteUrl(routes.blog)}</link>`,
+    `    <link>${escapeXml(absoluteUrl(routes.blog))}</link>`,
     `    <description>${escapeXml(FEED_DESCRIPTION)}</description>`,
     "    <language>en-us</language>",
-    `    <atom:link href="${absoluteUrl(routes.feed)}" rel="self" type="application/rss+xml"/>`,
+    `    <atom:link href="${escapeXml(absoluteUrl(routes.feed))}" rel="self" type="application/rss+xml"/>`,
     items,
     "  </channel>",
     "</rss>",
