@@ -212,8 +212,14 @@ export function toLocalPost(file: string, raw: string): LocalPost {
 // everywhere else — the Notion property reads back as one, the frontmatter is
 // one, the site prints one — so writing a timestamp into the database would put
 // a value in it that nothing on either side ever compares equal to what the
-// file says. Only a value that already opens with a full ISO day is narrowed;
-// anything else is handed on as written, for the validator to refuse by name.
+// file says.
+//
+// The day is taken as the ten characters the author wrote, never by parsing.
+// `new Date("2026-05-20T18:30:00")` — a date-time with no offset — is read by
+// JS as *local* time, so round-tripping it through toISOString() moves the post
+// a day west of Greenwich and makes the same file mean two different days on
+// two machines. The ten characters mean the same thing everywhere, and a day
+// that does not exist is refused by the validator rather than rolled over.
 const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]/;
 
 function frontmatterDate(value: unknown): string {
@@ -224,12 +230,7 @@ function frontmatterDate(value: unknown): string {
   }
 
   const written = String(value ?? "").trim();
-  if (!ISO_DATETIME.test(written)) return written;
-
-  const parsed = new Date(written);
-  return Number.isNaN(parsed.getTime())
-    ? written
-    : parsed.toISOString().slice(0, 10);
+  return ISO_DATETIME.test(written) ? written.slice(0, 10) : written;
 }
 
 function isTrashed(page: RemotePage): boolean {

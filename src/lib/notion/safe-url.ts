@@ -38,9 +38,35 @@ const STRIPPED_BY_BROWSERS = /[\u0000-\u0020\u007f]/g;
 
 const SCHEME = /^([A-Za-z][A-Za-z0-9+.-]*):/;
 
-// Long enough for every scheme anyone has registered. A "scheme" longer than
-// this is not one, and repeating it would be repeating the url.
-const MAX_SCHEME = 20;
+// The schemes it is safe to repeat, because they are names rather than values.
+//
+// The token before the first colon is only a scheme if it is one: "user:pass@
+// host/path" is a url with credentials and no scheme at all, and the regex
+// above matches the *username* in it — which is exactly the shape the converter
+// refuses, and so exactly the shape that reaches a log. Anything not on this
+// list is therefore not repeated at all; the block the link sits in is named
+// instead, which is what an author needs to find it.
+//
+// The list is every scheme a link in a blog post plausibly carries: the ones
+// the converter allows (so a message about one is still legible) and the ones
+// it refuses for being a way to run code rather than a place to go.
+const NAMEABLE_SCHEMES: ReadonlySet<string> = new Set([
+  "about",
+  "blob",
+  "data",
+  "file",
+  "ftp",
+  "http",
+  "https",
+  "javascript",
+  "mailto",
+  "sms",
+  "tel",
+  "vbscript",
+  "view-source",
+  "ws",
+  "wss",
+]);
 
 // Everything about a url that is safe to print: its scheme, and nothing else —
 // no credentials, no host, no path, no query, no fragment. A url with no scheme
@@ -49,6 +75,9 @@ export function describeUrlSafely(url: string): string {
   const scheme = SCHEME.exec(url.replace(STRIPPED_BY_BROWSERS, ""))?.[1];
 
   if (scheme === undefined) return "no scheme (a relative link)";
-  if (scheme.length > MAX_SCHEME) return "an unrecognizable scheme";
-  return `scheme "${scheme.toLowerCase()}:"`;
+
+  const name = scheme.toLowerCase();
+  return NAMEABLE_SCHEMES.has(name)
+    ? `scheme "${name}:"`
+    : "an unrecognized scheme";
 }

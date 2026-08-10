@@ -450,4 +450,39 @@ describe("what toLocalPost carries into the check", () => {
       toLocalPost("a.mdx", "---\ndate: 2026-05-20\n---\n\nB.\n").updated,
     ).toBeUndefined();
   });
+
+  // A quoted timestamp is a string, and `new Date("2026-05-20T18:30:00")` is
+  // read by JS as *local* time — so narrowing it through a Date moved the post
+  // a day west of Greenwich and left the same file meaning two different days
+  // on two machines. The day is the ten characters the author wrote.
+  const day = (frontmatter: string) =>
+    toLocalPost("a.mdx", `---\n${frontmatter}\n---\n\nB.\n`).date;
+
+  it.each([
+    ['date: "2026-05-20T18:30:00"', "2026-05-20"],
+    ['date: "2026-05-20 22:00:00"', "2026-05-20"],
+    ['date: "2026-05-20T23:59:59-07:00"', "2026-05-20"],
+    ['date: "2026-05-20T00:00:00+13:00"', "2026-05-20"],
+    ['date: "2026-05-20T09:00:00.000Z"', "2026-05-20"],
+    ['date: "2026-05-20"', "2026-05-20"],
+  ])("reads %s as the day it names", (frontmatter, expected) => {
+    expect(day(frontmatter)).toBe(expected);
+  });
+
+  it("refuses a timestamp whose day does not exist, rather than rolling it over", () => {
+    const post = toLocalPost(
+      "a.mdx",
+      '---\ntitle: "T"\ndate: "2026-02-31T09:00:00Z"\nexcerpt: "E"\n---\n\nB.\n',
+    );
+
+    expect(post.date).toBe("2026-02-31");
+    expect(validateLocalPosts([post]).join("\n")).toMatch(/date/i);
+  });
+
+  it("narrows an `updated` timestamp the same way", () => {
+    expect(
+      toLocalPost("a.mdx", '---\nupdated: "2026-06-01T18:30:00"\n---\n\nB.\n')
+        .updated,
+    ).toBe("2026-06-01");
+  });
 });

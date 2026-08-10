@@ -94,6 +94,42 @@ describe("describeUrlSafely", () => {
     expect(described.length).toBeLessThan(80);
   });
 
+  // A url with credentials and no scheme — "user:password@host/path" — puts the
+  // username exactly where a scheme goes, and it is precisely the shape the
+  // converter refuses, so it is precisely the shape that reaches a log. A token
+  // that is not a scheme anyone has registered is not repeated at all.
+  it.each([
+    "notion-svc-acct:S3cretP4ss@internal.corp/very/private/path",
+    "AKIAIOSFODNN7EXAMPLE:wJalrXUtn@s3.amazonaws.com/very/private/path",
+    "sekrit:hunter2@internal.corp",
+  ])("never mistakes the credentials in %s for a scheme", (url) => {
+    const described = describeUrlSafely(url);
+
+    for (const piece of [
+      "notion-svc-acct",
+      "S3cretP4ss",
+      "AKIAIOSFODNN7EXAMPLE",
+      "wJalrXUtn",
+      "sekrit",
+      "hunter2",
+      "internal.corp",
+    ]) {
+      expect(described.toLowerCase()).not.toContain(piece.toLowerCase());
+    }
+    expect(described).toMatch(/unrecognized|unrecognizable|no scheme/);
+  });
+
+  it("still names every scheme a link is actually refused for", () => {
+    for (const scheme of ["javascript", "data", "vbscript", "file", "blob"]) {
+      expect(describeUrlSafely(`${scheme}:whatever`)).toBe(`scheme "${scheme}:"`);
+    }
+  });
+
+  it("says nothing it does not recognize, however short", () => {
+    expect(describeUrlSafely("zz:payload")).toMatch(/unrecognized|unrecognizable/);
+    expect(describeUrlSafely("zz:payload")).not.toContain("zz");
+  });
+
   // redactUrl is the images' rule — origin and path, never the signed query —
   // and lives beside this one so there is one place urls are made loggable.
   it("sits beside the redaction the image downloader already uses", () => {
@@ -153,6 +189,25 @@ describe("an inline link the converter refuses", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain(inner.id);
     expect(warnings[0].split(":")[0]).toBe("paragraph block " + inner.id.split(":")[0]);
+  });
+});
+
+describe("a link whose credentials sit where a scheme goes", () => {
+  const href = "notion-svc-acct:S3cretP4ss@internal.corp/very/private/path";
+
+  it("says nothing about them inline", () => {
+    const [warning] = warningsFor([paragraphLinking(href)]);
+
+    expect(warning).not.toContain("S3cretP4ss");
+    expect(warning).not.toContain("notion-svc-acct");
+    expect(warning).not.toContain("internal.corp");
+  });
+
+  it("says nothing about them in a bookmark", () => {
+    const [warning] = warningsFor([block("bookmark", { url: href, caption: [] })]);
+
+    expect(warning).not.toContain("S3cretP4ss");
+    expect(warning).not.toContain("notion-svc-acct");
   });
 });
 
