@@ -137,6 +137,22 @@ that no longer references an image it used to, counts as out of date even when
 the `.mdx` file itself is byte-identical.
 
 Requires `NOTION_TOKEN` and `NOTION_DATABASE_ID` in your environment.
+`NOTION_DATA_SOURCE_ID` is optional and only needed if the database ever grows a
+second data source — see "Which data source" below.
+
+## Which data source
+
+A Notion database is a container; its schema and its rows live in a **data
+source**, and every read and write names one. An ordinary database has exactly
+one, and both `pnpm sync:notion` and `pnpm migrate:to-notion` resolve it from
+`NOTION_DATABASE_ID` — no extra variable, and both commands resolve it the same
+way, so they always read and write the same rows.
+
+If the database ever exposes more than one data source, neither command guesses:
+the run stops, lists the sources it found, and asks for `NOTION_DATA_SOURCE_ID`.
+Set it to the id of the source the blog publishes from. It is checked against
+the database before anything is read, so an id belonging to another database
+fails immediately rather than quietly publishing somebody else's rows.
 
 ## If one post fails to sync
 

@@ -20,26 +20,10 @@ export function createNotionClient(token: string): Client {
   return new Client({ auth: token, notionVersion: NOTION_VERSION });
 }
 
-// A database is a container; its schema and rows live in a data source.
-export async function resolveDataSourceId(
-  client: Client,
-  databaseId: string,
-): Promise<string> {
-  // @notionhq/client v5 types this as DatabaseObjectResponse | PartialDatabaseObjectResponse;
-  // only the full object carries `data_sources`, so narrow rather than cast.
-  const database = await withRetry(() =>
-    client.databases.retrieve({ database_id: databaseId }),
-  );
-
-  const id =
-    "data_sources" in database ? database.data_sources[0]?.id : undefined;
-  if (!id) {
-    throw new Error(
-      `database ${databaseId} exposes no data sources — check the integration is connected to it`,
-    );
-  }
-  return id;
-}
+// A database is a container; its schema and rows live in a data source, and
+// *which* data source is not a question this module gets to answer by position.
+// See data-source.ts: one resolver, called by the sync and by the migration, so
+// both halves of the repo read and write the same rows.
 
 // Query results mix full pages with partial page/data-source objects; only the
 // full page objects carry the properties the frontmatter is built from.

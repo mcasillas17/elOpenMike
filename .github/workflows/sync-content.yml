@@ -29,6 +29,13 @@ jobs:
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          # Optional, and unset for an ordinary database: a database's rows live
+          # in a data source, and one with a single source is resolved from the
+          # database id alone. Set this secret only if the Blog database ever
+          # exposes more than one — the run says so, and names them, rather than
+          # publishing from whichever one Notion listed first. An unset secret
+          # arrives as an empty string, which reads as "not set".
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
       - name: Commit and push any changes
         run: |
           # Scope the dirty check to the paths that are actually staged, so an

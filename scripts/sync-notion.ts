@@ -2,11 +2,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   createNotionClient,
-  resolveDataSourceId,
   queryPublishedPages,
   fetchBlockTree,
   retrievePage,
 } from "../src/lib/notion/client";
+import { resolveConfiguredDataSourceId } from "../src/lib/notion/data-source";
 import { isPublished, pageSlug } from "../src/lib/notion/fetch-post";
 import { validatePosts, validateSourceSlugs } from "../src/lib/notion/validate";
 import { postPath, massDeleteError } from "../src/lib/notion/plan";
@@ -89,10 +89,10 @@ function reportFailures(
 
 async function main(): Promise<void> {
   const client = createNotionClient(requireEnv("NOTION_TOKEN"));
-  const dataSourceId = await resolveDataSourceId(
-    client,
-    requireEnv("NOTION_DATABASE_ID"),
-  );
+  // One resolver, shared with the migration, so both halves of the repo read
+  // and write the same rows: NOTION_DATA_SOURCE_ID when it is set and proved to
+  // belong to the database, and otherwise the database's single data source.
+  const dataSourceId = await resolveConfiguredDataSourceId(client);
 
   const pages = await queryPublishedPages(client, dataSourceId, isPublished);
   const existing = await readExisting(BLOG_DIR);

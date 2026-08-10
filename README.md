@@ -47,6 +47,16 @@ Required GitHub secrets:
   `contents: write`. **Required:** pushes made with the default `GITHUB_TOKEN`
   do not trigger other workflows, so the deploy would never run.
 
+Optional:
+
+- `NOTION_DATA_SOURCE_ID` — only needed if the Blog database exposes more than
+  one **data source**. A database is a container; its rows live in a data
+  source, and an ordinary database has exactly one, which the sync and the
+  migration both resolve from `NOTION_DATABASE_ID`. If there is ever more than
+  one, neither guesses: the run stops, names the sources it found, and asks for
+  this variable. It is checked against the database before anything is read, so
+  an id from another database fails immediately.
+
 ## Supply-chain hardening
 
 - **Script blocking**: pnpm 10+ blocks dependency install/build scripts by default. The allowlist in `pnpm-workspace.yaml` → `allowBuilds` permits only `esbuild` (native binary setup) and `unrs-resolver` (Tailwind v4 Rust binding). All other lifecycle scripts are blocked.
@@ -67,7 +77,10 @@ Required GitHub secrets:
 ## One-time migration into Notion
 
 `pnpm migrate:to-notion` pushes the hand-written `content/blog/*.mdx` posts into
-the Notion database. It needs `NOTION_TOKEN` and `NOTION_DATA_SOURCE_ID`, and a
+the Notion database. It needs `NOTION_TOKEN` and `NOTION_DATABASE_ID` — the same
+two the sync uses, resolved through the same code, so it writes into the data
+source the sync publishes from (`NOTION_DATA_SOURCE_ID` only comes into it if
+the database exposes more than one). It also needs a
 `Status` property (Status or Select) offering both a **Draft** and a
 **Published** option — it checks for both before writing anything, because
 Notion refuses a status value that is not already an option and the API cannot

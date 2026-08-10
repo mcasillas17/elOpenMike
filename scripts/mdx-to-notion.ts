@@ -29,6 +29,7 @@ import {
   fetchBlockTree,
   queryPages,
 } from "../src/lib/notion/client";
+import { resolveConfiguredDataSourceId } from "../src/lib/notion/data-source";
 import { pageSlug, pageStatus, pageTitle } from "../src/lib/notion/fetch-post";
 import { withRetry } from "../src/lib/notion/retry";
 import type { DataSourceSchema } from "../src/lib/notion/properties";
@@ -53,12 +54,17 @@ async function readLocalPosts(dir: string) {
 
 async function main(): Promise<void> {
   const token = process.env.NOTION_TOKEN;
-  const dataSourceId = process.env.NOTION_DATA_SOURCE_ID;
-  if (!token || !dataSourceId) {
-    throw new Error("set NOTION_TOKEN and NOTION_DATA_SOURCE_ID");
+  if (!token) {
+    throw new Error("set NOTION_TOKEN and NOTION_DATABASE_ID");
   }
 
   const client = createNotionClient(token);
+
+  // The same resolver the sync uses, so this writes into the data source the
+  // sync publishes from. NOTION_DATA_SOURCE_ID is honored when it is set — and
+  // proved to belong to NOTION_DATABASE_ID first — but a database with one data
+  // source, which is every ordinary one, needs only the database id.
+  const dataSourceId = await resolveConfiguredDataSourceId(client);
 
   // Both the title property's name and the Status property's write shape and
   // options depend on how the database was set up, so read the schema before
