@@ -222,11 +222,11 @@ describe("migrationRequests", () => {
     const requests = migrationRequests(plan, options);
 
     expect(requests).toHaveLength(1);
-    expect(requests[0].parent).toEqual({
+    expect(requests[0].page.parent).toEqual({
       type: "data_source_id",
       data_source_id: "ds-1",
     });
-    expect(requests[0].properties.Slug).toEqual({
+    expect(requests[0].page.properties.Slug).toEqual({
       rich_text: [{ type: "text", text: { content: "two" } }],
     });
   });
@@ -238,7 +238,7 @@ describe("migrationRequests", () => {
       schema: schema({ "Post title": "title", Status: "status" }),
     });
 
-    expect(request.properties["Post title"]).toEqual({
+    expect(request.page.properties["Post title"]).toEqual({
       title: [{ type: "text", text: { content: "Title one" } }],
     });
   });
@@ -249,13 +249,13 @@ describe("migrationRequests", () => {
     const plan = planMigration([local("one")], []);
 
     expect(
-      migrationRequests(plan, options)[0].properties.Status,
+      migrationRequests(plan, options)[0].page.properties.Status,
     ).toEqual({ status: { name: "Published" } });
     expect(
       migrationRequests(plan, {
         dataSourceId: "ds-1",
         schema: schema({ Name: "title", Status: "select" }),
-      })[0].properties.Status,
+      })[0].page.properties.Status,
     ).toEqual({ select: { name: "Published" } });
   });
 
@@ -276,7 +276,7 @@ describe("migrationRequests", () => {
     );
     const [request] = migrationRequests(plan, options);
 
-    expect(request.children).toEqual([
+    expect(request.page.children).toEqual([
       {
         object: "block",
         type: "code",
@@ -295,13 +295,13 @@ describe("migrationRequests", () => {
     );
     const [request] = migrationRequests(plan, options);
 
-    expect(request.properties.Tags).toEqual({
+    expect(request.page.properties.Tags).toEqual({
       multi_select: [{ name: "AI" }, { name: "Observability" }],
     });
-    expect(request.properties.Published).toEqual({
+    expect(request.page.properties.Published).toEqual({
       date: { start: "2026-05-20" },
     });
-    expect(request.properties.Excerpt).toEqual({
+    expect(request.page.properties.Excerpt).toEqual({
       rich_text: [{ type: "text", text: { content: "Excerpt one" } }],
     });
   });
@@ -324,7 +324,7 @@ describe("migrationRequests", () => {
     const requests = migrationRequests(plan, options);
 
     expect(requests).toHaveLength(plan.create.length);
-    expect(requests.map((r) => r.properties.Slug)).toEqual(
+    expect(requests.map((r) => r.page.properties.Slug)).toEqual(
       plan.create.map((post) => ({
         rich_text: [{ type: "text", text: { content: post.slug } }],
       })),

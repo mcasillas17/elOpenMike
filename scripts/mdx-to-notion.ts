@@ -17,6 +17,8 @@ import {
   toLocalPost,
   planMigration,
   migrationRequests,
+  runMigration,
+  type MigrationExecutor,
   type RemotePage,
 } from "../src/lib/notion/migrate";
 
@@ -72,20 +74,49 @@ async function main(): Promise<void> {
     console.log(`· already in Notion, skipped ${slug}`);
   }
 
-  // Built up front so an unusable Status property or an unknown fence fails
-  // before the first page is created rather than partway through.
+  // Built up front so an unusable Status property, an unknown fence, or a post
+  // Notion's size limits would reject fails before the first page is created
+  // rather than partway through. Every post is measured, not just the first
+  // bad one.
   const requests = migrationRequests(plan, {
     dataSourceId,
     schema: dataSource.properties,
   });
 
-  for (const [index, body] of requests.entries()) {
-    await withRetry(() => client.request({ path: "pages", method: "post", body }));
-    console.log(`✓ migrated ${plan.create[index].slug}`);
-  }
+  // Notion takes 100 children per request, so a long post is one create and
+  // then a series of appends. Each call retries a 429 the way every other call
+  // in this repo does; nothing is run concurrently, because a post's batches
+  // are the order of its blocks and the integration gets ~3 requests/second.
+  const executor: MigrationExecutor = {
+    async createPage(body) {
+      const page = await withRetry(() =>
+        client.request<{ id: string }>({ path: "pages", method: "post", body }),
+      );
+      return page.id;
+    },
+    async appendChildren(pageId, children) {
+      await withRetry(() =>
+        client.blocks.children.append({ block_id: pageId, children }),
+      );
+    },
+    // A half-written page is worse than no page: the sync would publish it and
+    // the next migration would see its slug taken. Trashing it holds no slug,
+    // so re-running is the recovery.
+    async archivePage(pageId) {
+      await withRetry(() =>
+        client.pages.update({ page_id: pageId, in_trash: true }),
+      );
+    },
+  };
+
+  const written = await runMigration(requests, executor, ({ slug, batches }) =>
+    console.log(
+      `✓ migrated ${slug}${batches > 0 ? ` (+${batches} block batch${batches === 1 ? "" : "es"})` : ""}`,
+    ),
+  );
 
   console.log(
-    `\n✓ ${requests.length} created, ${plan.skip.length} already present`,
+    `\n✓ ${written.length} created, ${plan.skip.length} already present`,
   );
 }
 
