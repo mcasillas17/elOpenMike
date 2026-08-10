@@ -1,5 +1,5 @@
 import { Client } from "@notionhq/client";
-import { retryAfterMs } from "./retry";
+import { withRetry } from "./retry";
 import type { MdBlock } from "./types";
 
 // Pinned explicitly: `archived` became `in_trash` in this version, and database
@@ -14,27 +14,6 @@ export type PageObject = {
 
 export function createNotionClient(token: string): Client {
   return new Client({ auth: token, notionVersion: NOTION_VERSION });
-}
-
-// Notion allows ~3 requests/second per integration. Retry 429s honoring
-// Retry-After so a burst of image-heavy posts degrades to slow, not failed.
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  attempts = 4,
-): Promise<T> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await operation();
-    } catch (error: unknown) {
-      const status = (error as { status?: number }).status;
-      if (status !== 429 || attempt >= attempts) throw error;
-      const waitMs = retryAfterMs(
-        (error as { headers?: unknown }).headers,
-        attempt,
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-    }
-  }
 }
 
 // A database is a container; its schema and rows live in a data source.

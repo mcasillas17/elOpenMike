@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { readHeader, retryAfterMs } from "@/lib/notion/retry";
+import {
+  readHeader,
+  retryAfterMs,
+  withRetry,
+  MAX_RETRY_WAIT_MS,
+} from "@/lib/notion/retry";
 
 describe("readHeader", () => {
   // The SDK sets an error's `headers` from the fetch Response, i.e. a Headers
@@ -43,5 +48,152 @@ describe("retryAfterMs", () => {
     expect(retryAfterMs(new Headers({ "retry-after": "99999" }), 1)).toBe(
       60_000,
     );
+  });
+});
+
+// The retry loop itself had no coverage: it decides whether a rate-limited
+// sync recovers or fails the run, and a wrong condition (retrying a 401 for
+// ever, or giving up on the first 429) is invisible without it. The sleeper is
+// injected so the tests assert the delay without waiting for it.
+describe("withRetry", () => {
+  const rateLimited = (headers?: HeadersInit) =>
+    Object.assign(new Error("rate limited"), {
+      status: 429,
+      headers: headers ? new Headers(headers) : undefined,
+    });
+
+  function recorder() {
+    const slept: number[] = [];
+    return { slept, sleep: async (ms: number) => void slept.push(ms) };
+  }
+
+  it("returns the result without sleeping when the first call succeeds", async () => {
+    const { slept, sleep } = recorder();
+    await expect(withRetry(async () => "ok", { sleep })).resolves.toBe("ok");
+    expect(slept).toEqual([]);
+  });
+
+  it("retries a 429 and returns the later success", async () => {
+    const { slept, sleep } = recorder();
+    let calls = 0;
+    const result = await withRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) throw rateLimited({ "retry-after": "2" });
+        return "recovered";
+      },
+      { sleep },
+    );
+
+    expect(result).toBe("recovered");
+    expect(calls).toBe(2);
+    expect(slept).toEqual([2_000]);
+  });
+
+  it("honors Retry-After on every attempt", async () => {
+    const { slept, sleep } = recorder();
+    let calls = 0;
+    await withRetry(
+      async () => {
+        calls += 1;
+        if (calls < 3) throw rateLimited({ "retry-after": String(calls * 5) });
+        return "ok";
+      },
+      { sleep },
+    );
+    expect(slept).toEqual([5_000, 10_000]);
+  });
+
+  it("falls back to a per-attempt backoff without the header", async () => {
+    const { slept, sleep } = recorder();
+    let calls = 0;
+    await withRetry(
+      async () => {
+        calls += 1;
+        if (calls < 4) throw rateLimited();
+        return "ok";
+      },
+      { sleep },
+    );
+    expect(slept).toEqual([1_000, 2_000, 3_000]);
+  });
+
+  it("gives up after the attempt budget and rethrows the last error", async () => {
+    const { slept, sleep } = recorder();
+    let calls = 0;
+    const error = rateLimited({ "retry-after": "1" });
+
+    await expect(
+      withRetry(
+        async () => {
+          calls += 1;
+          throw error;
+        },
+        { attempts: 3, sleep },
+      ),
+    ).rejects.toBe(error);
+
+    expect(calls).toBe(3);
+    expect(slept).toEqual([1_000, 1_000]);
+  });
+
+  it("defaults to four attempts", async () => {
+    const { sleep } = recorder();
+    let calls = 0;
+    await expect(
+      withRetry(
+        async () => {
+          calls += 1;
+          throw rateLimited();
+        },
+        { sleep },
+      ),
+    ).rejects.toThrow(/rate limited/);
+    expect(calls).toBe(4);
+  });
+
+  it("rethrows a non-429 immediately", async () => {
+    for (const status of [400, 401, 403, 404, 500, undefined]) {
+      const { slept, sleep } = recorder();
+      let calls = 0;
+      const error = Object.assign(new Error("nope"), { status });
+
+      await expect(
+        withRetry(
+          async () => {
+            calls += 1;
+            throw error;
+          },
+          { sleep },
+        ),
+      ).rejects.toBe(error);
+
+      expect(calls).toBe(1);
+      expect(slept).toEqual([]);
+    }
+  });
+
+  it("rethrows a thrown non-object without retrying", async () => {
+    const { slept, sleep } = recorder();
+    await expect(
+      withRetry(async () => {
+        throw "plain string";
+      }, { sleep }),
+    ).rejects.toBe("plain string");
+    expect(slept).toEqual([]);
+  });
+
+  it("caps a hostile Retry-After", async () => {
+    const { slept, sleep } = recorder();
+    let calls = 0;
+    await withRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) throw rateLimited({ "retry-after": "99999" });
+        return "ok";
+      },
+      { sleep },
+    );
+    expect(slept).toEqual([MAX_RETRY_WAIT_MS]);
   });
 });
