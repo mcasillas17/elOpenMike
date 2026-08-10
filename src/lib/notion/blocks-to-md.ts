@@ -90,12 +90,17 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
 
   switch (block.type) {
     case "paragraph":
-      return renderTextBlock(data.rich_text, context);
+      return renderTextBlock(data.rich_text, block.children, context);
     case "heading_1":
     case "heading_2":
     case "heading_3":
       // Site pages already reserve the H1, so Notion headings shift down one level.
-      return renderHeading(HEADING_MARKERS[block.type], data.rich_text, context);
+      return renderHeading(
+        HEADING_MARKERS[block.type],
+        data.rich_text,
+        block.children,
+        context,
+      );
     case "quote":
       return renderQuote(data.rich_text, block.children, context);
     case "callout":
@@ -129,11 +134,36 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
   }
 }
 
-function renderHeading(marker: string, value: unknown, context: BlocksToMarkdownContext): string {
+// A Notion heading can be toggleable, and a toggleable heading holds blocks.
+// They were fetched and then dropped, so a section written as a collapsible
+// heading published as its title and nothing else. Markdown has no toggle, but
+// a heading followed by content is what a toggleable heading is once you take
+// the folding away — the same trade the `toggle` block already makes — so the
+// children are written after it as the siblings they render as.
+function renderHeading(
+  marker: string,
+  value: unknown,
+  children: MdBlock[],
+  context: BlocksToMarkdownContext,
+): string {
   // A heading's content is inline-only, so a literal `#` or `-` in it cannot
   // open a block and needs no escaping.
   const text = renderRichText(value, false, context);
-  return isBlank(text) ? "" : `${marker} ${text}`;
+  const own = isBlank(text) ? "" : `${marker} ${text}`;
+  return withChildren(own, children, context);
+}
+
+// A block's own text and the blocks nested under it, as the sibling blocks
+// markdown writes them. Whichever half is empty falls away, so a heading with
+// nothing under it is still one line and children under an empty heading are
+// still published.
+function withChildren(
+  own: string,
+  children: MdBlock[],
+  context: BlocksToMarkdownContext,
+): string {
+  const rendered = renderSequence(children, context, "", "\n\n");
+  return [own, rendered].filter(Boolean).join("\n\n");
 }
 
 function renderQuote(value: unknown, children: MdBlock[], context: BlocksToMarkdownContext): string {
@@ -248,14 +278,19 @@ function renderLinkBlock(
 }
 
 function renderToggle(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext): string {
-  const summary = renderFlowText(data.rich_text, context);
-  const renderedChildren = renderSequence(children, context, "", "\n\n");
-  return [summary, renderedChildren].filter(Boolean).join("\n\n");
+  return withChildren(renderFlowText(data.rich_text, context), children, context);
 }
 
-function renderTextBlock(value: unknown, context: BlocksToMarkdownContext): string {
+// Notion indents blocks under a paragraph the same way it does under a heading,
+// and they were dropped the same way. Markdown writes them as the siblings they
+// already read as.
+function renderTextBlock(
+  value: unknown,
+  children: MdBlock[],
+  context: BlocksToMarkdownContext,
+): string {
   const text = renderFlowText(value, context);
-  return isBlank(text) ? "" : text;
+  return withChildren(isBlank(text) ? "" : text, children, context);
 }
 
 // Rich text that opens a block of its own, so its first character is also the
