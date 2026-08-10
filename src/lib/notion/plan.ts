@@ -6,6 +6,7 @@ import {
   resolveUpdated,
 } from "./serialize";
 import type { ReconcilePlan } from "./reconcile";
+import { POST_FILE_EXTENSION } from "./slug";
 
 export type RenderedPost = {
   slug: string;
@@ -18,7 +19,7 @@ const UPDATED_PREFIX = 'updated: "';
 const POST_FILE = /^content\/blog\/(.*)\.mdx$/;
 
 export function postPath(slug: string): string {
-  return `content/blog/${slug}.mdx`;
+  return `content/blog/${slug}${POST_FILE_EXTENSION}`;
 }
 
 // The inverse of postPath. A path that is not a post file yields "", which

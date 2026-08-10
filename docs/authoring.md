@@ -98,6 +98,11 @@ rather than going somewhere) is reported by its scheme alone: not its host, its
 path, its query or its fragment, any of which can carry a token somebody pasted
 into a link. The link is kept in the post as plain text; only the log is quiet.
 
+A very long title is worth avoiding for one more reason: the slug becomes the
+name of `content/blog/<slug>.mdx` and of the post's image directory, and a
+filename cannot exceed 255 bytes. A title that slugifies past that is refused
+before anything is written — set a shorter `Slug` on the page.
+
 ## Images
 
 Upload images into the page (`/image`, or paste from the camera roll) rather

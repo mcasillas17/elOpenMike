@@ -1,7 +1,7 @@
 import matter from "gray-matter";
 import type { BlockObjectRequest } from "@notionhq/client";
 import { JSON_SCHEMA, load as loadYaml } from "js-yaml";
-import { slugify, isValidSlug } from "./slug";
+import { slugify, isValidSlug, slugFilenameProblems } from "./slug";
 import {
   titlePropertyName,
   buildStatusProperty,
@@ -367,6 +367,14 @@ export function planMigration(
       );
       continue;
     }
+    // The migration writes no file itself, but the post it pushes into Notion
+    // is one the sync then has to write — and a name no filesystem can hold is
+    // a post that never comes back out. Same check, same module, both ends.
+    errors.push(
+      ...slugFilenameProblems(post.slug).map(
+        (problem) => `${post.file}: ${problem}`,
+      ),
+    );
     filesBySlug.set(post.slug, [...(filesBySlug.get(post.slug) ?? []), post.file]);
   }
 

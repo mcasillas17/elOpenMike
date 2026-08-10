@@ -1,5 +1,5 @@
 import type { PostFrontmatter } from "./types";
-import { isValidSlug, slugify } from "./slug";
+import { isValidSlug, slugFilenameProblems, slugify } from "./slug";
 
 export type ValidatablePost = {
   slug: string;
@@ -216,6 +216,9 @@ export function validatePosts(posts: ValidatablePost[]): string[] {
     if (!isValidSlug(post.slug)) {
       errors.push(at("slug must be lowercase alphanumeric with single hyphens"));
     }
+    // Measured before a single path is planned: the write that would fail is
+    // one of many, and the ones before it have already landed by then.
+    errors.push(...slugFilenameProblems(post.slug).map(at));
     if (post.body.trim() === "") errors.push(at("body is empty after conversion"));
   }
 

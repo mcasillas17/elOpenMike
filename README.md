@@ -148,6 +148,11 @@ drift apart:
   collapse onto the same slug;
 - a **body**, since a page with nothing in it is a page the sync refuses to
   publish;
+- a **slug** short enough to name a file: `content/blog/<slug>.mdx` and
+  `public/images/blog/<slug>/` are path components, and every filesystem this
+  repo is written on caps one at 255 **bytes**. A long Notion title slugifies
+  straight past that, and the write only fails once earlier posts have already
+  been written;
 - and the **database schema** itself: a title property, `Slug`, `Excerpt`,
   `Tags` and `Published` each of the type the migration writes into, and a
   `Status` in one of its two shapes carrying both of the options the run needs.
