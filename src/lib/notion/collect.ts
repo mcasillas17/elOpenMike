@@ -80,7 +80,9 @@ type Collected =
 // — is reported as a per-post failure rather than rejected out of the pool: an
 // author unpublishing one post mid-run must not take the other posts' sync down
 // with it, and the failure carries the same preserve-or-skip meaning as an
-// image that would not download.
+// image that would not download. A block fetch that fails outright still
+// rejects the whole run, exactly as it did before: that is an integration or
+// API problem, not one post's problem.
 export async function collectSources(
   pages: PageObject[],
   { fetchBlocks, retrievePage, limit = MAX_CONCURRENT_REQUESTS }: CollectDeps,
