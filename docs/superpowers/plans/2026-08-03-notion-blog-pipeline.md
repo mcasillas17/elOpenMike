@@ -1576,7 +1576,26 @@ pnpm add -D tsx
 
 Expected: both resolve to releases older than 7 days under `minimumReleaseAge`. Neither needs a build script, so `allowBuilds` in `pnpm-workspace.yaml` is unchanged.
 
-- [ ] **Step 2: Write `client.ts`**
+- [ ] **Step 2: Verify the SDK surface before writing against it**
+
+The client code below was written against Notion's published docs, **not** against the installed package's types. Check the real surface now:
+
+```bash
+ls node_modules/@notionhq/client/build/src/
+grep -rn "dataSources\|data_sources" node_modules/@notionhq/client/build/src/Client.d.ts | head -20
+grep -n "notionVersion" node_modules/@notionhq/client/build/src/Client.d.ts | head -5
+```
+
+Two things to confirm, and **prefer the typed method wherever one exists**:
+
+1. **Data source query.** If the SDK exposes a typed method (e.g. `client.dataSources.query({ data_source_id, filter, start_cursor, page_size })`), use it in `queryPublishedPages` instead of the raw `client.request({ path: "data_sources/.../query" })` shown below. The raw form is a documented escape hatch and works either way, but the typed method gives real parameter and response types.
+2. **`databases.retrieve` response.** Confirm it returns a `data_sources` array on this version. If the type does not include it, keep the `as unknown as { data_sources?: ... }` cast below and leave the comment explaining why.
+
+Also confirm the constructor accepts `notionVersion`. If the option is named differently, adjust `createNotionClient` accordingly — the version string `2026-03-11` itself does not change.
+
+Record whatever you find in the Task 8 commit message so the next reader knows which form was chosen and why.
+
+- [ ] **Step 3: Write `client.ts`**
 
 ```ts
 // src/lib/notion/client.ts
@@ -1691,7 +1710,7 @@ export async function fetchBlockTree(
 }
 ```
 
-- [ ] **Step 3: Write `fetch-post.ts`**
+- [ ] **Step 4: Write `fetch-post.ts`**
 
 ```ts
 // src/lib/notion/fetch-post.ts
@@ -1744,12 +1763,12 @@ export function toPostSource(page: PageObject, blocks: MdBlock[]): PostSource {
 }
 ```
 
-- [ ] **Step 4: Type-check**
+- [ ] **Step 5: Type-check**
 
 Run: `pnpm exec tsc --noEmit`
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml src/lib/notion/client.ts src/lib/notion/fetch-post.ts
@@ -2474,13 +2493,34 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ### Task 14: End-to-end verification against the real workspace
 
+> ## ⛔ STOP — HUMAN REQUIRED
+>
+> **An autonomous agent must NOT attempt this task.** Stop after Task 13, report
+> what was completed, and leave this task unchecked.
+>
+> Every step below needs credentials and a Notion workspace that only the repo
+> owner can create: an internal integration token, a database shared with it,
+> and three GitHub Actions secrets. There is no way to satisfy them from a
+> sandbox.
+>
+> **Specifically forbidden:**
+> - Do not invent, mock, or stub Notion credentials to make steps "pass".
+> - Do not mark any step here complete without having actually run it.
+> - Do not weaken or delete the idempotency test (Task 7) because this task
+>   could not run — that test is the safety net for the 10-minute cron.
+> - Do not report Plan A as "complete". Report it as **"Tasks 1–13 complete,
+>   Task 14 blocked on credentials"**.
+>
+> Tasks 1–13 produce a fully type-checked, fully unit-tested pipeline. That is
+> the correct stopping point for unattended work.
+
 **Files:** none — this is a manual verification gate.
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–13.
 - Produces: a verified, working publish flow.
 
-**Do not skip.** Every prior task was tested against fixtures. This is the first contact with real Notion data, and it is where schema mismatches surface.
+**Do not skip when a human is available.** Every prior task was tested against fixtures. This is the first contact with real Notion data, and it is where schema mismatches surface — most likely the property names in `fetch-post.ts`, which are matched literally.
 
 - [ ] **Step 1: Create the Notion database**
 
