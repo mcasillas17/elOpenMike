@@ -124,6 +124,44 @@ function defuseLine(line: string): string {
   return line;
 }
 
+// CommonMark lets an ATX heading close itself: a run of `#`s at the end of the
+// line, preceded by a space or a tab — or by nothing but the heading's own
+// marker — is a *closing sequence*. It is markup rather than text, and the
+// parser throws it away along with the whitespace in front of it.
+//
+// Notion's hashes are the author's, so a heading reading "Title #" was written
+// as `## Title #` and rendered as "Title": the character disappeared, and the
+// anchor rehype-slug builds out of the heading's text moved with it.
+//
+// One backslash defuses the whole run — `## Title \###` is a heading reading
+// "Title ###" — so exactly one is written, and only where a closing sequence
+// would actually be read. A hash mid-line closes nothing; one already behind a
+// backslash (the escaper's, standing for a literal `\`) is not a `#` the parser
+// counts there; and one followed by the delimiters an annotation writes is no
+// longer at the end of the line at all. None of those are touched.
+//
+// Only the first line is considered: that is the line the heading's marker
+// opens, and the only one an ATX closing sequence can end. Anything after a
+// line ending is out of the heading, where escapeMarkdown's own line-start
+// handling has already escaped whatever could open a block.
+export function defuseHeadingClosingSequence(text: string): string {
+  const ending = text.search(LINE_ENDING);
+  const line = ending === -1 ? text : text.slice(0, ending);
+  const rest = ending === -1 ? "" : text.slice(ending);
+
+  let end = line.length;
+  while (end > 0 && INDENT.test(line[end - 1])) end -= 1;
+
+  let start = end;
+  while (start > 0 && line[start - 1] === "#") start -= 1;
+  if (start === end) return text;
+
+  const before = line[start - 1];
+  if (before !== undefined && !INDENT.test(before)) return text;
+
+  return `${line.slice(0, start)}\\${line.slice(start)}${rest}`;
+}
+
 type BlockMarker = { text: string; length: number };
 
 // Escapes one run of literal text. `atLineStart` says whether the first

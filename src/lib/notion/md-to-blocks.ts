@@ -151,6 +151,24 @@ const HEADING_LEVELS: Record<number, "heading_1" | "heading_2" | "heading_3"> = 
   4: "heading_3",
 };
 
+// An ATX heading may close with a run of `#`s, and CommonMark reads that run as
+// markup rather than as text: `## Title ###` is a heading reading "Title", and
+// that is what the site puts on the page. Migrating the file has to agree with
+// the render, or a heading arrives in Notion carrying characters no reader ever
+// saw — and the next sync would then write them back out as literal hashes.
+//
+// The run only closes the heading if whitespace (or nothing but the heading's
+// own marker) comes before it, which is exactly what leaves the sync's own
+// `## Title \###` alone: a backslash sits in front of that one, so it is text.
+const TRAILING_HASHES = /(^|[ \t])#+[ \t]*$/;
+
+function closingSequenceRemoved(content: string): string {
+  const trimmed = content.replace(/[ \t]+$/, "");
+  return TRAILING_HASHES.test(trimmed)
+    ? trimmed.replace(/#+$/, "").replace(/[ \t]+$/, "")
+    : trimmed;
+}
+
 // A tab advances to the next multiple of four, which is how CommonMark measures
 // the indentation deciding whether a line opens an indented code block.
 function measureIndent(line: string): { width: number; content: string } {
@@ -251,7 +269,9 @@ function readBlock(
       block: {
         object: "block",
         type,
-        [type]: { rich_text: inlineToRichText(heading[2] ?? "") },
+        [type]: {
+          rich_text: inlineToRichText(closingSequenceRemoved(heading[2] ?? "")),
+        },
       } as BlockObjectRequest,
       next: index + 1,
     };

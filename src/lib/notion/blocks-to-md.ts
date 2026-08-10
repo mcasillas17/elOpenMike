@@ -1,5 +1,9 @@
 import { richTextToMarkdown } from "./rich-text";
-import { defuseEsmKeyword, escapeMarkdown } from "./escape";
+import {
+  defuseEsmKeyword,
+  defuseHeadingClosingSequence,
+  escapeMarkdown,
+} from "./escape";
 import { markdownDestination } from "./link-destination";
 import { codeFence } from "./code-span";
 import type { MdBlock, RichText } from "./types";
@@ -147,8 +151,13 @@ function renderHeading(
   context: BlocksToMarkdownContext,
 ): string {
   // A heading's content is inline-only, so a literal `#` or `-` in it cannot
-  // open a block and needs no escaping.
-  const text = renderRichText(value, false, context);
+  // open a block and needs no escaping. Its *last* hashes are another matter:
+  // a run of them ending the line is the heading's closing sequence, which the
+  // parser removes. That is decided on the whole assembled line, so it is
+  // defused here rather than run by run.
+  const text = defuseHeadingClosingSequence(
+    renderRichText(value, false, context),
+  );
   const own = isBlank(text) ? "" : `${marker} ${text}`;
   return withChildren(own, children, context);
 }

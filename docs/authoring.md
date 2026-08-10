@@ -44,6 +44,10 @@ that begins with a hash, `---` typed as prose is three hyphens rather than a
 rule, and `[label](url)` pasted as text shows the brackets instead of becoming
 a link. Use the toolbar (or the shortcuts above) when you want the formatting.
 
+That holds inside a heading too, including at the end of one: a heading typed
+as "Ship it #" keeps its hash, and keeps its own anchor link rather than
+sharing one with a heading called "Ship it".
+
 The one exception is a bare URL in prose, which is still turned into a link —
 the same thing Notion does when you paste one.
 
