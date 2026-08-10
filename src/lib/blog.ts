@@ -54,11 +54,18 @@ function timestamp(date: string): number {
   return Number.isNaN(value) ? -Infinity : value;
 }
 
+// Newest first. Posts sharing a date are ordered by slug: the sequence comes
+// from readdir, whose order is filesystem-dependent, so without a tie-breaker
+// two posts published the same day could swap places between machines — and
+// with them the feed, the tag pages, and every prev/next link.
 export function getAllPosts(): PostMeta[] {
   return getPostSlugs()
     .map((slug) => getPost(slug)?.meta)
     .filter((m): m is PostMeta => m !== undefined)
-    .sort((a, b) => timestamp(b.date) - timestamp(a.date));
+    .sort(
+      (a, b) =>
+        timestamp(b.date) - timestamp(a.date) || a.slug.localeCompare(b.slug),
+    );
 }
 
 // URL-safe form of a tag name. Kept here so routes and listings agree.
