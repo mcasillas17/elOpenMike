@@ -114,6 +114,54 @@ function assertQueryComplete(
   );
 }
 
+// Notion paginates with a pair of fields: `has_more` says another page exists
+// and `next_cursor` says where it starts. Reading the cursor as
+// `next_cursor ?? undefined` makes a broken pairing — more results promised, no
+// cursor handed over — indistinguishable from the end of the list, and every
+// caller here treats the end of the list as the whole of it: the sync deletes
+// the file of a post whose row never arrived, the migration creates a second
+// page for it, and the resume preflight reads a truncated block tree as a
+// shorter prefix and appends blocks the page already holds.
+//
+// A cursor that repeats is the same failure the other way round: the loop asks
+// for the same page again, either forever or until the duplicates it collects
+// are read as content.
+//
+// Neither is recoverable — the answer is incoherent, not incomplete — so both
+// stop the walk before any partial result reaches a caller. `seen` is per list:
+// cursors are only meaningful within the list that issued them, so a nested
+// block's children get their own set.
+type Paginated = { has_more?: boolean; next_cursor?: string | null };
+
+function nextCursor(
+  response: Paginated,
+  seen: Set<string>,
+  what: string,
+): string | undefined {
+  if (response.has_more !== true) return undefined;
+
+  const cursor = response.next_cursor;
+  if (typeof cursor !== "string" || cursor.trim() === "") {
+    throw new Error(
+      `${what} reported more results (has_more) but handed back no cursor to ` +
+        `follow (next_cursor ${JSON.stringify(cursor ?? null)}) — what arrived ` +
+        "is a subset of the list presented as the end of it, so nothing was " +
+        "read, planned, written or deleted this run",
+    );
+  }
+
+  if (seen.has(cursor)) {
+    throw new Error(
+      `${what} handed back the cursor "${cursor}" a second time — the ` +
+        "pagination is looping rather than advancing, so nothing was read, " +
+        "planned, written or deleted this run",
+    );
+  }
+
+  seen.add(cursor);
+  return cursor;
+}
+
 // Walks every page in the data source. Notion's query does not return trashed
 // pages, so what comes back is the live contents of the database.
 export async function queryPages(
@@ -122,6 +170,7 @@ export async function queryPages(
   accept: (page: PageObject) => boolean = () => true,
 ): Promise<PageObject[]> {
   const pages: PageObject[] = [];
+  const seen = new Set<string>();
   let cursor: string | undefined;
 
   do {
@@ -139,7 +188,7 @@ export async function queryPages(
       const page = asPageObject(result);
       if (page && accept(page)) pages.push(page);
     }
-    cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+    cursor = nextCursor(response, seen, `data source ${dataSourceId}`);
   } while (cursor);
 
   return pages;
@@ -165,6 +214,7 @@ export async function fetchBlockTree(
   blockId: string,
 ): Promise<MdBlock[]> {
   const blocks: MdBlock[] = [];
+  const seen = new Set<string>();
   let cursor: string | undefined;
 
   do {
@@ -183,7 +233,7 @@ export async function fetchBlockTree(
       blocks.push({ ...result, children });
     }
 
-    cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+    cursor = nextCursor(response, seen, `the children of block ${blockId}`);
   } while (cursor);
 
   return blocks;

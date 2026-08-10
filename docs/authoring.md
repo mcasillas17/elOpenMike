@@ -176,6 +176,22 @@ would publish to one url, and the file on disk cannot say which page it came
 from. The run stops with `slug "..." is claimed by 2 different Notion pages`
 and writes nothing. Give one of them its own Slug.
 
+## If Notion answers a listing only halfway
+
+Notion returns long lists a page at a time: `has_more` says another page
+exists, `next_cursor` says where it starts. A run stops with
+`reported more results (has_more) but handed back no cursor to follow`, or
+`handed back the cursor "..." a second time`, when those two disagree — and it
+stops before anything is read, planned, written or deleted.
+
+That matters because a short list looks like a complete one. Every post whose
+row did not arrive claims no slug, and a file no post claims is a file the sync
+removes; the migration would create a second page for the same post; a
+half-read page body would look like a shorter draft to finish. None of that is
+recoverable from here — the answer is incoherent rather than merely partial —
+so the run refuses it. Re-run; it is a transient API fault, not a database
+problem.
+
 ## If the sync refuses to delete posts
 
 A run that would remove more than half the posts stops with
