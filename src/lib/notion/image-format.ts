@@ -1,3 +1,7 @@
+import { isCompleteImage, MAX_IMAGE_DIMENSION } from "./image-structure";
+
+export { isCompleteImage, MAX_IMAGE_DIMENSION };
+
 // What the sync is allowed to commit under public/images/blog/, and how it
 // decides.
 //
@@ -73,6 +77,7 @@ export type ImageFormatRejectionReason =
   | "markup-content"
   | "unrecognized-content"
   | "content-type-mismatch"
+  | "malformed-content"
   | "unsupported-format";
 
 // Categories only. The response these describe came back from a signed URL, on
@@ -86,6 +91,8 @@ const REJECTION_MESSAGES: Record<ImageFormatRejectionReason, string> = {
     "the body is markup, which a browser would run as a document rather than draw as a picture",
   "unrecognized-content": "the body is not a recognized raster image",
   "content-type-mismatch": "the body is not the image format it was served as",
+  "malformed-content":
+    "the body is not a complete, well-formed file of the image format it was served as",
   "unsupported-format":
     "no file name can be built for a format this site does not publish",
 };
@@ -207,6 +214,11 @@ export function verifyImageFormat(
   }
   if (sniffed !== declared) {
     throw new ImageFormatError("content-type-mismatch");
+  }
+  // The signature said what the file is trying to be; this says whether it is
+  // one. See image-structure.ts.
+  if (!isCompleteImage(sniffed, bytes)) {
+    throw new ImageFormatError("malformed-content");
   }
 
   return sniffed;

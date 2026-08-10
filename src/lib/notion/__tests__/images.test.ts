@@ -9,12 +9,14 @@ import {
 import type { AddressResolver } from "@/lib/notion/image-url";
 import { ImageFormatError } from "@/lib/notion/image-format";
 import {
-  concatBytes,
   AVIF_BYTES,
   GIF89_BYTES,
   HTML_BYTES,
   JPEG_BYTES,
   PNG_BYTES,
+  pngCarrying,
+  pngMarker,
+  pngOfSize,
   SCRIPT_SVG_BYTES,
   WEBP_BYTES,
   XML_BYTES,
@@ -22,17 +24,26 @@ import {
 
 const bytes = (s: string) => new TextEncoder().encode(s);
 
-// Real PNG bytes with a recognizable tail, so a test can assert both that the
-// body arrived intact and that it passed the format check the sync makes.
-const pngBody = (tail: string) => concatBytes(PNG_BYTES, bytes(tail));
-const tailOf = (body: Uint8Array) =>
-  new TextDecoder().decode(body.slice(PNG_BYTES.byteLength));
+// A real PNG carrying a recognizable marker, so a test can assert both that the
+// body arrived intact and that it passed the format check the sync makes. The
+// marker lives in a tEXt chunk rather than after the file's IEND, because a
+// file with anything after its IEND is exactly what the sync refuses.
+const pngBody = (marker: string) => pngCarrying(marker);
+const tailOf = (body: Uint8Array) => pngMarker(body);
 
-// A body of `size` bytes that really is a PNG.
-function pngOfSize(size: number): Uint8Array<ArrayBuffer> {
-  const body = new Uint8Array(size);
-  body.set(PNG_BYTES.slice(0, Math.min(PNG_BYTES.byteLength, size)));
-  return body;
+// The same bytes, handed over `size` at a time.
+function streamOf(body: Uint8Array, size: number): ReadableStream<Uint8Array> {
+  let offset = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (offset >= body.byteLength) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(body.slice(offset, offset + size));
+      offset += size;
+    },
+  });
 }
 
 // No test here touches DNS or the network: the resolver is injected and always
@@ -434,9 +445,9 @@ describe("downloadImage size cap", () => {
           return;
         }
         state.pulled += 1;
-        controller.enqueue(
-          state.pulled === 1 ? pngOfSize(CHUNK) : new Uint8Array(CHUNK),
-        );
+        // Every test using this expects the cap to stop the transfer, so what
+        // the bytes are never comes into it.
+        controller.enqueue(new Uint8Array(CHUNK));
       },
       cancel() {
         state.cancelled = true;
@@ -485,7 +496,9 @@ describe("downloadImage size cap", () => {
   });
 
   it("never calls arrayBuffer(), which would buffer the whole body first", async () => {
-    const { response } = chunkedResponse(2);
+    const response = new Response(streamOf(pngOfSize(2 * CHUNK), CHUNK), {
+      headers: { "content-type": "image/png" },
+    });
     const guarded = new Proxy(response, {
       get(target, property) {
         if (property === "arrayBuffer" || property === "blob") {
@@ -503,6 +516,7 @@ describe("downloadImage size cap", () => {
       resolve: publicResolver,
     });
     expect(result.bytes.byteLength).toBe(2 * CHUNK);
+    expect(result.format).toBe("png");
   });
 
   it("accepts a body of exactly the cap and rejects one byte more", async () => {
@@ -532,10 +546,11 @@ describe("downloadImage size cap", () => {
   });
 
   it("reassembles multi-chunk bodies in order", async () => {
+    const whole = pngCarrying("png-data");
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(concatBytes(PNG_BYTES, bytes("png-")));
-        controller.enqueue(bytes("data"));
+        controller.enqueue(whole.slice(0, 20));
+        controller.enqueue(whole.slice(20));
         controller.close();
       },
     });

@@ -123,6 +123,17 @@ format, so a GIF served as `image/png` is refused rather than renamed, and the
 extension written to disk comes from the format that was proved rather than
 from the header that was read.
 
+Proved means read all the way through, not sniffed. A magic prefix is eight
+bytes anybody can write in front of anything, so the whole file is walked in the
+terms its own format is defined in — PNG's chunks, JPEG's marker segments, GIF's
+blocks, WebP's RIFF chunks, AVIF's boxes. Every structure has to fit inside the
+file, the file has to stop where the format says it stops (at `IEND`, at `EOI`,
+at the GIF trailer, at the last byte the RIFF header accounts for), and the
+picture it declares has to be a size a picture can be. A truncated download, a
+signature with a document behind it, a length that does not match the bytes, or
+anything stapled to the end of a real image is refused — as a category, with
+nothing about the bytes.
+
 **SVG is refused outright**, however it is labelled. A committed image is served
 from the site's own origin, and an SVG is not a picture to a browser — it is a
 document that runs script, so a stored one is same-origin XSS reachable by
