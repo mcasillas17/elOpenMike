@@ -94,8 +94,8 @@ function groupRuns(rich: RichText[]): RichText[][] {
 }
 
 function groupKey(run: RichText): string {
-  const { bold, italic, strikethrough } = run.annotations;
-  return JSON.stringify([bold, italic, strikethrough, run.href]);
+  const { bold, italic, strikethrough, underline } = run.annotations;
+  return JSON.stringify([bold, italic, strikethrough, underline, run.href]);
 }
 
 // Adjacent runs that are both code, or both not, are one piece of text: two
@@ -123,7 +123,7 @@ function renderGroup(
   onWarning?: (message: string) => void,
 ): { segment: Segment; lineStart: boolean } {
   const annotations = runs[0].annotations;
-  const { bold, italic, strikethrough } = annotations;
+  const { bold, italic, strikethrough, underline } = annotations;
   const href = runs[0].href;
   // A URL Markdown cannot spell as a destination, or one that is a way to run
   // code rather than a place to go, leaves the text as text: dropping the link
@@ -134,7 +134,7 @@ function renderGroup(
     onWarning?.(`dropped a link to an unsupported url: ${href}`);
   }
   const insideLink = destination !== undefined;
-  const emphasised = bold || italic || strikethrough;
+  const emphasised = bold || italic || strikethrough || underline;
   const pieces = mergeByCode(runs);
   // Whatever the group writes first: a delimiter of its own means the text no
   // longer sits at the start of a line — and a delimiter is not a block marker,
@@ -182,6 +182,23 @@ function renderGroup(
   }
 
   const { lead, core, trail } = splitEdgeWhitespace(inner);
+  const withElements = `${lead}${wrapElements(core, annotations)}${trail}`;
+
+  // Markdown has no delimiter for underline, so a run carrying it is written as
+  // elements throughout — which is the same move made below wherever two
+  // generated delimiter runs would fuse, and needs no flanking at all. Writing
+  // the other three as delimiters around a `<u>` would work too, but it would
+  // put a delimiter run beside a `>` on every boundary for no gain.
+  if (underline) {
+    return {
+      segment: plainSegment(
+        insideLink ? `[${withElements}](${destination})` : withElements,
+        insideLink,
+      ),
+      lineStart: insideLink ? false : endsAtLineStart(trail, false),
+    };
+  }
+
   const layers = delimiterLayers(annotations);
   const wrapped = wrapDelimiters(core, annotations);
   const marker = layers[0][0];
@@ -196,7 +213,6 @@ function renderGroup(
     outermost += 1;
   }
   const inside = layers[outermost] ?? core;
-  const withElements = `${lead}${wrapElements(core, annotations)}${trail}`;
   const withDelimiters = `${lead}${wrapped}${trail}`;
 
   // Inside a link the delimiters are already surrounded by the brackets, which
@@ -258,14 +274,16 @@ function wrapDelimiters(core: string, annotations: Annotations): string {
   );
 }
 
-// The same nesting, in the elements the delimiters stand for. MDX reads these
-// as JSX and still parses their children as Markdown, so an escaped character
-// or a code span inside one is unaffected.
+// The same nesting, in the elements the delimiters stand for, with `<u>`
+// outermost because underline has no delimiter to nest among them. MDX reads
+// these as JSX and still parses their children as Markdown, so an escaped
+// character or a code span inside one is unaffected.
 function wrapElements(core: string, annotations: Annotations): string {
   let wrapped = core;
   if (annotations.strikethrough) wrapped = `<del>${wrapped}</del>`;
   if (annotations.italic) wrapped = `<em>${wrapped}</em>`;
   if (annotations.bold) wrapped = `<strong>${wrapped}</strong>`;
+  if (annotations.underline) wrapped = `<u>${wrapped}</u>`;
   return wrapped;
 }
 

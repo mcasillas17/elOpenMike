@@ -23,7 +23,12 @@ export type RichTextInput = CodeBlockRequest["code"]["rich_text"];
 type TextItem = Extract<RichTextInput[number], { text: unknown }>;
 type ItemAnnotations = NonNullable<TextItem["annotations"]>;
 
-type Annotation = "bold" | "italic" | "strikethrough" | "code";
+type Annotation =
+  | "bold"
+  | "italic"
+  | "strikethrough"
+  | "underline"
+  | "code";
 
 // Written to the request in a fixed order so identical content always
 // serializes identically.
@@ -31,6 +36,7 @@ const ANNOTATION_ORDER = [
   "bold",
   "italic",
   "strikethrough",
+  "underline",
   "code",
 ] as const satisfies readonly Annotation[];
 
@@ -652,9 +658,13 @@ const GENERATED_ELEMENTS: Record<string, Annotation> = {
   // code-span.ts. Its children are literal text rather than markdown, so
   // readCodeElementText below reads them instead of parse().
   code: "code",
+  // Underline, which markdown has no delimiter for at all: rich-text.ts writes
+  // every annotation on such a run as an element, so this is the only spelling
+  // of it there is to read.
+  u: "underline",
 };
 
-const OPENING_TAG = /^<(strong|em|del|code)>/;
+const OPENING_TAG = /^<(strong|em|del|code|u)>/;
 
 // A GFM table row is one line, so blocks-to-md writes a cell's line endings as
 // this element — self-closing, because MDX reads raw HTML as JSX and a bare
