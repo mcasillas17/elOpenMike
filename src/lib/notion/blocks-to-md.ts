@@ -1,4 +1,5 @@
 import { richTextToMarkdown } from "./rich-text";
+import { escapeMarkdown } from "./escape";
 import { codeFence } from "./code-span";
 import type { MdBlock, RichText } from "./types";
 
@@ -121,7 +122,9 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
 }
 
 function renderHeading(marker: string, value: unknown): string {
-  const text = renderRichText(value);
+  // A heading's content is inline-only, so a literal `#` or `-` in it cannot
+  // open a block and needs no escaping.
+  const text = renderRichText(value, false);
   return isBlank(text) ? "" : `${marker} ${text}`;
 }
 
@@ -171,7 +174,7 @@ function renderCode(data: Record<string, unknown>): string {
 }
 
 function renderImage(block: MdBlock, data: Record<string, unknown>, context: BlocksToMarkdownContext): string {
-  const alt = renderRichText(data.caption);
+  const alt = renderRichText(data.caption, false);
   // The converter stays pure by receiving already-resolved image paths from the caller.
   return `![${alt}](${context.imagePath(block.id)})`;
 }
@@ -199,7 +202,8 @@ function renderTableRow(block: MdBlock): string[] {
     return [];
   }
 
-  return data.cells.map((cell) => renderRichText(cell));
+  // A cell is inline context; its line breaks become <br /> below.
+  return data.cells.map((cell) => renderRichText(cell, false));
 }
 
 function renderLinkBlock(data: Record<string, unknown>): string {
@@ -207,8 +211,11 @@ function renderLinkBlock(data: Record<string, unknown>): string {
     return "";
   }
 
-  const caption = renderRichText(data.caption);
-  return `[${caption === "" ? data.url : caption}](${data.url})`;
+  const caption = renderRichText(data.caption, false);
+  // With no caption the url doubles as the link text, where it is literal prose
+  // like any other and is escaped as such.
+  const label = caption === "" ? escapeMarkdown(data.url, false) : caption;
+  return `[${label}](${data.url})`;
 }
 
 function renderToggle(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext): string {
@@ -222,8 +229,8 @@ function renderTextBlock(value: unknown): string {
   return isBlank(text) ? "" : text;
 }
 
-function renderRichText(value: unknown): string {
-  return richTextToMarkdown(readRichText(value));
+function renderRichText(value: unknown, atLineStart = true): string {
+  return richTextToMarkdown(readRichText(value), { atLineStart });
 }
 
 function readPlainText(value: unknown): string {

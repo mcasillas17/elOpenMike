@@ -36,6 +36,17 @@ as you type.
 Notion's Heading 1/2/3 render on the site as h2/h3/h4 — the post title is
 already the page's h1.
 
+## Markdown characters are literal
+
+Only Notion's own formatting becomes formatting. Anything you type as plain
+text stays plain text on the site: a paragraph beginning `# ` is a paragraph
+that begins with a hash, `---` typed as prose is three hyphens rather than a
+rule, and `[label](url)` pasted as text shows the brackets instead of becoming
+a link. Use the toolbar (or the shortcuts above) when you want the formatting.
+
+The one exception is a bare URL in prose, which is still turned into a link —
+the same thing Notion does when you paste one.
+
 ## What it produces
 
 A Notion page with an H1 "A minimal tool", a paragraph, and a TypeScript code

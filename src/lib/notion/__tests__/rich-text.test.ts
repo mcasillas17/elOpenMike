@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { escapeMdx, richTextToMarkdown } from "../rich-text";
+import { richTextToMarkdown } from "../rich-text";
 import { rt } from "./fixtures/blocks";
 
-describe("escapeMdx", () => {
-  it("escapes MDX and JSX delimiters", () => {
-    expect(escapeMdx("Array<{id: string}>")).toBe("Array&lt;&#123;id: string&#125;>");
-  });
-
-  it("leaves ordinary prose unchanged", () => {
-    expect(escapeMdx("ordinary prose")).toBe("ordinary prose");
-  });
-});
+// The MDX/JSX delimiters are escaped by escapeMarkdown now, alongside every
+// other literal character Markdown would otherwise claim — see
+// literal-markdown.test.tsx.
 
 describe("richTextToMarkdown", () => {
   it("renders a plain run unchanged", () => {
