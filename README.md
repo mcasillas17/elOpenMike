@@ -110,6 +110,13 @@ the token. Notion has no transaction, no conditional write and no if-match, so
 the strongest protocol available is to look again, as late as possible, and to
 refuse anything that has moved:
 
+- **immediately before a page is created**, the database is queried again for
+  the slug it is about to claim. The plan said the slug was free, but that read
+  is as old as the run: a page claiming it can have appeared since, and creating
+  anyway is how two Notion pages come to hold one slug — which the sync refuses
+  to publish and which no later run can plan against until somebody deletes a
+  page by hand. A resumed draft is checked the same way, and has to still be the
+  only page claiming its slug;
 - **before every append** and **immediately before the promotion**, the page is
   read back in full — its metadata, its status, its `last_edited_time` either
   side of the block walk, and its whole paginated block tree. It has to still be

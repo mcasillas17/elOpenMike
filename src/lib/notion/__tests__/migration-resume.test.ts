@@ -81,7 +81,7 @@ async function migrate(notion: FakeNotion, posts: LocalPost[]) {
 
   const written = await runMigration(
     prepared.writes,
-    createMigrationExecutor(notion.client, statusSchema),
+    createMigrationExecutor(notion.client, "ds-1", statusSchema),
   );
   return { ...prepared, written };
 }

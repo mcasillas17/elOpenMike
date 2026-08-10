@@ -158,8 +158,12 @@ export class FakeNotion {
   // How many blocks a page held each time it was promoted to Published.
   readonly published: Array<{ pageId: string; blocks: number }> = [];
   childPageReads = 0;
-  // Called after a read has been answered, and before a write lands: the two
-  // halves of the window between a check and the use it justified.
+  // The two edges of a read. `beforeRead` changes the database before the
+  // answer is taken, so the check that made the read sees the change;
+  // `afterRead` changes it once the answer is already on its way back, which is
+  // the window a single check cannot see into. Reads are answered from a
+  // snapshot taken between them, exactly as a real response would be.
+  beforeRead?: (kind: ReadKind, id: string) => void;
   afterRead?: (kind: ReadKind, id: string) => void;
   beforeWrite?: (kind: WriteKind, id: string) => void;
   private dead = false;
@@ -199,6 +203,10 @@ export class FakeNotion {
 
   private read(kind: ReadKind, id: string): void {
     this.afterRead?.(kind, id);
+  }
+
+  private aboutToRead(kind: ReadKind, id: string): void {
+    this.beforeRead?.(kind, id);
   }
 
   seed(page: SeedPage): string {
@@ -351,16 +359,20 @@ export class FakeNotion {
       pages: {
         retrieve: async ({ page_id }: { page_id: string }) => {
           this.alive();
+          this.aboutToRead("retrieve", page_id);
           const page = this.pages.get(page_id);
           if (!page) throw new Error(`no such page ${page_id}`);
-          this.read("retrieve", page_id);
-          return {
+          // The answer is a snapshot: what a later edit does to the page cannot
+          // reach back into a response Notion has already sent.
+          const answer = {
             object: "page",
             id: page.id,
             last_edited_time: page.last_edited_time,
             in_trash: page.in_trash,
-            properties: page.properties,
+            properties: { ...page.properties },
           };
+          this.read("retrieve", page_id);
+          return answer;
         },
         update: async ({
           page_id,
@@ -376,8 +388,8 @@ export class FakeNotion {
       dataSources: {
         query: async () => {
           this.alive();
-          this.read("query", "");
-          return {
+          this.aboutToRead("query", "");
+          const answer = {
             results: live().map((page) => ({
               object: "page",
               id: page.id,
@@ -388,6 +400,8 @@ export class FakeNotion {
             next_cursor: null,
             request_status: { type: "complete" },
           };
+          this.read("query", "");
+          return answer;
         },
       },
       blocks: {
@@ -410,6 +424,7 @@ export class FakeNotion {
             start_cursor?: string;
           }) => {
             this.alive();
+            this.aboutToRead("children", block_id);
             this.childPageReads += 1;
             const blocks = this.childrenOf(block_id);
             const from = start_cursor ? Number(start_cursor) : 0;

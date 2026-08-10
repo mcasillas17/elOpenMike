@@ -1,5 +1,5 @@
 import type { Client, UpdatePageParameters } from "@notionhq/client";
-import { fetchBlockTree, retrievePage } from "./client";
+import { fetchBlockTree, queryPages, retrievePage } from "./client";
 import {
   pageDate,
   pageExcerpt,
@@ -29,6 +29,7 @@ import type { MigrationExecutor, PageState } from "./migrate";
 // not demote.
 export function createMigrationExecutor(
   client: Client,
+  dataSourceId: string,
   schema: DataSourceSchema,
 ): MigrationExecutor {
   const draft = buildStatusProperty(schema, DRAFT_STATUS);
@@ -47,6 +48,23 @@ export function createMigrationExecutor(
   };
 
   return {
+    // Read against the same data source the plan was read from, and filtered on
+    // the slug the sync itself would derive, so what this sees is what the sync
+    // would call a collision. A trashed page is not returned by a query and
+    // holds no slug, which is what makes trashing a page and re-running the way
+    // to redo one post.
+    async claimants(slug) {
+      const pages = await queryPages(
+        client,
+        dataSourceId,
+        (page) => pageSlug(page) === slug,
+      );
+      return pages.map((page) => ({
+        pageId: page.id,
+        status: pageStatus(page),
+      }));
+    },
+
     async createPage(body) {
       const page = await withRetry(() =>
         client.request<{ id: string }>({ path: "pages", method: "post", body }),

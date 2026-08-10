@@ -93,7 +93,7 @@ async function migrate(
 
   const written = await runMigration(
     prepared.writes,
-    createMigrationExecutor(notion.client, schema),
+    createMigrationExecutor(notion.client, "ds-1", schema),
   );
   return { ...prepared, written };
 }
@@ -221,6 +221,44 @@ describe("a draft whose metadata moved on while it waited", () => {
   });
 });
 
+// A page's date reads back as the ten characters of its day, whatever was
+// written into it — Notion's date property carries a time and fetch-post slices
+// it off, because that is what the frontmatter says. A post whose own date
+// carries a time therefore has to be compared in the same ten characters, or it
+// disagrees with the page forever: rewritten, re-read, still different, and the
+// draft can never be published at all.
+describe("a post whose frontmatter date carries a time", () => {
+  const timed = (slug: string, content: string): LocalPost => ({
+    ...local(slug, content),
+    date: "2026-05-20T09:00:00.000Z",
+  });
+
+  it("publishes it without rewriting a thing", async () => {
+    const notion = new FakeNotion();
+
+    const result = await migrate(notion, [timed("one", paragraphs(3))]);
+
+    expect(result.errors).toEqual([]);
+    expect(livePages(notion)[0].status).toBe("Published");
+    expect(notion.mutations).toEqual(["create:page-1:3", "publish:page-1"]);
+  });
+
+  it("finishes a draft it left behind, rather than failing forever", async () => {
+    const post = timed("one", paragraphs(150));
+    const notion = await killedMidPost(post);
+
+    const before = notion.mutations.length;
+    const result = await migrate(notion, [post]);
+
+    expect(result.errors).toEqual([]);
+    expect(livePages(notion)[0].status).toBe("Published");
+    expect(notion.mutations.slice(before)).toEqual([
+      "append:page-1:50",
+      "publish:page-1",
+    ]);
+  });
+});
+
 describe("a draft that turns out to be another post", () => {
   const post = local("one", paragraphs(150));
 
@@ -247,7 +285,7 @@ describe("a draft that turns out to be another post", () => {
   it("refuses a slug that changed after the plan was made", async () => {
     const notion = await killedMidPost(post);
     let done = false;
-    notion.afterRead = (kind, id) => {
+    notion.beforeRead = (kind, id) => {
       if (done || kind !== "retrieve") return;
       done = true;
       notion.setProperty(id, "Slug", {
@@ -256,7 +294,9 @@ describe("a draft that turns out to be another post", () => {
       });
     };
 
-    await expect(migrate(notion, [post])).rejects.toThrow(/slug/i);
+    await expect(migrate(notion, [post])).rejects.toThrow(
+      /its slug reads "somebody-elses-slug", not "one"/,
+    );
 
     const slug = propertyOf(notion, "page-1", "Slug") as {
       rich_text: { plain_text: string }[];

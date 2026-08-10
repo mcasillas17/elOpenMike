@@ -396,12 +396,15 @@ export function migrationRequests(
       title: post.title,
       blocks,
       metadata: {
-        // Trimmed because that is what fetch-post does when it reads a title
-        // or an excerpt back, and a page can only ever be compared against
-        // what it reads back as.
+        // Every value here is the one the *page* reads back as, because that is
+        // the only thing a live page can be compared against: fetch-post trims
+        // a title and an excerpt, and slices a date property down to the ten
+        // characters of its day. A post whose own date carries a time would
+        // otherwise disagree with its page forever — rewritten, re-read, still
+        // different, and never published at all.
         title: post.title.trim(),
         slug: post.slug,
-        date: post.date,
+        date: post.date.slice(0, 10),
         excerpt: post.excerpt.trim(),
         tags: post.tags,
         statusType: "status" in draft ? "status" : "select",
@@ -548,6 +551,11 @@ export async function prepareMigration(
 // conditional update and no if-match, so the only thing standing between this
 // migration and somebody else's editing is how recently it looked.
 export type MigrationExecutor = {
+  // Every live page in the database that publishes under this slug. The create
+  // below is the one write with no page of its own to read first, so this is
+  // what it is checked against: a slug some other page already claims is a slug
+  // this run must not create a second page for.
+  claimants(slug: string): Promise<Array<{ pageId: string; status: string }>>;
   // Creates the page — as a draft, because that is what the request says — and
   // answers with its id.
   createPage(page: CreatePageRequest): Promise<string>;
@@ -805,7 +813,9 @@ async function writePages(
 
   for (const write of writes) {
     const resumed = write.resume !== undefined;
-    const pageId = write.resume?.pageId ?? (await executor.createPage(write.page));
+    const pageId = write.resume
+      ? await proveStillOnlyClaimant(write, executor, write.resume.pageId)
+      : await createUnclaimed(write, executor);
     // Whatever is on the page before the first append: the create request's own
     // children, or the prefix planResumes proved a resumed draft already holds.
     let held =
@@ -838,6 +848,66 @@ async function writePages(
   }
 
   return written;
+}
+
+// The database is read once more, immediately before the page is created. The
+// plan said this slug was free, but that read is as old as the run and a page
+// claiming the slug can have appeared since — from the author, or from a second
+// copy of this script. Creating anyway is how two Notion pages come to claim
+// one slug, which the sync refuses to publish at all and which no later run can
+// plan against without somebody deleting a page by hand.
+//
+// This is the one write with no page of its own to read first, so the database
+// is what it is checked against. The window between this read and the create is
+// the same one-request window every other write here has, and it cannot be
+// closed from this side.
+async function createUnclaimed(
+  write: MigrationWrite,
+  executor: MigrationExecutor,
+): Promise<string> {
+  const claimants = await executor.claimants(write.slug);
+  if (claimants.length > 0) {
+    throw new Error(
+      `${write.file}: ${describeClaimants(claimants)} already ` +
+        `${claimants.length === 1 ? "claims" : "claim"} the slug ` +
+        `"${write.slug}" — the run planned to create a page for it, and a ` +
+        "second page under one slug is one the sync will not publish, so " +
+        "nothing was created; check the database and run the migration again",
+    );
+  }
+  return executor.createPage(write.page);
+}
+
+// The same question for a resumed draft: it has to be the only page publishing
+// under this slug, or finishing it makes one of two claimants live.
+async function proveStillOnlyClaimant(
+  write: MigrationWrite,
+  executor: MigrationExecutor,
+  pageId: string,
+): Promise<string> {
+  const claimants = await executor.claimants(write.slug);
+  const others = claimants.filter((page) => page.pageId !== pageId);
+  if (others.length > 0 || claimants.length === 0) {
+    throw new Error(
+      `${write.file}: the draft page ${pageId} is no longer the only page ` +
+        `claiming the slug "${write.slug}" (${describeClaimants(claimants)}) — ` +
+        "nothing was written to it",
+    );
+  }
+  return pageId;
+}
+
+function describeClaimants(
+  claimants: readonly { pageId: string; status: string }[],
+): string {
+  if (claimants.length === 0) return "no live page";
+  return claimants
+    .map(
+      (page) =>
+        `page ${page.pageId} (${page.status === "" ? "no status" : page.status})`,
+    )
+    .sort()
+    .join(", ");
 }
 
 // Reads the page and refuses to go on unless it is still exactly the draft this

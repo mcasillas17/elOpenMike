@@ -116,7 +116,11 @@ async function main(): Promise<void> {
   // before each append, before the promotion, and once more after it. That is
   // the whole protocol, and it lives beside the migration rather than here so
   // the tests drive the same wiring this script does.
-  const executor = createMigrationExecutor(client, dataSource.properties);
+  const executor = createMigrationExecutor(
+    client,
+    dataSourceId,
+    dataSource.properties,
+  );
 
   const written = await runMigration(
     prepared.writes,
