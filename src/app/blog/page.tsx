@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { Container } from "@/components/ui/Container";
 import { PostCard } from "@/components/blog/PostCard";
 import { getAllPosts } from "@/lib/blog";
-import { routes } from "@/lib/site";
+import { routes, alternatesFor } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Blog",
   description: "Notes on AI systems, distributed systems, and observability.",
-  alternates: { canonical: routes.blog },
+  alternates: alternatesFor(routes.blog),
 };
 
 export default function BlogPage() {

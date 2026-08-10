@@ -11,7 +11,7 @@ import { Tag } from "@/components/ui/Tag";
 import { getPost, getPostSlugs } from "@/lib/blog";
 import { mdxComponents } from "@/components/blog/mdx-components";
 import { ArticleJsonLd } from "@/components/seo/ArticleJsonLd";
-import { routes } from "@/lib/site";
+import { routes, alternatesFor } from "@/lib/site";
 
 const prettyCodeOptions: PrettyCodeOptions = {
   theme: "github-dark",
@@ -35,7 +35,7 @@ export async function generateMetadata({
   return {
     title: post.meta.title,
     description: post.meta.excerpt,
-    alternates: { canonical: routes.blogPost(slug) },
+    alternates: alternatesFor(routes.blogPost(slug)),
   };
 }
 

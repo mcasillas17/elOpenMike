@@ -25,6 +25,22 @@ export function absoluteUrl(path: string): string {
   return `${SITE_URL}${path === "/" ? "" : path}`;
 }
 
+// RSS autodiscovery, in the shape Next's `alternates.types` expects.
+//
+// Next merges metadata per top-level key, so a page that exports
+// `alternates: { canonical }` REPLACES the layout's `alternates` and silently
+// drops the feed link. Pages therefore build their alternates through this.
+export function alternatesFor(canonical: string) {
+  return {
+    canonical,
+    types: {
+      "application/rss+xml": [
+        { url: routes.feed, title: `${site.name} — Blog` },
+      ],
+    },
+  };
+}
+
 export const site = {
   name: "Miguel Casillas",
   firstName: "Miguel",

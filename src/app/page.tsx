@@ -5,10 +5,10 @@ import { Skills } from "@/components/sections/Skills";
 import { Projects } from "@/components/sections/Projects";
 import { About } from "@/components/sections/About";
 import { Comedy } from "@/components/sections/Comedy";
-import { routes } from "@/lib/site";
+import { routes, alternatesFor } from "@/lib/site";
 
 export const metadata: Metadata = {
-  alternates: { canonical: routes.home },
+  alternates: alternatesFor(routes.home),
 };
 
 export default function Home() {
