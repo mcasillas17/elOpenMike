@@ -116,13 +116,30 @@ function parse(
     }
 
     // MDX, not Markdown: `<` opens JSX or an autolink and `{` an expression.
-    // Neither survives the trip into a Notion run.
+    // Neither survives the trip into a Notion run — except for the three
+    // elements rich-text.ts writes on purpose, which are annotations spelled
+    // another way. See readGeneratedElement.
     if (char === "<") {
-      throw new UnsupportedInlineMarkdownError(
-        "raw HTML, JSX or an autolink",
+      const element = readGeneratedElement(source, index, end);
+      if (!element) {
+        throw new UnsupportedInlineMarkdownError(
+          "raw HTML, JSX or an autolink",
+          source,
+          index,
+        );
+      }
+      flush();
+      parse(
         source,
-        index,
+        element.contentStart,
+        element.contentEnd,
+        annotate(context, element.annotation),
+        items,
+        closers,
+        enclosing,
       );
+      index = element.end;
+      continue;
     }
     if (char === "{") {
       throw new UnsupportedInlineMarkdownError(
@@ -417,6 +434,13 @@ function scanForCloser(
       index = link.ok ? link.end : index + 1;
       continue;
     }
+    // The children of a generated element are parsed as markdown, but a
+    // delimiter inside one cannot pair with a delimiter outside it.
+    if (char === "<") {
+      const element = readGeneratedElement(source, index, end);
+      index = element ? element.end : index + 1;
+      continue;
+    }
 
     if (isDelimiter(char)) {
       const run = delimiterRunAt(source, index, end);
@@ -464,8 +488,77 @@ function scanForCloser(
   return { sawMismatch, sawCrossing };
 }
 
-type CodeSpan = { content: string; end: number };
+// rich-text.ts writes an annotation as one of these three elements wherever two
+// generated delimiter runs would sit flush against each other: delimiter runs
+// are maximal, so `**a**` beside `**b**` is a run of four asterisks that opens
+// and closes nothing, while `<strong>a</strong>**b**` says exactly what was
+// meant. They are this repo's own output, so reading them back is reading a
+// bold, italic or struck run — and a synced post that carries one has to be
+// migratable again.
+//
+// Nothing else is accepted. The tag must be one of these three names in lower
+// case, with no attributes and no whitespace inside the angle brackets, and it
+// must close. Anything else is the raw HTML this converter has always refused,
+// which is what keeps `<script>`, `<em onclick=…>` and a half-open tag out of a
+// Notion page.
+const GENERATED_ELEMENTS: Record<string, Annotation> = {
+  strong: "bold",
+  em: "italic",
+  del: "strikethrough",
+};
 
+const OPENING_TAG = /^<(strong|em|del)>/;
+
+type GeneratedElement = {
+  annotation: Annotation;
+  contentStart: number;
+  contentEnd: number;
+  end: number;
+};
+
+function readGeneratedElement(
+  source: string,
+  index: number,
+  end: number,
+): GeneratedElement | undefined {
+  const match = OPENING_TAG.exec(source.slice(index, end));
+  if (!match) return undefined;
+
+  const name = match[1];
+  const opening = `<${name}>`;
+  const closing = `</${name}>`;
+  const contentStart = index + opening.length;
+
+  // The closing tag that belongs to *this* opening one, so an element of the
+  // same name nested inside closes itself first.
+  let depth = 0;
+  let scan = contentStart;
+  while (scan < end) {
+    if (scan + opening.length <= end && source.startsWith(opening, scan)) {
+      depth += 1;
+      scan += opening.length;
+      continue;
+    }
+    if (scan + closing.length <= end && source.startsWith(closing, scan)) {
+      if (depth === 0) {
+        return {
+          annotation: GENERATED_ELEMENTS[name],
+          contentStart,
+          contentEnd: scan,
+          end: scan + closing.length,
+        };
+      }
+      depth -= 1;
+      scan += closing.length;
+      continue;
+    }
+    scan += 1;
+  }
+
+  return undefined;
+}
+
+type CodeSpan = { content: string; end: number };
 // CommonMark: a code span closes on a backtick run of exactly the opening
 // length, which is what lets a span quote backticks of its own. Nothing inside
 // is interpreted — no escapes, no character references.

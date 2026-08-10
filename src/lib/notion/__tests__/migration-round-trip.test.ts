@@ -130,6 +130,26 @@ describe("a Notion paragraph pushed back into Notion", () => {
     expect(semantic(inlineRoundTrip(original))).toEqual(semantic(original));
   });
 
+  // Where two generated delimiter runs would sit flush against each other they
+  // fuse into one longer run that pairs with nothing, so the converter writes
+  // the annotation as the element it stands for instead. The trip back has to
+  // read those elements, or a synced post cannot be migrated at all.
+  it("keeps adjacent style runs the converter had to write as elements", () => {
+    const original = [
+      rt("Wow!", { bold: true }),
+      rt("b", { italic: true }),
+      rt(" and "),
+      rt("a", { bold: true }),
+      rt("b", { bold: true, strikethrough: true }),
+      rt(" and "),
+      rt("x", { italic: true }),
+      rt("y", { italic: true, strikethrough: true }),
+    ];
+
+    expect(richTextToMarkdown(original)).toContain("<strong>");
+    expect(semantic(inlineRoundTrip(original))).toEqual(semantic(original));
+  });
+
   // The two halves of the escaper meet here: a paragraph opening with a word
   // MDX reads as ESM is written as a character reference, and reading it back
   // has to give the word again rather than the reference.

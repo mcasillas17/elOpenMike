@@ -358,6 +358,71 @@ describe("links", () => {
   });
 });
 
+// rich-text.ts writes `<strong>`, `<em>` and `<del>` on purpose: where two
+// generated delimiter runs would sit flush against each other they fuse into
+// one longer run that pairs with nothing, and the element says what the
+// delimiters cannot say there. Those exact tags are the converter's own output
+// and have to read back as the annotations they stand for. Nothing else does:
+// a tag with attributes, a different name, or one that never closes is the raw
+// HTML this converter has always refused.
+describe("the emphasis elements the sync writes", () => {
+  it("reads each one as the annotation it stands for", () => {
+    expect(runs("<strong>bold</strong>")).toEqual([
+      { text: "bold", bold: true },
+    ]);
+    expect(runs("<em>italic</em>")).toEqual([{ text: "italic", italic: true }]);
+    expect(runs("<del>struck</del>")).toEqual([
+      { text: "struck", strikethrough: true },
+    ]);
+  });
+
+  it("reads them nested the way the converter nests them", () => {
+    expect(runs("<strong><em><del>all</del></em></strong>")).toEqual([
+      { text: "all", bold: true, italic: true, strikethrough: true },
+    ]);
+    expect(runs("<strong>**~~b~~**</strong>")).toEqual([
+      { text: "b", bold: true, strikethrough: true },
+    ]);
+  });
+
+  it("reads the markdown inside one, which MDX parses as markdown", () => {
+    expect(runs("<strong>a `span` and \\*not emphasis\\*</strong>")).toEqual([
+      { text: "a ", bold: true },
+      { text: "span", bold: true, code: true },
+      { text: " and *not emphasis*", bold: true },
+    ]);
+  });
+
+  it("reads an element beside the delimiters it was written to avoid", () => {
+    expect(runs("<strong>Wow!</strong>*b*")).toEqual([
+      { text: "Wow!", bold: true },
+      { text: "b", italic: true },
+    ]);
+    expect(runs("<strong>a</strong>**~~b~~**")).toEqual([
+      { text: "a", bold: true },
+      { text: "b", bold: true, strikethrough: true },
+    ]);
+  });
+
+  it("refuses every other tag, attribute and shape", () => {
+    rejects('<strong class="x">a</strong>');
+    rejects("<strong >a</strong>");
+    rejects("<strong\n>a</strong>");
+    rejects("<STRONG>a</STRONG>");
+    rejects("<strong/>");
+    rejects("<strong>a");
+    rejects("<strong>a</em>");
+    rejects("</strong>");
+    rejects("<b>a</b>");
+    rejects("<i>a</i>");
+    rejects("<s>a</s>");
+    rejects("<script>alert(1)</script>");
+    rejects('<em onclick="steal()">a</em>');
+    rejects("<del data-x>a</del>");
+    rejects("<strongest>a</strongest>");
+  });
+});
+
 describe("constructs with no rich-text equivalent", () => {
   it("refuses rather than quietly dropping them", () => {
     rejects("<span>markup</span>");
