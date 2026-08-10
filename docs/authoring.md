@@ -75,6 +75,18 @@ content disappears silently:
 Sub-pages nested under a post are also skipped, which makes them a safe place
 for outlines and research notes.
 
+## Images
+
+Upload images into the page (`/image`, or paste from the camera roll) rather
+than linking them from an arbitrary site. The sync only downloads images served
+by Notion itself — its signed S3 URLs, `file.notion.so`, `www.notion.so/image/`
+— plus `images.unsplash.com`, which Notion's own image picker uses. Anything
+else is refused by host, because a blindly fetched URL turns the sync runner
+into a request-forwarding proxy for whatever the URL points at.
+
+Images larger than 10 MB are refused too; the post keeps whatever it had on
+disk and the run reports the failure.
+
 ## Known rough edge
 
 Code blocks are painful to author on a phone — touch keyboards fight braces and
