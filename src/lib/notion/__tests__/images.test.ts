@@ -105,10 +105,20 @@ describe("downloadImage error redaction", () => {
     "?X-Amz-Credential=AKIAEXAMPLE&X-Amz-Signature=deadbeef&X-Amz-Security-Token=tok";
 
   const expectRedacted = (message: string) => {
-    expect(message).not.toContain("X-Amz-Signature");
-    expect(message).not.toContain("X-Amz-Security-Token");
-    expect(message).not.toContain("deadbeef");
-    expect(message).toContain("secure.notion-static.com/img.png");
+    for (const secret of [
+      "s3.us-west-2.amazonaws.com",
+      "secure.notion-static.com",
+      "/img.png",
+      "X-Amz-Credential",
+      "X-Amz-Signature",
+      "X-Amz-Security-Token",
+      "AKIAEXAMPLE",
+      "deadbeef",
+      "tok",
+    ]) {
+      expect(message).not.toContain(secret);
+    }
+    expect(message).toMatch(/image/i);
   };
 
   it("keeps the signature out of a failed-download message", async () => {
@@ -274,6 +284,76 @@ describe("downloadImage redirect handling", () => {
       }),
     ).rejects.toThrow(/too many redirects/i);
     expect(fetchImpl).toHaveBeenCalledTimes(MAX_IMAGE_REDIRECTS + 1);
+  });
+
+  it("does not expose redirect hosts, paths, secrets, or resolver addresses", async () => {
+    const source =
+      "https://file.notion.so/private/source.png" +
+      "?source-token=query-secret#source-fragment";
+    const target =
+      "https://s3.amazonaws.com/private/redirect.png" +
+      "?target-token=redirect-secret#target-fragment";
+    const fetchImpl = vi.fn(async () => redirectTo(target));
+    const resolve: AddressResolver = async (hostname) =>
+      hostname === "s3.amazonaws.com"
+        ? ["10.87.65.43"]
+        : ["52.219.100.1"];
+
+    const failure = await downloadImage(source, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      resolve,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(Error);
+    const message = (failure as Error).message;
+    expect(message).toMatch(/image url rejected/i);
+    for (const secret of [
+      "file.notion.so",
+      "s3.amazonaws.com",
+      "10.87.65.43",
+      "/private/source.png",
+      "/private/redirect.png",
+      "query-secret",
+      "source-fragment",
+      "redirect-secret",
+      "target-fragment",
+    ]) {
+      expect(message).not.toContain(secret);
+    }
+  });
+
+  it("sanitizes endpoint details thrown by the fetch implementation", async () => {
+    const source =
+      "https://file.notion.so/private/source.png?token=query-secret#fragment-secret";
+    const fetchImpl = vi.fn(async () => {
+      throw new Error(
+        "fetch leaked file.notion.so at 203.0.113.77/private/source.png?token=query-secret#fragment-secret",
+      );
+    });
+
+    const failure = await downloadImage(source, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      resolve: publicResolver,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(Error);
+    const message = (failure as Error).message;
+    expect(message).toMatch(/image download failed/i);
+    for (const secret of [
+      "file.notion.so",
+      "203.0.113.77",
+      "/private/source.png",
+      "query-secret",
+      "fragment-secret",
+    ]) {
+      expect(message).not.toContain(secret);
+    }
   });
 });
 

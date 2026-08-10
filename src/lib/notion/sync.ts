@@ -1,5 +1,5 @@
 import { blocksToMarkdown } from "./blocks-to-md";
-import { imageDir, imageFileName } from "./images";
+import { imageDir, imageFileName, safeImageErrorMessage } from "./images";
 import type { ImagePlan } from "./image-plan";
 import { isValidSlug } from "./slug";
 import { planReconcile, type ReconcilePlan } from "./reconcile";
@@ -50,7 +50,13 @@ async function capturePostImages(
       if (block.type === "image") {
         const url = imageUrl(block);
         if (url) {
-          const { bytes, contentType } = await download(url);
+          let image: Awaited<ReturnType<ImageDownloader>>;
+          try {
+            image = await download(url);
+          } catch (error: unknown) {
+            throw new Error(safeImageErrorMessage(error));
+          }
+          const { bytes, contentType } = image;
           const name = imageFileName(bytes, contentType);
           files.set(`${imageDir(post.slug)}/${name}`, bytes);
           paths.set(block.id, `/images/blog/${post.slug}/${name}`);

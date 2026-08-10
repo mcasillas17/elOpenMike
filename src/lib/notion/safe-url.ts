@@ -10,24 +10,19 @@
 //
 // Two rules, in one place so they cannot drift apart:
 //
-//   * redactUrl keeps the origin and the path. It is what the image downloader
-//     reports, where the host and the object being fetched are the whole point
-//     of the message and the signature is the part that must not be repeated;
+//   * redactUrl keeps no endpoint detail. Image failures can involve internal
+//     hosts, credentials, resolver addresses and private paths, none of which a
+//     public log needs in order to report a reason category;
 //   * describeUrlSafely keeps the scheme. It is what the converter reports for
 //     a link it will not write, where the only useful facts are which block the
 //     link was in — the caller says that — and what kind of url it was. The
 //     rest is neither needed nor safe.
 
-// Notion's file URLs are pre-signed S3 links whose query string carries
-// X-Amz-Signature and X-Amz-Security-Token. The sync's errors are printed to a
-// public Actions log, so only the location — never the credentials — is shown.
+// A constant rather than a partial URL: a hostname, IP, path or fragment can be
+// a secret just as readily as a query credential.
 export function redactUrl(url: string | URL): string {
-  try {
-    const parsed = typeof url === "string" ? new URL(url) : url;
-    return `${parsed.origin}${parsed.pathname}`;
-  } catch {
-    return "<unparseable url>";
-  }
+  void url;
+  return "<redacted url>";
 }
 
 // Browsers strip ASCII whitespace and control characters out of an href before

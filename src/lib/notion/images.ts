@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   assertSafeImageUrl,
-  redactUrl,
+  ImageUrlValidationError,
   type AddressResolver,
 } from "./image-url";
 
@@ -14,6 +14,33 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_IMAGE_REDIRECTS = 5;
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+type ImageDownloadFailureReason =
+  | "request-failed"
+  | "redirect-missing-location"
+  | "redirect-limit"
+  | "invalid-redirect"
+  | "too-large"
+  | "empty-body"
+  | "http-status"
+  | "transfer-failed";
+
+class ImageDownloadError extends Error {
+  constructor(
+    readonly reason: ImageDownloadFailureReason,
+    detail: string,
+  ) {
+    super(`image download failed: ${detail}`);
+    this.name = "ImageDownloadError";
+  }
+}
+
+export function safeImageErrorMessage(error: unknown): string {
+  return error instanceof ImageUrlValidationError ||
+    error instanceof ImageDownloadError
+    ? error.message
+    : "image download failed: unexpected failure";
+}
 
 const EXTENSIONS: Record<string, string> = {
   "image/png": "png",
@@ -55,18 +82,25 @@ async function fetchValidated(
   let target = await assertSafeImageUrl(url, resolve);
 
   for (let hop = 0; ; hop++) {
-    const response = await fetchImpl(target, { redirect: "manual", signal });
+    let response: Response;
+    try {
+      response = await fetchImpl(target, { redirect: "manual", signal });
+    } catch {
+      throw new ImageDownloadError("request-failed", "request failed");
+    }
     if (!REDIRECT_STATUSES.has(response.status)) return response;
 
     const location = response.headers.get("location");
     if (!location) {
-      throw new Error(
-        `image download failed: ${response.status} with no Location header ${redactUrl(target)}`,
+      throw new ImageDownloadError(
+        "redirect-missing-location",
+        "redirect has no Location header",
       );
     }
     if (hop >= MAX_IMAGE_REDIRECTS) {
-      throw new Error(
-        `image download failed: too many redirects (${MAX_IMAGE_REDIRECTS}) from ${redactUrl(url)}`,
+      throw new ImageDownloadError(
+        "redirect-limit",
+        `too many redirects (${MAX_IMAGE_REDIRECTS})`,
       );
     }
 
@@ -74,8 +108,9 @@ async function fetchValidated(
     try {
       next = new URL(location, target);
     } catch {
-      throw new Error(
-        `image download failed: unparseable redirect Location from ${redactUrl(target)}`,
+      throw new ImageDownloadError(
+        "invalid-redirect",
+        "redirect Location is invalid",
       );
     }
     // Free the socket before the next hop; a 3xx may still carry a body.
@@ -84,9 +119,10 @@ async function fetchValidated(
   }
 }
 
-function tooLarge(detail: string, url: string): Error {
-  return new Error(
-    `image too large: ${detail} (max ${MAX_IMAGE_BYTES}) ${redactUrl(url)}`,
+function tooLarge(detail: string): Error {
+  return new ImageDownloadError(
+    "too-large",
+    `image too large: ${detail} (max ${MAX_IMAGE_BYTES})`,
   );
 }
 
@@ -96,17 +132,16 @@ function tooLarge(detail: string, url: string): Error {
 // error message.
 async function readCapped(
   response: Response,
-  url: string,
   controller: AbortController,
 ): Promise<Uint8Array> {
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
     controller.abort();
-    throw tooLarge(`content-length ${declared} bytes`, url);
+    throw tooLarge(`content-length ${declared} bytes`);
   }
 
   if (!response.body) {
-    throw new Error(`image download failed: empty body ${redactUrl(url)}`);
+    throw new ImageDownloadError("empty-body", "empty response body");
   }
 
   const reader = response.body.getReader();
@@ -123,7 +158,7 @@ async function readCapped(
       // abort the request itself so the connection is torn down too.
       await reader.cancel("image exceeds the size cap");
       controller.abort();
-      throw tooLarge(`exceeds ${MAX_IMAGE_BYTES} bytes`, url);
+      throw tooLarge(`exceeds ${MAX_IMAGE_BYTES} bytes`);
     }
     chunks.push(value);
   }
@@ -143,17 +178,28 @@ export async function downloadImage(
   url: string,
   options: DownloadImageOptions = {},
 ): Promise<{ bytes: Uint8Array; contentType: string }> {
-  const controller = new AbortController();
-  const response = await fetchValidated(url, options, controller.signal);
-  if (!response.ok) {
-    controller.abort();
-    throw new Error(
-      `image download failed: ${response.status} ${redactUrl(url)}`,
-    );
+  try {
+    const controller = new AbortController();
+    const response = await fetchValidated(url, options, controller.signal);
+    if (!response.ok) {
+      controller.abort();
+      throw new ImageDownloadError(
+        "http-status",
+        `server returned status ${response.status}`,
+      );
+    }
+    return {
+      bytes: await readCapped(response, controller),
+      contentType:
+        response.headers.get("content-type") ?? "application/octet-stream",
+    };
+  } catch (error: unknown) {
+    if (
+      error instanceof ImageUrlValidationError ||
+      error instanceof ImageDownloadError
+    ) {
+      throw error;
+    }
+    throw new ImageDownloadError("transfer-failed", "transfer failed");
   }
-  return {
-    bytes: await readCapped(response, url, controller),
-    contentType:
-      response.headers.get("content-type") ?? "application/octet-stream",
-  };
 }

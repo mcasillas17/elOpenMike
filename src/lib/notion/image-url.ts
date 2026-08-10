@@ -1,5 +1,4 @@
 import { lookup } from "node:dns/promises";
-import { redactUrl } from "./safe-url";
 
 // The sync fetches whatever URL a Notion image block carries. Without a policy
 // that is a server-side request forgery primitive: an `external` image block
@@ -8,12 +7,41 @@ import { redactUrl } from "./safe-url";
 // response into the repo as an "image". Every URL therefore has to clear this
 // module before any bytes are read, and every redirect hop has to clear it too.
 
-// How a url is written into a message lives in one module for the whole sync;
-// re-exported because every error below already reads redactUrl(...) at the end
-// of a sentence about a fetch.
-export { redactUrl };
+export { redactUrl } from "./safe-url";
 
 export type AddressResolver = (hostname: string) => Promise<string[]>;
+
+export type ImageUrlRejectionReason =
+  | "invalid-url"
+  | "https-required"
+  | "credentials-not-allowed"
+  | "default-port-required"
+  | "host-not-allowed"
+  | "dns-resolution-failed"
+  | "dns-no-addresses"
+  | "non-public-address";
+
+const REJECTION_MESSAGES: Record<ImageUrlRejectionReason, string> = {
+  "invalid-url": "not a valid absolute URL",
+  "https-required": "HTTPS is required",
+  "credentials-not-allowed": "credentials are not allowed",
+  "default-port-required": "the default HTTPS port is required",
+  "host-not-allowed": "host is not an allowed Notion image host",
+  "dns-resolution-failed": "host resolution failed",
+  "dns-no-addresses": "host did not resolve to any address",
+  "non-public-address": "host resolves to a non-public address",
+};
+
+export class ImageUrlValidationError extends Error {
+  constructor(readonly reason: ImageUrlRejectionReason) {
+    super(`image URL rejected: ${REJECTION_MESSAGES[reason]}`);
+    this.name = "ImageUrlValidationError";
+  }
+}
+
+function reject(reason: ImageUrlRejectionReason): never {
+  throw new ImageUrlValidationError(reason);
+}
 
 // Hosts Notion actually serves image bytes from:
 //   - prod-files-secure.s3.<region>.amazonaws.com — signed uploads (current)
@@ -189,43 +217,37 @@ export async function assertSafeImageUrl(
   try {
     parsed = typeof url === "string" ? new URL(url) : url;
   } catch {
-    throw new Error("image url is not a valid absolute url");
+    reject("invalid-url");
   }
-
-  const where = redactUrl(parsed);
 
   if (parsed.protocol !== "https:") {
-    throw new Error(
-      `image url must use https (got ${parsed.protocol.replace(":", "")}) ${where}`,
-    );
+    reject("https-required");
   }
   if (parsed.username !== "" || parsed.password !== "") {
-    throw new Error(`image url must not carry credentials ${redactUrl(
-      `${parsed.protocol}//${parsed.host}${parsed.pathname}`,
-    )}`);
+    reject("credentials-not-allowed");
   }
   if (!HTTPS_PORTS.has(parsed.port)) {
-    throw new Error(`image url must use the default https port ${where}`);
+    reject("default-port-required");
   }
 
   // URL keeps IPv6 literals bracketed; DNS and the range checks want the bare form.
   const hostname = parsed.hostname.replace(/^\[|\]$/g, "");
   if (!isAllowedImageHost(hostname)) {
-    throw new Error(
-      `image host ${hostname} is not an allowed Notion image host — ` +
-        "upload the image to Notion instead of linking it externally",
-    );
+    reject("host-not-allowed");
   }
 
-  const addresses = await resolve(hostname);
+  let addresses: string[];
+  try {
+    addresses = await resolve(hostname);
+  } catch {
+    reject("dns-resolution-failed");
+  }
   if (addresses.length === 0) {
-    throw new Error(`image host ${hostname} did not resolve to any address`);
+    reject("dns-no-addresses");
   }
   for (const address of addresses) {
     if (!isPublicUnicastAddress(address)) {
-      throw new Error(
-        `image host ${hostname} resolves to a non-public address (${address}) ${where}`,
-      );
+      reject("non-public-address");
     }
   }
 

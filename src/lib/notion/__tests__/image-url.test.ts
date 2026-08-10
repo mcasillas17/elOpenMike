@@ -205,6 +205,88 @@ describe("assertSafeImageUrl", () => {
       );
     }
   });
+
+  it("returns only generic reason categories for every rejected endpoint", async () => {
+    const cases: Array<{
+      url: string;
+      resolver: AddressResolver;
+      forbidden: string[];
+    }> = [
+      {
+        url:
+          "https://secret-internal.corp/private/image.png" +
+          "?api-key=query-secret#fragment-secret",
+        resolver: publicResolver,
+        forbidden: [
+          "secret-internal.corp",
+          "/private/image.png",
+          "query-secret",
+          "fragment-secret",
+        ],
+      },
+      {
+        url: "https://169.254.169.254/latest/meta-data/secret",
+        resolver: publicResolver,
+        forbidden: ["169.254.169.254", "/latest/meta-data/secret"],
+      },
+      {
+        url: "https://[fd00::cafe]/private-v6",
+        resolver: publicResolver,
+        forbidden: ["fd00::cafe", "/private-v6"],
+      },
+      {
+        url:
+          "https://alice-secret:password-secret@file.notion.so/private.png" +
+          "?token=query-secret#fragment-secret",
+        resolver: publicResolver,
+        forbidden: [
+          "alice-secret",
+          "password-secret",
+          "file.notion.so",
+          "/private.png",
+          "query-secret",
+          "fragment-secret",
+        ],
+      },
+      {
+        url:
+          "https://file.notion.so/private/resolved.png" +
+          "?token=query-secret#fragment-secret",
+        resolver: resolvesTo("10.23.45.67"),
+        forbidden: [
+          "file.notion.so",
+          "10.23.45.67",
+          "/private/resolved.png",
+          "query-secret",
+          "fragment-secret",
+        ],
+      },
+      {
+        url: "https://file.notion.so/private/dns.png",
+        resolver: async () => {
+          throw new Error(
+            "resolver leaked file.notion.so via 192.168.44.55 at /private/dns.png",
+          );
+        },
+        forbidden: [
+          "file.notion.so",
+          "192.168.44.55",
+          "/private/dns.png",
+        ],
+      },
+    ];
+
+    for (const { url, resolver, forbidden } of cases) {
+      const failure = await assertSafeImageUrl(url, resolver).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(Error);
+      const message = (failure as Error).message;
+      expect(message).toMatch(/image url rejected/i);
+      for (const secret of forbidden) expect(message).not.toContain(secret);
+    }
+  });
 });
 
 describe("ALLOWED_IMAGE_HOSTS", () => {
@@ -217,13 +299,22 @@ describe("ALLOWED_IMAGE_HOSTS", () => {
 });
 
 describe("redactUrl", () => {
-  it("drops the query string that carries the signature", () => {
-    expect(redactUrl(signedNotionUrl)).toBe(
-      "https://prod-files-secure.s3.us-west-2.amazonaws.com/abc/def/photo.png",
-    );
+  it("drops every endpoint detail, not only the signed query", () => {
+    const redacted = redactUrl(signedNotionUrl);
+
+    expect(redacted).toBe("<redacted url>");
+    for (const secret of [
+      "prod-files-secure.s3.us-west-2.amazonaws.com",
+      "/abc/def/photo.png",
+      "X-Amz-Credential",
+      "X-Amz-Signature",
+      "deadbeef",
+    ]) {
+      expect(redacted).not.toContain(secret);
+    }
   });
 
   it("describes an unparseable url without echoing it", () => {
-    expect(redactUrl("not a url")).toBe("<unparseable url>");
+    expect(redactUrl("not a url")).toBe("<redacted url>");
   });
 });

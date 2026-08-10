@@ -130,11 +130,11 @@ describe("describeUrlSafely", () => {
     expect(describeUrlSafely("zz:payload")).not.toContain("zz");
   });
 
-  // redactUrl is the images' rule — origin and path, never the signed query —
-  // and lives beside this one so there is one place urls are made loggable.
+  // Image failures reveal no endpoint detail at all: internal hostnames and
+  // private paths are just as inappropriate for a public log as signed queries.
   it("sits beside the redaction the image downloader already uses", () => {
     expect(redactUrl("https://files.example.com/a.png?X-Amz-Signature=sekrit")).toBe(
-      "https://files.example.com/a.png",
+      "<redacted url>",
     );
     expect(reExported).toBe(redactUrl);
   });

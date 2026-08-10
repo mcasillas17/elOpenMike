@@ -77,7 +77,7 @@ describe("renderPosts", () => {
       {
         slug: "broken",
         pageId: "page-broken",
-        message: "image download failed: 403 https://img/fail.png",
+        message: "image download failed: unexpected failure",
       },
     ]);
     // The post after the failure was still attempted.
@@ -126,7 +126,37 @@ describe("renderPosts", () => {
     const outcome = await renderPosts([source("x", [imageBlock("u")])], async () => {
       throw "socket hang up";
     });
-    expect(outcome.failures[0].message).toBe("socket hang up");
+    expect(outcome.failures[0].message).toBe(
+      "image download failed: unexpected failure",
+    );
+  });
+
+  it("never carries endpoint details from a downloader into the logged failure", async () => {
+    const url =
+      "https://alice-secret:password-secret@secret-internal.corp/private/image.png" +
+      "?token=query-secret#fragment-secret";
+    const outcome = await renderPosts(
+      [source("secret", [imageBlock(url)])],
+      async () => {
+        throw new Error(
+          `resolver exposed secret-internal.corp as 10.45.67.89 for ${url}`,
+        );
+      },
+    );
+
+    const message = outcome.failures[0].message;
+    expect(message).toBe("image download failed: unexpected failure");
+    for (const secret of [
+      "alice-secret",
+      "password-secret",
+      "secret-internal.corp",
+      "10.45.67.89",
+      "/private/image.png",
+      "query-secret",
+      "fragment-secret",
+    ]) {
+      expect(message).not.toContain(secret);
+    }
   });
 });
 
