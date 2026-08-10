@@ -1,5 +1,5 @@
 import type { PostFrontmatter } from "./types";
-import { isValidSlug } from "./slug";
+import { isValidSlug, slugify } from "./slug";
 
 export type ValidatablePost = {
   slug: string;
@@ -24,6 +24,8 @@ function isValidDate(value: string): boolean {
 // returns an empty array, so a malformed post can never reach production.
 export function validatePosts(posts: ValidatablePost[]): string[] {
   const errors: string[] = [];
+  // Tag slug → the distinct names that produced it, so a collision can name both.
+  const tagNamesBySlug = new Map<string, Set<string>>();
 
   for (const post of posts) {
     const at = (message: string) => `${post.slug}: ${message}`;
@@ -45,6 +47,35 @@ export function validatePosts(posts: ValidatablePost[]): string[] {
       errors.push(at("slug must be lowercase alphanumeric with single hyphens"));
     }
     if (post.body.trim() === "") errors.push(at("body is empty after conversion"));
+
+    // Tag names become /blog/tag/<slug> urls. A name with no alphanumerics
+    // slugifies to "" and renders a link to /blog/tag/ — a 404 on every card
+    // that carries it, and a 404 url in the sitemap.
+    for (const tag of post.frontmatter.tags) {
+      const slug = slugify(tag);
+      if (slug === "") {
+        errors.push(
+          at(`tag ${JSON.stringify(tag)} has no url-safe characters`),
+        );
+        continue;
+      }
+      const names = tagNamesBySlug.get(slug) ?? new Set<string>();
+      names.add(tag);
+      tagNamesBySlug.set(slug, names);
+    }
+  }
+
+  // Distinct names collapsing onto one slug (e.g. "C++" and "C#" both -> "c")
+  // would silently merge two tags onto a single page under one of the names.
+  for (const [slug, names] of tagNamesBySlug) {
+    if (names.size > 1) {
+      errors.push(
+        `tag slug "${slug}" is shared by ${[...names]
+          .sort()
+          .map((name) => JSON.stringify(name))
+          .join(", ")}`,
+      );
+    }
   }
 
   const counts = new Map<string, number>();

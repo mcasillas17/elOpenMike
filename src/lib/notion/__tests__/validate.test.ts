@@ -77,3 +77,43 @@ describe("validatePosts", () => {
     expect(validatePosts([broken]).length).toBeGreaterThanOrEqual(5);
   });
 });
+
+// Notion multi-selects are free-form. tagSlug()/slugify() strip everything
+// outside [a-z0-9], so an emoji or CJK tag collapses to "" and every chip for
+// it renders href="/blog/tag/" — a 404 on every listing and post page, plus a
+// 404 url in the sitemap. Two tags that collapse to the same slug silently
+// merge onto one page. Catch both before anything is written.
+describe("validatePosts tags", () => {
+  it("accepts tags that produce a usable slug", () => {
+    expect(validatePosts([withFm({ tags: ["AI", "Distributed Systems"] })])).toEqual(
+      [],
+    );
+  });
+
+  it("rejects a tag that slugifies to nothing", () => {
+    for (const tag of ["🔥", "日本語", "—"]) {
+      const errors = validatePosts([withFm({ tags: [tag] })]);
+      expect(errors.length).toBe(1);
+      expect(errors[0]).toContain("tag");
+    }
+  });
+
+  it("rejects distinct tags that collapse onto the same slug", () => {
+    const errors = validatePosts([
+      { ...ok, slug: "a", frontmatter: { ...ok.frontmatter, tags: ["C++"] } },
+      { ...ok, slug: "b", frontmatter: { ...ok.frontmatter, tags: ["C#"] } },
+    ]);
+    expect(errors.length).toBe(1);
+    expect(errors[0]).toContain("c");
+    expect(errors[0]).toMatch(/C\+\+|C#/);
+  });
+
+  it("does not flag the same tag reused across posts", () => {
+    expect(
+      validatePosts([
+        { ...ok, slug: "a", frontmatter: { ...ok.frontmatter, tags: ["AI"] } },
+        { ...ok, slug: "b", frontmatter: { ...ok.frontmatter, tags: ["AI"] } },
+      ]),
+    ).toEqual([]);
+  });
+});
