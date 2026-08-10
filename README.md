@@ -198,6 +198,17 @@ refuse anything that has moved:
 Two runs inside one process are serialized against each other by a lock, so
 they cannot interleave their reads and writes.
 
+**Retries are split by what a request does.** A read — a data source query, a
+page retrieve, a block children list, a schema or database read — changes
+nothing, so a transient `500`, `502`, `503` or `504` is retried on the same
+capped `Retry-After` backoff as a `429`; giving up on the first one turns a bad
+minute of Notion's day into "these posts could not be read", which is what
+`--check` reports to CI. A **write** is not retried on any of those: a 5xx on
+`pages.create` does not say whether the page was created, and repeating it is
+how one post becomes two pages claiming one slug. Only a `429`, which promises
+the request never landed, is waited out. The run stops instead — and re-running
+it is safe by design.
+
 **The limit, honestly.** Between the last read and the write it justified there
 is one round-trip in which somebody else can still change the page, and Notion
 offers no way to say "apply this only if the page is still the version I read".

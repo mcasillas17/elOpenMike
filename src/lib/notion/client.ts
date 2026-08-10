@@ -1,5 +1,5 @@
 import { Client } from "@notionhq/client";
-import { withRetry } from "./retry";
+import { withReadRetry } from "./retry";
 import type { DataSourceSchema } from "./properties";
 import type { MdBlock } from "./types";
 
@@ -25,7 +25,7 @@ export async function retrieveDataSourceSchema(
   client: Client,
   dataSourceId: string,
 ): Promise<DataSourceSchema> {
-  const result = await withRetry(() =>
+  const result = await withReadRetry(() =>
     client.request<{ properties?: unknown }>({
       path: `data_sources/${dataSourceId}`,
       method: "get",
@@ -84,7 +84,7 @@ export async function retrievePage(
   client: Client,
   pageId: string,
 ): Promise<PageObject> {
-  const result = await withRetry(() =>
+  const result = await withReadRetry(() =>
     client.pages.retrieve({ page_id: pageId }),
   );
   const page = asPageObject(result);
@@ -188,7 +188,7 @@ export async function queryPages(
   let cursor: string | undefined;
 
   do {
-    const response = await withRetry(() =>
+    const response = await withReadRetry(() =>
       client.dataSources.query({
         data_source_id: dataSourceId,
         start_cursor: cursor,
@@ -232,7 +232,7 @@ export async function fetchBlockTree(
   let cursor: string | undefined;
 
   do {
-    const response = await withRetry(() =>
+    const response = await withReadRetry(() =>
       client.blocks.children.list({
         block_id: blockId,
         start_cursor: cursor,

@@ -1,5 +1,5 @@
 import type { Client } from "@notionhq/client";
-import { withRetry } from "./retry";
+import { withReadRetry } from "./retry";
 
 // A Notion database is a container. Its schema and its rows live in a *data
 // source*, and since 2025-09-03 every read and write names one: the sync
@@ -63,7 +63,7 @@ export async function listDataSources(
     );
   }
 
-  const database = await withRetry(() =>
+  const database = await withReadRetry(() =>
     client.databases.retrieve({ database_id: id }),
   );
 

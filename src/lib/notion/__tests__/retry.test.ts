@@ -3,7 +3,10 @@ import {
   readHeader,
   retryAfterMs,
   withRetry,
+  withMutationRetry,
+  withReadRetry,
   MAX_RETRY_WAIT_MS,
+  RETRYABLE_SERVER_STATUSES,
 } from "@/lib/notion/retry";
 
 describe("readHeader", () => {
@@ -195,5 +198,182 @@ describe("withRetry", () => {
       { sleep },
     );
     expect(slept).toEqual([MAX_RETRY_WAIT_MS]);
+  });
+});
+
+// A 429 says "slow down"; a 5xx says "something broke here". Repeating a *read*
+// through one is free — a query, a page retrieve, a children list changes
+// nothing, so the worst a retry costs is the wait — and it is the difference
+// between a sync that shrugs off one bad minute of Notion's day and one that
+// reports the whole blog as unreadable, which is exactly the signal `--check`
+// turns into a failed CI run.
+//
+// A mutation is the opposite. A 500 or a 504 on `pages.create` does not say
+// whether the page was created: the request may have landed and the answer got
+// lost. Retrying that is how one post becomes two Notion pages claiming one
+// slug — the state the sync then refuses to publish at all, and the exact
+// wreckage the migration's whole resume protocol exists to avoid creating. So
+// mutations keep the conservative policy they had: 429 and nothing else.
+describe("withReadRetry", () => {
+  const failing = (status: number, headers?: HeadersInit) =>
+    Object.assign(new Error(`status ${status}`), {
+      status,
+      headers: headers ? new Headers(headers) : undefined,
+    });
+
+  function recorder() {
+    const slept: number[] = [];
+    return { slept, sleep: async (ms: number) => void slept.push(ms) };
+  }
+
+  it.each(RETRYABLE_SERVER_STATUSES)(
+    "retries a %i and returns the later success",
+    async (status) => {
+      const { slept, sleep } = recorder();
+      let calls = 0;
+      const result = await withReadRetry(
+        async () => {
+          calls += 1;
+          if (calls === 1) throw failing(status);
+          return "recovered";
+        },
+        { sleep },
+      );
+
+      expect(result).toBe("recovered");
+      expect(calls).toBe(2);
+      expect(slept).toEqual([1_000]);
+    },
+  );
+
+  it("still retries a 429", async () => {
+    const { slept, sleep } = recorder();
+    let calls = 0;
+    await withReadRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) throw failing(429, { "retry-after": "2" });
+        return "ok";
+      },
+      { sleep },
+    );
+
+    expect(calls).toBe(2);
+    expect(slept).toEqual([2_000]);
+  });
+
+  it("honors Retry-After on a 503 and caps a hostile one", async () => {
+    const { slept, sleep } = recorder();
+    let calls = 0;
+    await withReadRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) throw failing(503, { "retry-after": "5" });
+        if (calls === 2) throw failing(503, { "retry-after": "99999" });
+        return "ok";
+      },
+      { sleep },
+    );
+
+    expect(slept).toEqual([5_000, MAX_RETRY_WAIT_MS]);
+  });
+
+  it("gives up at the attempt budget and rethrows the last error", async () => {
+    const { slept, sleep } = recorder();
+    let calls = 0;
+    const error = failing(503);
+
+    await expect(
+      withReadRetry(
+        async () => {
+          calls += 1;
+          throw error;
+        },
+        { sleep },
+      ),
+    ).rejects.toBe(error);
+
+    expect(calls).toBe(4);
+    expect(slept).toEqual([1_000, 2_000, 3_000]);
+  });
+
+  // A 501 is "this server will never do that" and a 4xx is "your request is
+  // wrong": repeating either is three more ways to be told the same thing.
+  it.each([400, 401, 403, 404, 409, 501, 505, undefined])(
+    "rethrows a %s immediately",
+    async (status) => {
+      const { slept, sleep } = recorder();
+      let calls = 0;
+      const error = Object.assign(new Error("nope"), { status });
+
+      await expect(
+        withReadRetry(async () => {
+          calls += 1;
+          throw error;
+        }, { sleep }),
+      ).rejects.toBe(error);
+
+      expect(calls).toBe(1);
+      expect(slept).toEqual([]);
+    },
+  );
+});
+
+describe("withMutationRetry", () => {
+  const failing = (status: number) =>
+    Object.assign(new Error(`status ${status}`), { status });
+
+  it.each(RETRYABLE_SERVER_STATUSES)(
+    "rethrows a %i at once rather than repeating a write nobody can tell landed",
+    async (status) => {
+      const slept: number[] = [];
+      let calls = 0;
+      const error = failing(status);
+
+      await expect(
+        withMutationRetry(
+          async () => {
+            calls += 1;
+            throw error;
+          },
+          { sleep: async (ms: number) => void slept.push(ms) },
+        ),
+      ).rejects.toBe(error);
+
+      expect(calls).toBe(1);
+      expect(slept).toEqual([]);
+    },
+  );
+
+  it("still backs off a 429, which says nothing landed", async () => {
+    const slept: number[] = [];
+    let calls = 0;
+    await withMutationRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw Object.assign(new Error("rate limited"), {
+            status: 429,
+            headers: new Headers({ "retry-after": "3" }),
+          });
+        }
+        return "ok";
+      },
+      { sleep: async (ms: number) => void slept.push(ms) },
+    );
+
+    expect(calls).toBe(2);
+    expect(slept).toEqual([3_000]);
+  });
+
+  it("is what a bare withRetry still means", async () => {
+    let calls = 0;
+    await expect(
+      withRetry(async () => {
+        calls += 1;
+        throw failing(503);
+      }),
+    ).rejects.toThrow(/503/);
+    expect(calls).toBe(1);
   });
 });

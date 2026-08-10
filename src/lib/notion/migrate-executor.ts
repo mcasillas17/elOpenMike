@@ -16,7 +16,7 @@ import {
   type DataSourceSchema,
 } from "./properties";
 import { appendChildrenBody } from "./limits";
-import { withRetry } from "./retry";
+import { withMutationRetry } from "./retry";
 import type { MigrationExecutor, PageState } from "./migrate";
 
 // The migration's half of the Notion API, in one place, so what the tests drive
@@ -40,7 +40,7 @@ export function createMigrationExecutor(
     pageId: string,
     properties: Record<string, unknown>,
   ): Promise<void> => {
-    await withRetry(() =>
+    await withMutationRetry(() =>
       client.pages.update({
         page_id: pageId,
         properties: properties as UpdatePageParameters["properties"],
@@ -67,14 +67,14 @@ export function createMigrationExecutor(
     },
 
     async createPage(body) {
-      const page = await withRetry(() =>
+      const page = await withMutationRetry(() =>
         client.request<{ id: string }>({ path: "pages", method: "post", body }),
       );
       return page.id;
     },
 
     async appendChildren(pageId, children) {
-      await withRetry(() =>
+      await withMutationRetry(() =>
         client.blocks.children.append({
           block_id: pageId,
           ...appendChildrenBody(children),
