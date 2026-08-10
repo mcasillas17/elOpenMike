@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll } from "vitest";
 import {
   planImages,
   readImageFiles,
@@ -21,6 +21,8 @@ import { imageDir } from "@/lib/notion/images";
 
 const bytes = (value: string) => new TextEncoder().encode(value);
 const decode = (value: Uint8Array) => new TextDecoder().decode(value);
+
+const SCRATCH = path.join(process.cwd(), ".tmp-tests");
 
 let root: string;
 
@@ -54,8 +56,7 @@ const exists = (file: string) =>
 
 beforeEach(async () => {
   root = path.join(
-    process.cwd(),
-    ".tmp-tests",
+    SCRATCH,
     `image-sync-${process.pid}-${Math.random().toString(36).slice(2)}`,
   );
   await fs.mkdir(root, { recursive: true });
@@ -63,6 +64,12 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true });
+});
+
+// Leave nothing behind in the repo. rmdir fails while another file's tree is
+// still there, which is the right answer.
+afterAll(async () => {
+  await fs.rmdir(SCRATCH).catch(() => undefined);
 });
 
 describe("image reconciliation against a real tree", () => {
