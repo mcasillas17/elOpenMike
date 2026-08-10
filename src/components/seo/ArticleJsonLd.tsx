@@ -7,12 +7,14 @@ export function ArticleJsonLd({
   description,
   date,
   tags,
+  updated,
 }: {
   slug: string;
   title: string;
   description: string;
   date: string;
   tags: string[];
+  updated?: string;
 }) {
   const url = absoluteUrl(routes.blogPost(slug));
   const data = {
@@ -21,7 +23,7 @@ export function ArticleJsonLd({
     headline: title,
     description,
     datePublished: date,
-    dateModified: date,
+    dateModified: updated ?? date,
     author: { "@type": "Person", name: site.name, url: SITE_URL },
     keywords: tags.join(", "),
     url,

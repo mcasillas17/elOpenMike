@@ -13,6 +13,8 @@ export const routes = {
   projectDetail: (slug: string) => `/projects/${slug}`,
   blog: "/blog",
   blogPost: (slug: string) => `/blog/${slug}`,
+  blogTag: (slug: string) => `/blog/tag/${slug}`,
+  feed: "/feed.xml",
   comedy: "/comedy",
   resume: "/resume.pdf",
   sitemap: "/sitemap.xml",
