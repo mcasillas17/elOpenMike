@@ -306,3 +306,134 @@ function png(): Response {
     headers: { "content-type": "image/png" },
   });
 }
+
+// A 500 MB "image" must not be buffered into memory before it is rejected:
+// arrayBuffer() reads the whole body first, so the cap has to be enforced
+// while the bytes stream in.
+describe("downloadImage size cap", () => {
+  const CHUNK = 1024 * 1024;
+
+  // Streams `count` 1 MiB chunks, recording how many were actually pulled and
+  // whether the consumer cancelled.
+  function chunkedResponse(count: number, headers: HeadersInit = {}) {
+    const state = { pulled: 0, cancelled: false };
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (state.pulled >= count) {
+          controller.close();
+          return;
+        }
+        state.pulled += 1;
+        controller.enqueue(new Uint8Array(CHUNK));
+      },
+      cancel() {
+        state.cancelled = true;
+      },
+    });
+    return {
+      state,
+      response: new Response(stream, {
+        headers: { "content-type": "image/png", ...headers },
+      }),
+    };
+  }
+
+  it("rejects a declared content-length over the cap without reading the body", async () => {
+    const { state, response } = chunkedResponse(64, {
+      "content-length": String(MAX_IMAGE_BYTES + 1),
+    });
+    await expect(
+      downloadImage(SIGNED_URL, {
+        fetchImpl: (async () => response) as unknown as typeof fetch,
+        resolve: publicResolver,
+      }),
+    ).rejects.toThrow(/too large: content-length/i);
+    // A ReadableStream prefetches one chunk on its own; the point is that the
+    // remaining 63 MiB were never pulled.
+    expect(state.pulled).toBeLessThanOrEqual(1);
+  });
+
+  it("aborts mid-stream instead of buffering an oversized body", async () => {
+    const { state, response } = chunkedResponse(512); // 512 MiB if fully read
+    const signals: AbortSignal[] = [];
+    const fetchImpl = (async (_input: string | URL, init?: RequestInit) => {
+      if (init?.signal) signals.push(init.signal);
+      return response;
+    }) as unknown as typeof fetch;
+
+    await expect(
+      downloadImage(SIGNED_URL, { fetchImpl, resolve: publicResolver }),
+    ).rejects.toThrow(/too large/i);
+
+    // Stops as soon as the cap is passed rather than draining 512 MiB (the
+    // extra chunk is the stream's own one-chunk prefetch).
+    expect(state.pulled).toBeLessThanOrEqual(MAX_IMAGE_BYTES / CHUNK + 2);
+    expect(state.cancelled).toBe(true);
+    expect(signals[0]?.aborted).toBe(true);
+  });
+
+  it("never calls arrayBuffer(), which would buffer the whole body first", async () => {
+    const { response } = chunkedResponse(2);
+    const guarded = new Proxy(response, {
+      get(target, property) {
+        if (property === "arrayBuffer" || property === "blob") {
+          throw new Error(`${String(property)}() must not be called`);
+        }
+        // Read with the real Response as receiver: its getters touch private
+        // fields that a proxy receiver cannot reach.
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const result = await downloadImage(SIGNED_URL, {
+      fetchImpl: (async () => guarded) as unknown as typeof fetch,
+      resolve: publicResolver,
+    });
+    expect(result.bytes.byteLength).toBe(2 * CHUNK);
+  });
+
+  it("accepts a body of exactly the cap and rejects one byte more", async () => {
+    const exact = new Uint8Array(MAX_IMAGE_BYTES);
+    const okResult = await downloadImage(SIGNED_URL, {
+      fetchImpl: (async () =>
+        new Response(exact, {
+          headers: {
+            "content-type": "image/png",
+            "content-length": String(MAX_IMAGE_BYTES),
+          },
+        })) as unknown as typeof fetch,
+      resolve: publicResolver,
+    });
+    expect(okResult.bytes.byteLength).toBe(MAX_IMAGE_BYTES);
+
+    const overByOne = new Uint8Array(MAX_IMAGE_BYTES + 1);
+    await expect(
+      downloadImage(SIGNED_URL, {
+        fetchImpl: (async () =>
+          new Response(overByOne, {
+            headers: { "content-type": "image/png" },
+          })) as unknown as typeof fetch,
+        resolve: publicResolver,
+      }),
+    ).rejects.toThrow(/too large/i);
+  });
+
+  it("reassembles multi-chunk bodies in order", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes("png-"));
+        controller.enqueue(bytes("data"));
+        controller.close();
+      },
+    });
+    const result = await downloadImage(SIGNED_URL, {
+      fetchImpl: (async () =>
+        new Response(stream, {
+          headers: { "content-type": "image/png" },
+        })) as unknown as typeof fetch,
+      resolve: publicResolver,
+    });
+    expect(new TextDecoder().decode(result.bytes)).toBe("png-data");
+  });
+});
