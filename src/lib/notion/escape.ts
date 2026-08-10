@@ -124,6 +124,28 @@ function defuseLine(line: string): string {
   return line;
 }
 
+// A wrapper markdown writes on one line — a heading's `## `, an image's
+// `![…](…)`, a link's `[…](…)` — cannot hold a line ending, and what happens to
+// the text after one is worse than losing it: the wrapper ends at the line
+// break and its second half lands in column one, where a `]` no longer closes
+// anything and an `import ` opens an ESM statement. A blank line does it even
+// to a paragraph's continuation.
+//
+// A line ending written as the character reference it already renders as is the
+// way through. micromark decides the block structure — and whether a line is
+// ESM — from the raw bytes, before any reference is resolved, so `&#10;` is
+// text on the line it sits on; the reader still gets the line ending, because
+// that is what the reference *is*; and md-to-rich-text reads it back as the
+// character it stands for, so nothing is lost on the way to Notion either.
+const LINE_ENDING_REFERENCES: Record<string, string> = {
+  "\n": "&#10;",
+  "\r": "&#13;",
+};
+
+export function referenceLineEndings(text: string): string {
+  return text.replace(/[\r\n]/g, (char) => LINE_ENDING_REFERENCES[char]);
+}
+
 // CommonMark lets an ATX heading close itself: a run of `#`s at the end of the
 // line, preceded by a space or a tab — or by nothing but the heading's own
 // marker — is a *closing sequence*. It is markup rather than text, and the

@@ -3,7 +3,7 @@
 // delimiter run of the same length, so both delimiters have to be chosen from
 // the content rather than fixed.
 
-import { escapeMarkdown } from "./escape";
+import { escapeMarkdown, referenceLineEndings } from "./escape";
 
 export function longestBacktickRun(text: string): number {
   let longest = 0;
@@ -47,17 +47,9 @@ export function inlineCodeSpan(text: string): string {
 // is lost, the generated file still holds one line per block, and
 // md-to-rich-text reads this one shape back — and refuses every other `<code>`.
 const LINE_ENDING = /[\r\n]/;
-const LINE_ENDING_REFERENCES: Record<string, string> = {
-  "\n": "&#10;",
-  "\r": "&#13;",
-};
 
 export function inlineCode(text: string): string {
   if (!LINE_ENDING.test(text)) return inlineCodeSpan(text);
 
-  const escaped = escapeMarkdown(text, false).replace(
-    /[\r\n]/g,
-    (char) => LINE_ENDING_REFERENCES[char],
-  );
-  return `<code>${escaped}</code>`;
+  return `<code>${referenceLineEndings(escapeMarkdown(text, false))}</code>`;
 }

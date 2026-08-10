@@ -3,6 +3,7 @@ import {
   defuseEsmKeyword,
   defuseHeadingClosingSequence,
   escapeMarkdown,
+  referenceLineEndings,
 } from "./escape";
 import { markdownDestination } from "./link-destination";
 import { describeUrlSafely } from "./safe-url";
@@ -187,12 +188,21 @@ function renderHeading(
   context: RenderContext,
 ): string {
   // A heading's content is inline-only, so a literal `#` or `-` in it cannot
-  // open a block and needs no escaping. Its *last* hashes are another matter:
-  // a run of them ending the line is the heading's closing sequence, which the
-  // parser removes. That is decided on the whole assembled line, so it is
-  // defused here rather than run by run.
+  // open a block and needs no escaping.
+  //
+  // Its line endings are another matter. An ATX heading is exactly one line:
+  // the `## ` covers the first, and everything Notion put after a shift+enter
+  // used to be written in column one, where it stopped being a heading at all
+  // and started being whatever markdown reads there — a paragraph, a list, or,
+  // this being MDX, an `import ` line handed to acorn. So the line endings are
+  // written as the references they render as (see escape.ts), which keeps every
+  // word of the heading inside the heading.
+  //
+  // The closing sequence is defused after that, on the one line the heading now
+  // has: a run of hashes ending it is markup wherever the author's line breaks
+  // used to be.
   const text = defuseHeadingClosingSequence(
-    renderRichText(value, false, context),
+    referenceLineEndings(renderRichText(value, false, context)),
   );
   const own = isBlank(text) ? "" : `${marker} ${text}`;
   return withChildren(own, children, context);
@@ -247,9 +257,28 @@ function renderListItem(
   // list instead of a nested one. Deriving the indent from the marker keeps
   // bullets where they were and follows "10." out to four columns.
   const childIndent = `${indent}${" ".repeat(marker.length + 1)}`;
-  const ownLine = `${indent}${prefix}${isBlank(text) ? "" : ` ${text}`}`;
+  // The item's *own* text belongs to the item too, and Notion's is not always
+  // one line: a shift+enter, or a paragraph pasted into the item. Only the
+  // first line gets the marker, so every line after it used to be written in
+  // column one — a lazy continuation at best, and after a blank line a block of
+  // its own, outside the list entirely and in the one column MDX reads `import `
+  // and `export ` as ESM in. Written at the item's content column instead, both
+  // stay inside the item: the second line continues its paragraph, and a line
+  // after a blank one is the item's second paragraph.
+  const ownText = indentContinuation(text, childIndent);
+  const ownLine = `${indent}${prefix}${isBlank(text) ? "" : ` ${ownText}`}`;
   const childLines = renderSequence(children, context, childIndent, "\n");
   return childLines === "" ? ownLine : `${ownLine}\n${childLines}`;
+}
+
+// Every line but the first, moved out to `indent`. A blank line is left blank:
+// it is what separates the item's paragraphs, and indenting it would say
+// nothing markdown reads.
+function indentContinuation(text: string, indent: string): string {
+  return text
+    .split("\n")
+    .map((line, index) => (index === 0 || isBlank(line) ? line : `${indent}${line}`))
+    .join("\n");
 }
 
 function renderCode(data: Record<string, unknown>): string {
@@ -263,7 +292,13 @@ function renderCode(data: Record<string, unknown>): string {
 }
 
 function renderImage(block: MdBlock, data: Record<string, unknown>, context: RenderContext): string {
-  const alt = renderRichText(data.caption, false, context);
+  // `![…](…)` is one line of markdown. A caption Notion split over two lines
+  // used to end the image at the break — `![A diagram` is not an image, and
+  // whatever followed landed in column one carrying the rest of the syntax with
+  // it, which is a paragraph reading "…](/images/x.png)" at best and an ESM
+  // line MDX refuses to parse at worst. Alt text is a single attribute anyway,
+  // so the line endings are written as the references they render as.
+  const alt = referenceLineEndings(renderRichText(data.caption, false, context));
   // The converter stays pure by receiving already-resolved image paths from the caller.
   return `![${alt}](${context.imagePath(block.id)})`;
 }
@@ -325,9 +360,16 @@ function renderLinkBlock(
 
   // With no caption the url doubles as the link text, where it is literal prose
   // like any other and is escaped as such. Both halves sit inside `[...]`, past
-  // column one, so no ESM keyword in either can open a statement.
-  const caption = renderRichText(data.caption, false, context);
-  const label = caption === "" ? escapeMarkdown(data.url, false) : caption;
+  // column one, so no ESM keyword in either can open a statement — but only for
+  // as long as the brackets are still on one line. A caption Notion split over
+  // two ended the label at the break and left `](https://…)` opening a block of
+  // its own, so the label's line endings are written as the references they
+  // render as (see escape.ts).
+  const caption = referenceLineEndings(
+    renderRichText(data.caption, false, context),
+  );
+  const label =
+    caption === "" ? referenceLineEndings(escapeMarkdown(data.url, false)) : caption;
   return `[${label}](${destination})`;
 }
 

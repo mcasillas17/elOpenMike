@@ -48,6 +48,11 @@ That holds inside a heading too, including at the end of one: a heading typed
 as "Ship it #" keeps its hash, and keeps its own anchor link rather than
 sharing one with a heading called "Ship it".
 
+A line break you put inside one block stays inside it. Shift+enter in a
+heading, a second paragraph inside a bullet, a caption typed over two lines and
+a table cell with two lines all publish as the one block you wrote — the words
+after the break never become a block of their own on the site.
+
 The one exception is a bare URL in prose, which is still turned into a link —
 the same thing Notion does when you paste one.
 
