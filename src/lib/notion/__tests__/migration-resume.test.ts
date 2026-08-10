@@ -172,7 +172,6 @@ describe("a migration killed partway through", () => {
 
 describe("posts of every length", () => {
   const cases: Array<[string, number]> = [
-    ["a post with no blocks at all", 0],
     ["a post that fits in one request", 1],
     ["a post filling one request exactly", MAX_CHILDREN_PER_REQUEST],
     ["a post one block past the boundary", MAX_CHILDREN_PER_REQUEST + 1],
@@ -182,7 +181,7 @@ describe("posts of every length", () => {
   for (const [name, count] of cases) {
     it(`migrates ${name} as a draft that is promoted once`, async () => {
       const notion = new FakeNotion();
-      const post = local("one", count === 0 ? "" : paragraphs(count));
+      const post = local("one", paragraphs(count));
 
       await migrate(notion, [post]);
 
@@ -197,7 +196,7 @@ describe("posts of every length", () => {
 
     it(`resumes ${name} after the process dies right after the page is created`, async () => {
       const notion = new FakeNotion();
-      const post = local("one", count === 0 ? "" : paragraphs(count));
+      const post = local("one", paragraphs(count));
       notion.killAfter(1);
       await expect(migrate(notion, [post])).rejects.toThrow(/killed/);
       expect(livePages(notion)[0].status).toBe("Draft");
@@ -210,6 +209,40 @@ describe("posts of every length", () => {
       expect(livePages(notion)[0].texts).toEqual(expected(count));
     });
   }
+
+  // Not a length any more: a page with nothing in it is a page the sync would
+  // refuse to publish, and one published post it refuses stops the whole blog
+  // from syncing. So it is caught while it is still a file. The create-with-no-
+  // children path is still exercised below, where the plan is built by hand.
+  it("refuses a post with nothing in it, before a page exists", async () => {
+    const notion = new FakeNotion();
+
+    const prepared = await migrate(notion, [local("one", "")]);
+
+    expect(prepared.errors.join("\n")).toMatch(/one\.mdx/);
+    expect(prepared.errors.join("\n")).toMatch(/body/i);
+    expect(notion.mutations).toEqual([]);
+    expect(notion.pages.size).toBe(0);
+  });
+
+  // The write protocol for a page whose blocks all fit in the create request
+  // and leave nothing to append: one create, no appends, one promotion.
+  it("creates and promotes a page with no children in two requests", async () => {
+    const notion = new FakeNotion();
+    const plan = planMigration([local("one", "")], []);
+    const writes = migrationRequests(plan, options);
+
+    expect(writes[0].page.children).toEqual([]);
+    expect(writes[0].appends).toEqual([]);
+
+    await runMigration(
+      writes,
+      createMigrationExecutor(notion.client, "ds-1", statusSchema),
+    );
+
+    expect(notion.mutations).toEqual(["create:page-1:0", "publish:page-1"]);
+    expect(livePages(notion)[0].status).toBe("Published");
+  });
 
   it("creates the page as a Draft, never as Published", async () => {
     const notion = new FakeNotion();
@@ -224,10 +257,8 @@ describe("posts of every length", () => {
   });
 
   it("writes Draft in the shape a Select database uses", async () => {
-    const notion = new FakeNotion();
-    notion.killAfter(1);
     const selectSchema: DataSourceSchema = {
-      Name: { type: "title" },
+      ...statusSchema,
       Status: {
         type: "select",
         select: { options: [{ name: "Draft" }, { name: "Published" }] },
@@ -241,26 +272,31 @@ describe("posts of every length", () => {
       async () => [],
     );
 
+    expect(prepared.errors).toEqual([]);
     expect(prepared.writes[0].page.properties.Status).toEqual({
       select: { name: "Draft" },
     });
   });
 
+  // Reported rather than thrown, alongside anything else wrong with the run:
+  // a migration that has to be fixed one message at a time is one nobody
+  // finishes. Nothing is written either way.
   it("refuses a database whose Status has no Draft option to migrate into", async () => {
-    await expect(
-      prepareMigration(
-        [local("one", "Body.\n")],
-        [],
-        {
-          dataSourceId: "ds-1",
-          schema: {
-            Name: { type: "title" },
-            Status: { type: "status", status: { options: [{ name: "Published" }] } },
-          },
+    const prepared = await prepareMigration(
+      [local("one", "Body.\n")],
+      [],
+      {
+        dataSourceId: "ds-1",
+        schema: {
+          ...statusSchema,
+          Status: { type: "status", status: { options: [{ name: "Published" }] } },
         },
-        async () => [],
-      ),
-    ).rejects.toThrow(/Draft/);
+      },
+      async () => [],
+    );
+
+    expect(prepared.errors.join("\n")).toMatch(/Draft/);
+    expect(prepared.writes).toEqual([]);
   });
 });
 

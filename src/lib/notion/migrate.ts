@@ -4,10 +4,12 @@ import { slugify, isValidSlug } from "./slug";
 import {
   titlePropertyName,
   buildStatusProperty,
+  schemaProblems,
   DRAFT_STATUS,
   PUBLISHED_STATUS,
   type DataSourceSchema,
 } from "./properties";
+import { validateLocalPosts } from "./validate";
 import { markdownToBlocks, plainRichText as text } from "./md-to-blocks";
 import type { RichTextInput } from "./md-to-rich-text";
 import type { MdBlock } from "./types";
@@ -72,6 +74,12 @@ export type LocalPost = {
   date: string;
   excerpt: string;
   tags: string[];
+  // Only what the file itself carries. Notion has no column for it — the sync
+  // derives a post's `updated` from the page's last_edited_time — so this is
+  // never written; it is read so a file claiming an unreadable one is caught
+  // here, where the files are being read anyway, rather than published to the
+  // sitemap as a <lastmod> no crawler can parse.
+  updated?: string;
   content: string;
 };
 
@@ -180,6 +188,7 @@ export type PageState = {
 export function toLocalPost(file: string, raw: string): LocalPost {
   const stem = file.replace(/\.mdx$/, "");
   const { data, content } = matter(raw);
+  const updated = frontmatterDate(data.updated);
 
   return {
     file,
@@ -188,6 +197,7 @@ export function toLocalPost(file: string, raw: string): LocalPost {
     date: frontmatterDate(data.date),
     excerpt: String(data.excerpt ?? ""),
     tags: (Array.isArray(data.tags) ? data.tags : []).map(String),
+    ...(data.updated === undefined ? {} : { updated }),
     content,
   };
 }
@@ -196,13 +206,30 @@ export function toLocalPost(file: string, raw: string): LocalPost {
 // "Tue May 19 2026 17:00:00 GMT-0700" — a value Notion rejects, and one that has
 // already slipped a day into the local timezone. The parsed date is UTC
 // midnight, so the ISO day is the day that was written.
+//
+// A *quoted* timestamp stays a string, and YAML hands it over exactly as typed.
+// It is narrowed to its day here for the same reason: a post's date is a day
+// everywhere else — the Notion property reads back as one, the frontmatter is
+// one, the site prints one — so writing a timestamp into the database would put
+// a value in it that nothing on either side ever compares equal to what the
+// file says. Only a value that already opens with a full ISO day is narrowed;
+// anything else is handed on as written, for the validator to refuse by name.
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]/;
+
 function frontmatterDate(value: unknown): string {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime())
       ? ""
       : value.toISOString().slice(0, 10);
   }
-  return String(value ?? "").trim();
+
+  const written = String(value ?? "").trim();
+  if (!ISO_DATETIME.test(written)) return written;
+
+  const parsed = new Date(written);
+  return Number.isNaN(parsed.getTime())
+    ? written
+    : parsed.toISOString().slice(0, 10);
 }
 
 function isTrashed(page: RemotePage): boolean {
@@ -512,10 +539,18 @@ export type PreparedMigration = {
 };
 
 // Everything that happens before the first write, in the order it has to: the
-// database is read, the posts are planned against it, every request is built
-// and measured, and every draft that would be resumed is read and proved to be
-// an unfinished copy of its post. Nothing here writes, so a run that reports
-// errors has changed nothing at all.
+// posts are measured against the invariants the site and the sync enforce and
+// the database's schema against what this run writes, the posts are planned
+// against the database, every request is built and measured, and every draft
+// that would be resumed is read and proved to be an unfinished copy of its
+// post. Nothing here writes, so a run that reports errors has changed nothing
+// at all.
+//
+// The metadata preflight comes first and covers *every* local post, including
+// ones the plan would skip: a post whose frontmatter the sync refuses is a post
+// that never comes back out of Notion, and one bad excerpt is enough to stop
+// the whole blog syncing. Its problems are reported together with the plan's,
+// because a run that has to be fixed twice is a run somebody gives up on.
 //
 // Content Notion would reject throws rather than being returned, because it is
 // a problem with the files rather than with the state of the database.
@@ -526,12 +561,18 @@ export async function prepareMigration(
   readBlocks: (pageId: string) => Promise<MdBlock[]>,
 ): Promise<PreparedMigration> {
   const plan = planMigration(posts, pages);
-  if (plan.errors.length > 0) {
+  const errors = [
+    ...schemaProblems(options.schema),
+    ...validateLocalPosts(posts),
+    ...plan.errors,
+  ];
+
+  if (errors.length > 0) {
     return {
       writes: [],
       skip: [],
       orphanDrafts: plan.orphanDrafts,
-      errors: plan.errors,
+      errors,
     };
   }
 

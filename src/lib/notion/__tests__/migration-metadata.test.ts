@@ -4,6 +4,7 @@ import { pageSlug, pageStatus, pageTitle } from "@/lib/notion/fetch-post";
 import {
   prepareMigration,
   runMigration,
+  toLocalPost,
   type LocalPost,
   type RemotePage,
 } from "@/lib/notion/migrate";
@@ -223,14 +224,29 @@ describe("a draft whose metadata moved on while it waited", () => {
 
 // A page's date reads back as the ten characters of its day, whatever was
 // written into it — Notion's date property carries a time and fetch-post slices
-// it off, because that is what the frontmatter says. A post whose own date
-// carries a time therefore has to be compared in the same ten characters, or it
-// disagrees with the page forever: rewritten, re-read, still different, and the
-// draft can never be published at all.
+// it off, because that is what the frontmatter says. A file whose own date
+// carries a time is therefore narrowed to its day as it is read, so what is
+// written into the database is what the sync reads back out of it. Without
+// that, the post disagrees with its page forever: rewritten, re-read, still
+// different, and the draft never published at all.
 describe("a post whose frontmatter date carries a time", () => {
-  const timed = (slug: string, content: string): LocalPost => ({
-    ...local(slug, content),
-    date: "2026-05-20T09:00:00.000Z",
+  const timed = (slug: string, content: string): LocalPost =>
+    toLocalPost(
+      `${slug}.mdx`,
+      [
+        "---",
+        `title: "Title ${slug}"`,
+        'date: "2026-05-20T09:00:00.000Z"',
+        `excerpt: "Excerpt ${slug}"`,
+        'tags: ["AI"]',
+        "---",
+        "",
+        content,
+      ].join("\n"),
+    );
+
+  it("writes the day the file names, not the timestamp", () => {
+    expect(timed("one", "Body.\n").date).toBe("2026-05-20");
   });
 
   it("publishes it without rewriting a thing", async () => {

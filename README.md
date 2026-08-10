@@ -114,6 +114,38 @@ A re-run reads the whole database first and then finishes what it finds:
 All of that reading happens before the first write, so a run either has a clean
 plan for every post or changes nothing.
 
+### What the run checks before it writes anything
+
+Every local post is measured first — all of them, including ones already in
+Notion that the run would otherwise skip — against exactly the invariants the
+sync enforces on the way back out, because a post pushed into Notion carrying
+one of these never comes out again: it sits in the database, invisible on the
+site, while every sync from then on refuses the **whole blog** because of it.
+The checks are literally the sync's, in one shared module, so the two cannot
+drift apart:
+
+- a non-empty **title** and **excerpt**, and an excerpt of at most 200
+  characters;
+- a **date** that is a real `YYYY-MM-DD` day. A date carrying a time is narrowed
+  to its day as the file is read, so what the database holds is what the sync
+  reads back; anything else — `2026/05/20`, `May 20, 2026`, `2026-02-31` — is
+  refused by name;
+- an **`updated`**, where the file carries one, that is a real day too. Notion
+  has no column for it (the sync derives it from the page's last-edited time),
+  but an unreadable one would reach the sitemap as `<lastmod>` and the article
+  JSON-LD as `dateModified`, and then be preserved forever;
+- **tags** that Notion can store under that name (no commas, which it uses to
+  separate options) and that the blog can build a `/blog/tag/…` url from — so no
+  tag that slugifies to nothing, and no two tags that collapse onto one page;
+- a **body**, since a page with nothing in it is a page the sync refuses to
+  publish;
+- and the **database schema** itself: a title property, `Slug`, `Excerpt`,
+  `Tags` and `Published` each of the type the migration writes into, and a
+  `Status` in one of its two shapes carrying both of the options the run needs.
+
+Every problem across every post and the schema is reported together, and a run
+that finds one **writes nothing at all**.
+
 ### What the run checks while it is writing
 
 The plan above is built from a read that is already old by the time the first

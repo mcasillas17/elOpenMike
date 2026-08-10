@@ -93,3 +93,67 @@ export function buildStatusProperty(
     ? { status: { name: option } }
     : { select: { name: option } };
 }
+
+// The properties the migration writes into, and the type each one has to be.
+// Notion refuses a value written into a property of another type — and refuses
+// a property the database does not have at all — with a validation error that
+// names neither the column nor the fix, arriving mid-run once pages exist.
+//
+// The names are the ones docs/authoring.md documents. The migration adds no
+// column of its own, so a database missing one is a database this cannot write
+// to, and saying which is the difference between a fixable message and a
+// half-migrated blog.
+const WRITTEN_PROPERTIES = {
+  Slug: "rich_text",
+  Excerpt: "rich_text",
+  Tags: "multi_select",
+  Published: "date",
+} as const;
+
+// Everything about a data source's schema that would stop the migration, all at
+// once, before the first write. Pure: it is given the schema the run already
+// read, and answers with problems rather than throwing, so they can be reported
+// beside the posts' own.
+export function schemaProblems(schema: DataSourceSchema): string[] {
+  const problems: string[] = [];
+
+  const titles = Object.entries(schema).filter(
+    ([, property]) => property.type === "title",
+  );
+  if (titles.length === 0) {
+    problems.push(
+      "the database has no title property — every Notion data source has " +
+        "exactly one, so the integration is reading something else",
+    );
+  }
+
+  for (const [name, expected] of Object.entries(WRITTEN_PROPERTIES)) {
+    const property = schema[name];
+    if (!property) {
+      problems.push(
+        `the database has no "${name}" property — the migration writes one and ` +
+          "cannot add a column, so add it in Notion (see docs/authoring.md)",
+      );
+      continue;
+    }
+    if (property.type !== expected) {
+      problems.push(
+        `"${name}" is a ${property.type} property where the migration writes a ` +
+          `${expected} — Notion refuses a value written into another type`,
+      );
+    }
+  }
+
+  // The Status property is checked by the same function that builds its two
+  // values, so the shape and the options the run needs cannot drift from what
+  // it actually writes.
+  for (const option of [DRAFT_STATUS, PUBLISHED_STATUS]) {
+    try {
+      buildStatusProperty(schema, option);
+    } catch (error: unknown) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  return problems;
+}
