@@ -136,7 +136,7 @@ function unsupported(reason: string, line: string): Error {
   );
 }
 
-const FENCE = /^(`{3,})(.*)$/;
+const FENCE = /^(`{3,}|~{3,})(.*)$/;
 const HEADING = /^(#{1,6})(?:[ \t]+(.*?))?[ \t]*$/;
 const THEMATIC_BREAK = /^(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
 const SETEXT = /^(?:=+|-+)[ \t]*$/;
@@ -277,19 +277,53 @@ function readBlock(
   return readParagraph(lines, index);
 }
 
+// CommonMark closes a fenced block on a line of the same character, at least as
+// long as the fence that opened it, indented no further than three columns and
+// carrying nothing but whitespace after the run. A line that merely starts with
+// the same backticks — `` ```js `` inside a block quoting markdown — closes
+// nothing.
+function closesFence(line: string, fence: string): boolean {
+  const { width, content } = measureIndent(line);
+  if (width >= 4) return false;
+  const run = /^(`+|~+)[ \t]*$/.exec(content);
+  return (
+    run !== null && run[1][0] === fence[0] && run[1].length >= fence.length
+  );
+}
+
 function readCode(
   lines: string[],
   index: number,
   fence: string,
   info: string,
 ): { block: BlockObjectRequest; next: number } {
+  // A backtick fence's info string cannot hold a backtick, or the line would
+  // be a paragraph with a code span in it rather than a fence at all.
+  if (fence.startsWith("`") && info.includes("`")) {
+    throw unsupported(
+      "a fence whose info string holds a backtick, which opens no code block",
+      lines[index],
+    );
+  }
+
   const language = notionCodeLanguage(info);
   const body: string[] = [];
   let scan = index + 1;
 
-  while (scan < lines.length && !lines[scan].startsWith(fence)) {
+  while (scan < lines.length && !closesFence(lines[scan], fence)) {
     body.push(lines[scan]);
     scan += 1;
+  }
+
+  // Markdown lets a fence run to the end of the document; migrating that would
+  // send the whole rest of the post to Notion as code. The run stops instead,
+  // before any page is created.
+  if (scan >= lines.length) {
+    throw unsupported(
+      `a fenced code block that never closes — close it with a line of at least ` +
+        `${fence.length} ${fence[0] === "`" ? "backticks" : "tildes"}`,
+      lines[index],
+    );
   }
 
   return {

@@ -145,6 +145,68 @@ describe("markdownToBlocks", () => {
     );
   });
 
+  // CommonMark closes a fenced block on a line of the same character, at least
+  // as long as the one that opened it, and carrying nothing else. A fence that
+  // never meets one runs to the end of the document, so the rest of the post
+  // would have arrived in Notion as code.
+  describe("a fence that does not close", () => {
+    const rejects = (markdown: string) =>
+      expect(() => markdownToBlocks(markdown)).toThrow(/unsupported markdown/);
+
+    it("refuses a block that never closes", () => {
+      rejects("```ts\nconst a = 1;\n");
+      rejects("```ts\nconst a = 1;\n\nAnd prose after it.\n");
+    });
+
+    it("refuses a closer shorter than the fence that opened the block", () => {
+      rejects("````md\ncode\n```\n");
+    });
+
+    it("refuses a closer carrying an info string, which closes nothing", () => {
+      rejects("```ts\ncode\n```js\n");
+    });
+
+    it("refuses an info string a backtick fence cannot carry", () => {
+      rejects("```js`x\ncode\n```\n");
+    });
+
+    it("says what to do about it", () => {
+      expect(() => markdownToBlocks("```ts\ncode\n")).toThrow(
+        /never closes/,
+      );
+    });
+  });
+
+  describe("a fence long enough for what is inside it", () => {
+    it("keeps a shorter fence in the body rather than closing on it", () => {
+      const [block] = codeBlocks("````md\n```ts\ninner\n```\n````\n");
+      expect(block.code.rich_text).toEqual([
+        { type: "text", text: { content: "```ts\ninner\n```" } },
+      ]);
+      expect(block.code.language).toBe("markdown");
+    });
+
+    it("closes on a fence longer than the one that opened it", () => {
+      expect(codeBlocks("```ts\ncode\n`````\n")[0].code.rich_text).toEqual([
+        { type: "text", text: { content: "code" } },
+      ]);
+    });
+
+    it("reads a tilde fence, which markdown opens a block with too", () => {
+      const [block] = codeBlocks("~~~ts\nconst a = 1;\n~~~\n");
+      expect(block.code.language).toBe("typescript");
+      expect(block.code.rich_text).toEqual([
+        { type: "text", text: { content: "const a = 1;" } },
+      ]);
+    });
+
+    it("keeps reading the document after the block closes", () => {
+      const blocks = markdownToBlocks("```ts\ncode\n```\n\nProse.\n");
+      expect(blocks).toHaveLength(2);
+      expect(blocks[1].type).toBe("paragraph");
+    });
+  });
+
   // blocks-to-md renders Notion H1/H2/H3 as `##`/`###`/`####`, so migrating in
   // the other direction has to shift back by exactly the same step or the first
   // sync after the migration deepens every sub-heading.
