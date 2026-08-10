@@ -31,12 +31,15 @@ jobs:
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
       - name: Commit and push any changes
         run: |
-          if [ -z "$(git status --porcelain)" ]; then
+          # Scope the dirty check to the paths that are actually staged, so an
+          # unrelated dirty file can't make `git commit` run with nothing to
+          # commit (which fails the step under `set -e`).
+          git add -A -- content/blog public/images/blog
+          if git diff --cached --quiet; then
             echo "No content changes."
             exit 0
           fi
           git config user.name "elopenmike-content-bot"
           git config user.email "micasillm@gmail.com"
-          git add content/blog public/images/blog
           git commit -m "content: sync from Notion"
           git push
