@@ -96,6 +96,13 @@ appending fails after the page exists, the new page is moved to the Notion
 trash — it then holds no slug, so re-running the migration is the recovery. If
 even that fails, the message names the page to delete by hand.
 
+One window this cannot close by itself: a post that takes several requests has
+a moment where its page exists and holds its slug while the post is
+incomplete. Every failure the script can see is rolled back, but a process
+killed outright sees nothing, and the half-written page it leaves is one a
+re-run skips as "already there". If a run is killed, check the last slug it
+logged, trash that page in Notion, and run again.
+
 Anything with no equivalent in a Notion block or run — an image, a reference
 link, a link title, arbitrary HTML, a `#` heading, an indented code block, a
 list nested three deep, a fence that never closes, a paragraph needing more

@@ -31,6 +31,16 @@ import {
 // Trash: a trashed page is invisible to the sync and to a data source query, so
 // it does not hold its slug. Trashing a page and re-running is how one post is
 // redone, and a trashed page never counts as a duplicate of a live one.
+//
+// A post too long for one request takes several (see limits.ts), which opens
+// the one window this design cannot close by itself: between creating the page
+// and appending the last of its blocks, the page exists and holds its slug
+// while the post is incomplete. Every failure the script can observe is rolled
+// back — runMigration trashes the page, so the slug is free again — but a
+// process killed outright observes nothing. That leaves a live, half-written
+// page which a re-run then skips as "already there". It is reported here, in
+// the README, and in the failure message, because the recovery is a human one:
+// trash the page in Notion and run again.
 
 export type LocalPost = {
   file: string;
