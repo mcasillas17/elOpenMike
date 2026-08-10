@@ -127,7 +127,7 @@ export const plainRichText = (content: string): RichTextInput => [
 //   * a toggle's summary and its children are written as sibling blocks, and
 //     migrate back as siblings.
 export function markdownToBlocks(markdown: string): BlockObjectRequest[] {
-  return readBlocks(markdown.split("\n"));
+  return readBlocks(markdown.replace(/\r\n?/g, "\n").split("\n"));
 }
 
 function unsupported(reason: string, line: string): Error {

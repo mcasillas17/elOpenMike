@@ -132,6 +132,88 @@ describe("the committed posts", () => {
 });
 
 describe("markdownToBlocks", () => {
+  describe("line-ending normalization", () => {
+    const everyBlockForm = [
+      "Paragraph.",
+      "",
+      "## Heading one",
+      "### Heading two",
+      "#### Heading three",
+      "",
+      "- Bullet",
+      "",
+      "1. Numbered",
+      "",
+      "- [x] Done",
+      "",
+      "> Quote",
+      ">",
+      "> - Nested",
+      "",
+      "---",
+      "",
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "```ts",
+      "const answer = 42;",
+      "```",
+      "",
+    ].join("\n");
+
+    it.each([
+      ["CRLF", "\r\n"],
+      ["lone CR", "\r"],
+    ])("parses every emitted block form with %s exactly like LF", (_name, ending) => {
+      const expected = markdownToBlocks(everyBlockForm);
+      const actual = markdownToBlocks(everyBlockForm.replaceAll("\n", ending));
+
+      expect(actual).toEqual(expected);
+      expect(actual.map((block) => block.type)).toEqual([
+        "paragraph",
+        "heading_1",
+        "heading_2",
+        "heading_3",
+        "bulleted_list_item",
+        "numbered_list_item",
+        "to_do",
+        "quote",
+        "divider",
+        "table",
+        "code",
+      ]);
+    });
+
+    it.each([
+      ["CRLF", "\r\n"],
+      ["lone CR", "\r"],
+    ])(
+      "normalizes %s inside a fence without changing fence semantics",
+      (_name, ending) => {
+        const fenced = [
+          "````md",
+          "before",
+          "```ts",
+          "inside",
+          "```",
+          "after",
+          "````",
+          "",
+        ].join(ending);
+
+        const [block] = codeBlocks(fenced);
+        expect(block.code.language).toBe("markdown");
+        expect(block.code.rich_text).toEqual([
+          {
+            type: "text",
+            text: { content: "before\n```ts\ninside\n```\nafter" },
+          },
+        ]);
+      },
+    );
+  });
+
   it("keeps the code body verbatim", () => {
     const blocks = codeBlocks("```ts\nconst a = 1;\n\n  indented();\n```\n");
     expect(blocks[0].code.rich_text).toEqual([
