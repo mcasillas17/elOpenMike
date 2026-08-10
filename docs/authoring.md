@@ -106,3 +106,15 @@ pnpm sync:notion --check  # exit 1 if a sync would change anything
 ```
 
 Requires `NOTION_TOKEN` and `NOTION_DATABASE_ID` in your environment.
+
+## If the sync refuses to delete posts
+
+A run that would remove more than half the posts stops with
+`refusing to delete N of M post(s)` and writes nothing. That is almost always
+a Notion-side change rather than something you meant:
+
+- the **Status** property was renamed, or its **Published** option was;
+- the integration lost access to the database.
+
+Fix the database and re-run. If you really did unpublish that many posts at
+once, confirm it with `pnpm sync:notion --allow-mass-delete`.
