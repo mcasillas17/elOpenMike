@@ -1,4 +1,5 @@
 import { site, SITE_URL, absoluteUrl, routes } from "@/lib/site";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 // BlogPosting structured data for a blog post (Google rich results).
 export function ArticleJsonLd({
@@ -32,7 +33,7 @@ export function ArticleJsonLd({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(data) }}
     />
   );
 }
