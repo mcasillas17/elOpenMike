@@ -47,18 +47,55 @@ type Context = {
   href?: string;
 };
 
-export class UnsupportedInlineMarkdownError extends Error {
-  readonly source: string;
-  readonly index: number;
+// What kind of thing was refused, as a name rather than as an excerpt of the
+// text. Every refusal has one, so a caller can react to a class of problem
+// without parsing prose — and so a message can be built without quoting the
+// line it came from.
+export type InlineMarkdownCategory =
+  | "raw-markup"
+  | "mdx-expression"
+  | "inline-image"
+  | "code-span"
+  | "code-element"
+  | "link"
+  | "emphasis"
+  | "character-reference"
+  | "scan-budget"
+  | "nesting-depth";
 
-  constructor(reason: string, source: string, index: number) {
+// A refusal used to quote the line it choked on, in full, both in its message
+// and on the error object. That line is printed to a terminal and, from CI, to
+// a public log — and the one line that reaches a refusal is by definition the
+// odd one: a link pasted with a session token still in its query, an image URL
+// signed by a private CDN, a half-written snippet holding an API key, a
+// paragraph pasted out of a terminal. The converter cannot tell which, and it
+// does not have to.
+//
+// So nothing from the text itself is kept: what is reported is a category, the
+// reason that category exists, the character offset, and — where the caller
+// knows it — the line the block started on. That is enough to open the file and
+// put a cursor on the problem, which is all the message was ever for.
+export class UnsupportedInlineMarkdownError extends Error {
+  readonly category: InlineMarkdownCategory;
+  readonly reason: string;
+  readonly index: number;
+  readonly line?: number;
+
+  constructor(
+    category: InlineMarkdownCategory,
+    reason: string,
+    index: number,
+    line?: number,
+  ) {
     super(
-      `unsupported inline markdown in migration: ${reason} at offset ${index} ` +
-        `of ${JSON.stringify(source)}`,
+      `unsupported inline markdown in migration: ${reason} at offset ${index}` +
+        (line === undefined ? "" : ` of line ${line}`),
     );
     this.name = "UnsupportedInlineMarkdownError";
-    this.source = source;
+    this.category = category;
+    this.reason = reason;
     this.index = index;
+    if (line !== undefined) this.line = line;
   }
 }
 
@@ -72,6 +109,10 @@ export type InlineParseOptions = {
   // so a cell holding two lines has nowhere to put the break except the
   // `<br />` blocks-to-md writes there — and only there. See readLineBreak.
   tableCell?: boolean;
+  // Which line of the post this text opened on, where the caller knows. It is
+  // reported instead of the text, so a refusal is locatable without being
+  // quotable. 1-based, as an editor counts.
+  line?: number;
   // The ceiling on `steps`. Defaults to inlineScanBudget(markdown.length).
   maxSteps?: number;
   onMetrics?: (metrics: InlineParseMetrics) => void;
@@ -102,7 +143,7 @@ class ScanBudget {
   deepest = 0;
 
   constructor(
-    private readonly source: string,
+    private readonly line: number | undefined,
     private readonly maxSteps: number,
   ) {}
 
@@ -112,10 +153,11 @@ class ScanBudget {
     this.steps += count;
     if (this.steps > this.maxSteps) {
       throw new UnsupportedInlineMarkdownError(
+        "scan-budget",
         `inline markdown whose delimiters need more than ${this.maxSteps} scan ` +
           "steps to resolve — simplify the emphasis on this line",
-        this.source,
         index,
+        this.line,
       );
     }
   }
@@ -123,9 +165,10 @@ class ScanBudget {
   descend<T>(index: number, work: () => T): T {
     if (this.depth >= MAX_INLINE_DEPTH) {
       throw new UnsupportedInlineMarkdownError(
+        "nesting-depth",
         `inline markdown nested more than ${MAX_INLINE_DEPTH} levels deep`,
-        this.source,
         index,
+        this.line,
       );
     }
     this.depth += 1;
@@ -146,17 +189,31 @@ type Scan = {
   closers: CloserMemo;
   budget: ScanBudget;
   tableCell: boolean;
+  // The line this text opened on, when the caller knew it. Reported in place
+  // of the text itself; see UnsupportedInlineMarkdownError.
+  line?: number;
 };
+
+// Every refusal inside the scan goes through here, so none of them can reach
+// for `scan.source` on the way out.
+function refuse(
+  scan: Scan,
+  category: InlineMarkdownCategory,
+  reason: string,
+  index: number,
+): never {
+  throw new UnsupportedInlineMarkdownError(category, reason, index, scan.line);
+}
 
 // The runs one line of inline Markdown describes. Throws
 // UnsupportedInlineMarkdownError for anything Notion's rich text cannot hold,
 // and for anything that would cost more to read than the budget allows.
 export function inlineToRichText(
   markdown: string,
-  { maxSteps, onMetrics, tableCell = false }: InlineParseOptions = {},
+  { maxSteps, onMetrics, tableCell = false, line }: InlineParseOptions = {},
 ): RichTextInput {
   const budget = new ScanBudget(
-    markdown,
+    line,
     maxSteps ?? inlineScanBudget(markdown.length),
   );
   const scan: Scan = {
@@ -165,6 +222,7 @@ export function inlineToRichText(
     closers: new Map(),
     budget,
     tableCell,
+    line,
   };
 
   try {
@@ -216,7 +274,7 @@ function parse(
     }
 
     if (char === "&") {
-      const reference = readReference(source, index, end);
+      const reference = readReference(scan, index, end);
       if (reference) {
         literal += reference.value;
         index += reference.length;
@@ -240,11 +298,7 @@ function parse(
       }
       const element = readGeneratedElement(scan, index, end);
       if (!element) {
-        throw new UnsupportedInlineMarkdownError(
-          "raw HTML, JSX or an autolink",
-          source,
-          index,
-        );
+        refuse(scan, "raw-markup", "raw HTML, JSX or an autolink", index);
       }
       flush();
       // `<code>` holds a code run's text, which is not markdown: reading it as
@@ -271,17 +325,14 @@ function parse(
       continue;
     }
     if (char === "{") {
-      throw new UnsupportedInlineMarkdownError(
-        "an MDX expression",
-        source,
-        index,
-      );
+      refuse(scan, "mdx-expression", "an MDX expression", index);
     }
 
     if (char === "!" && source[index + 1] === "[") {
-      throw new UnsupportedInlineMarkdownError(
+      refuse(
+        scan,
+        "inline-image",
         "an inline image, which Notion stores as a block rather than a run",
-        source,
         index,
       );
     }
@@ -289,11 +340,7 @@ function parse(
     if (char === "`") {
       const span = readCodeSpan(scan, index, end);
       if (!span) {
-        throw new UnsupportedInlineMarkdownError(
-          "a code span that never closes",
-          source,
-          index,
-        );
+        refuse(scan, "code-span", "a code span that never closes", index);
       }
       flush();
       scan.items.push(textItem(span.content, annotate(context, "code")));
@@ -304,14 +351,10 @@ function parse(
     if (char === "[") {
       const link = readLink(scan, index, end);
       if (!link.ok) {
-        throw new UnsupportedInlineMarkdownError(link.reason, source, index);
+        refuse(scan, "link", link.reason, index);
       }
       if (context.href !== undefined) {
-        throw new UnsupportedInlineMarkdownError(
-          "a link inside a link",
-          source,
-          index,
-        );
+        refuse(scan, "link", "a link inside a link", index);
       }
       flush();
       budget.descend(index, () =>
@@ -331,9 +374,11 @@ function parse(
       const run = delimiterRunAt(scan, index, end);
       if (run.canOpen) {
         if (run.length > maxRunLength(char)) {
-          throw new UnsupportedInlineMarkdownError(
-            `a run of ${run.length} "${char}" characters, which is emphasis this converter cannot place`,
-            source,
+          refuse(
+            scan,
+            "emphasis",
+            `a run of ${run.length} emphasis delimiters, which is emphasis ` +
+              "this converter cannot place",
             index,
           );
         }
@@ -345,16 +390,20 @@ function parse(
           enclosing,
         );
         if (closer.sawMismatch) {
-          throw new UnsupportedInlineMarkdownError(
-            `emphasis opened with "${char.repeat(run.length)}" and a run of another length between it and its closer`,
-            source,
+          refuse(
+            scan,
+            "emphasis",
+            `emphasis opened with a run of ${run.length} delimiters and a run ` +
+              "of another length between it and its closer",
             index,
           );
         }
         if (closer.sawCrossing) {
-          throw new UnsupportedInlineMarkdownError(
-            `emphasis opened with "${char.repeat(run.length)}" and crossed by another delimiter's pair rather than containing it`,
-            source,
+          refuse(
+            scan,
+            "emphasis",
+            `emphasis opened with a run of ${run.length} delimiters and ` +
+              "crossed by another delimiter's pair rather than containing it",
             index,
           );
         }
@@ -816,9 +865,10 @@ function readCodeElementText(scan: Scan, start: number, end: number): string {
       // escapeMarkdown writes a literal backslash as `\\`, so a backslash
       // before anything else was never written by it.
       if (index + 1 >= end || escaped === undefined || !isEscapable(escaped)) {
-        throw new UnsupportedInlineMarkdownError(
+        refuse(
+          scan,
+          "code-element",
           "a backslash inside a code element that escapes nothing",
-          source,
           index,
         );
       }
@@ -828,7 +878,7 @@ function readCodeElementText(scan: Scan, start: number, end: number): string {
     }
 
     if (char === "&") {
-      const reference = readReference(source, index, end);
+      const reference = readReference(scan, index, end);
       if (reference) {
         text += reference.value;
         index += reference.length;
@@ -837,9 +887,11 @@ function readCodeElementText(scan: Scan, start: number, end: number): string {
     }
 
     if (FOREIGN_IN_CODE.has(char)) {
-      throw new UnsupportedInlineMarkdownError(
-        `an unescaped "${char}" inside a code element, which this converter never writes`,
-        source,
+      refuse(
+        scan,
+        "code-element",
+        "an unescaped markdown delimiter inside a code element, which this " +
+          "converter never writes",
         index,
       );
     }
@@ -968,7 +1020,7 @@ function readDestination(scan: Scan, start: number, end: number): Destination {
       }
     }
     if (char === "&") {
-      const reference = readReference(source, index, end);
+      const reference = readReference(scan, index, end);
       if (reference) {
         url += reference.value;
         index += reference.length;
@@ -1038,12 +1090,12 @@ const NAMED_REFERENCES: Record<string, string> = {
 };
 
 function readReference(
-  source: string,
+  scan: Scan,
   index: number,
   end: number,
 ): { value: string; length: number } | undefined {
   REFERENCE.lastIndex = index;
-  const match = REFERENCE.exec(source);
+  const match = REFERENCE.exec(scan.source);
   if (!match || index + match[0].length > end) return undefined;
 
   const [text, decimal, hexadecimal, name] = match;
@@ -1051,9 +1103,13 @@ function readReference(
   if (name !== undefined) {
     const value = NAMED_REFERENCES[name];
     if (value === undefined) {
-      throw new UnsupportedInlineMarkdownError(
-        `the character reference "${text}", which this converter cannot resolve — write "&amp;" for a literal ampersand`,
-        source,
+      // The reference itself is not repeated: `&name;` is source text like any
+      // other, and the offset already points at it.
+      refuse(
+        scan,
+        "character-reference",
+        "a character reference this converter cannot resolve — write " +
+          '"&amp;" for a literal ampersand',
         index,
       );
     }
@@ -1062,9 +1118,11 @@ function readReference(
 
   const code = Number.parseInt(decimal ?? hexadecimal, decimal ? 10 : 16);
   if (namesNoCharacter(code)) {
-    throw new UnsupportedInlineMarkdownError(
-      `the character reference "${text}", which markdown renders as the replacement character`,
-      source,
+    refuse(
+      scan,
+      "character-reference",
+      "a character reference for a code point markdown renders as the " +
+        "replacement character",
       index,
     );
   }

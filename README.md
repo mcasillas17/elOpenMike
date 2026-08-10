@@ -262,9 +262,14 @@ Anything with no equivalent in a Notion block or run — an image, a reference
 link, a link title, arbitrary HTML, a `#` heading, an indented code block, a
 list nested three deep, a fence that never closes, a paragraph needing more
 than 100 formatting runs, a link longer than 2000 characters — stops the run
-before the first page is created, naming the file and the line it choked on.
-Every post is checked, not just the first bad one, and nothing is downgraded to
-a paragraph behind your back.
+before the first page is created, naming the file, the line number and (for
+inline markdown) the offset it choked on. It does **not** repeat the line
+itself: that message is printed to a terminal and, from CI, to a public log,
+and the one line in a post that reaches a refusal is by definition the odd one
+— a link pasted with a session token still in its query, a snippet holding a
+key, a paragraph pasted out of a terminal. A category and a location say where
+to look without saying what is there. Every post is checked, not just the first
+bad one, and nothing is downgraded to a paragraph behind your back.
 
 ## Deploy (Fly.io)
 

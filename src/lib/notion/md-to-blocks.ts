@@ -130,9 +130,17 @@ export function markdownToBlocks(markdown: string): BlockObjectRequest[] {
   return readBlocks(markdown.replace(/\r\n?/g, "\n").split("\n"));
 }
 
-function unsupported(reason: string, line: string): Error {
+// A refusal used to quote the line it choked on, in full. That message is
+// printed to a terminal and, from CI, to a public log — and the one line in a
+// post that reaches a refusal is by definition the odd one: a link pasted with
+// a session token in its query, a fence holding a key somebody exported, a
+// paragraph pasted out of a terminal. The converter cannot tell which, and does
+// not have to: the line *number* says exactly where to look and repeats
+// nothing. `index` is the 0-based position in the array; the message counts
+// from 1, as an editor does.
+function unsupported(reason: string, index: number): Error {
   return new Error(
-    `unsupported markdown in migration: ${reason} in ${JSON.stringify(line)}`,
+    `unsupported markdown in migration: ${reason} (line ${index + 1})`,
   );
 }
 
@@ -220,7 +228,11 @@ function opensBlock(content: string, interrupting = false): boolean {
   return false;
 }
 
-function readBlocks(lines: string[]): BlockObjectRequest[] {
+// `offset` is where `lines[0]` sits in the whole post, 0-based. A quote's and a
+// list item's contents are read from a slice, so without it every refusal
+// inside one would name a line number counted from the wrong place — and a line
+// number is now the only thing a refusal says about where it is.
+function readBlocks(lines: string[], offset = 0): BlockObjectRequest[] {
   const blocks: BlockObjectRequest[] = [];
   let index = 0;
 
@@ -230,7 +242,7 @@ function readBlocks(lines: string[]): BlockObjectRequest[] {
       continue;
     }
 
-    const read = readBlock(lines, index);
+    const read = readBlock(lines, index, offset);
     blocks.push(read.block);
     index = read.next;
   }
@@ -241,6 +253,7 @@ function readBlocks(lines: string[]): BlockObjectRequest[] {
 function readBlock(
   lines: string[],
   index: number,
+  offset: number,
 ): { block: BlockObjectRequest; next: number } {
   const line = lines[index];
   const { width, content } = measureIndent(line);
@@ -248,12 +261,12 @@ function readBlock(
   if (width >= 4) {
     throw unsupported(
       "an indented code block, which the sync never writes — fence it instead",
-      line,
+      offset + index,
     );
   }
 
   const fence = FENCE.exec(content);
-  if (fence) return readCode(lines, index, fence[1], fence[2]);
+  if (fence) return readCode(lines, index, offset, fence[1], fence[2]);
 
   const heading = HEADING.exec(content);
   if (heading) {
@@ -262,7 +275,7 @@ function readBlock(
       throw unsupported(
         `a level ${heading[1].length} heading, which no Notion heading maps to — ` +
           "the sync writes Notion's three levels as ##, ### and ####",
-        line,
+        offset + index,
       );
     }
     return {
@@ -270,7 +283,9 @@ function readBlock(
         object: "block",
         type,
         [type]: {
-          rich_text: inlineToRichText(closingSequenceRemoved(heading[2] ?? "")),
+          rich_text: inlineToRichText(closingSequenceRemoved(heading[2] ?? ""), {
+            line: offset + index + 1,
+          }),
         },
       } as BlockObjectRequest,
       next: index + 1,
@@ -284,17 +299,17 @@ function readBlock(
     };
   }
 
-  if (content.startsWith(">")) return readQuote(lines, index);
+  if (content.startsWith(">")) return readQuote(lines, index, offset);
 
   if (content.startsWith("|") && isTableDelimiterRow(lines[index + 1])) {
-    return readTable(lines, index);
+    return readTable(lines, index, offset);
   }
 
   if (BULLET.test(content) || ORDERED.test(content)) {
-    return readListItem(lines, index);
+    return readListItem(lines, index, offset);
   }
 
-  return readParagraph(lines, index);
+  return readParagraph(lines, index, offset);
 }
 
 // CommonMark closes a fenced block on a line of the same character, at least as
@@ -314,6 +329,7 @@ function closesFence(line: string, fence: string): boolean {
 function readCode(
   lines: string[],
   index: number,
+  offset: number,
   fence: string,
   info: string,
 ): { block: BlockObjectRequest; next: number } {
@@ -322,7 +338,7 @@ function readCode(
   if (fence.startsWith("`") && info.includes("`")) {
     throw unsupported(
       "a fence whose info string holds a backtick, which opens no code block",
-      lines[index],
+      offset + index,
     );
   }
 
@@ -342,7 +358,7 @@ function readCode(
     throw unsupported(
       `a fenced code block that never closes — close it with a line of at least ` +
         `${fence.length} ${fence[0] === "`" ? "backticks" : "tildes"}`,
-      lines[index],
+      offset + index,
     );
   }
 
@@ -359,6 +375,7 @@ function readCode(
 function readParagraph(
   lines: string[],
   index: number,
+  offset: number,
 ): { block: BlockObjectRequest; next: number } {
   const collected: string[] = [];
   let scan = index;
@@ -375,7 +392,7 @@ function readParagraph(
       if (SETEXT.test(content)) {
         throw unsupported(
           "a setext heading underline, which no Notion heading maps to",
-          line,
+          offset + scan,
         );
       }
       if (opensBlock(content, true)) break;
@@ -389,7 +406,11 @@ function readParagraph(
     block: {
       object: "block",
       type: "paragraph",
-      paragraph: { rich_text: inlineToRichText(collected.join("\n")) },
+      paragraph: {
+        rich_text: inlineToRichText(collected.join("\n"), {
+          line: offset + index + 1,
+        }),
+      },
     },
     next: scan,
   };
@@ -398,6 +419,7 @@ function readParagraph(
 function readQuote(
   lines: string[],
   index: number,
+  offset: number,
 ): { block: BlockObjectRequest; next: number } {
   const inner: string[] = [];
   let scan = index;
@@ -424,7 +446,8 @@ function readQuote(
 
   // blocks-to-md writes a quote's own text first and its children after, so the
   // paragraph it opens with is the text and the rest are the children.
-  const blocks = readBlocks(inner);
+  // One inner line per quoted line, so the slice starts where the quote does.
+  const blocks = readBlocks(inner, offset + index);
   const lead = blocks[0];
   const opensWithParagraph = lead !== undefined && lead.type === "paragraph";
   const rich_text = opensWithParagraph
@@ -440,7 +463,7 @@ function readQuote(
       quote: {
         rich_text,
         ...(children.length > 0
-          ? { children: asChildren(children, lines[index]) }
+          ? { children: asChildren(children, offset + index) }
           : {}),
       },
     },
@@ -451,13 +474,14 @@ function readQuote(
 function readListItem(
   lines: string[],
   index: number,
+  offset: number,
 ): { block: BlockObjectRequest; next: number } {
   const line = lines[index];
   const { width, content } = measureIndent(line);
   const bullet = BULLET.exec(content);
   const ordered = bullet ? null : ORDERED.exec(content);
   if (!bullet && !ordered) {
-    throw unsupported("a list item with no marker", line);
+    throw unsupported("a list item with no marker", offset + index);
   }
   const markerWidth = bullet ? 1 : (ordered as RegExpExecArray)[1].length + 1;
   // CommonMark: a list item's content column is the width of its marker plus
@@ -493,7 +517,13 @@ function readListItem(
     first,
     ...lines.slice(index + 1, scan).map((rest) => stripIndent(rest, column)),
   ];
-  while (body.length > 0 && isBlank(body[0])) body.shift();
+  // body[0] is the marker's own line, so the slice starts on the item's line
+  // and moves with every blank one dropped from the front.
+  let bodyOffset = offset + index;
+  while (body.length > 0 && isBlank(body[0])) {
+    body.shift();
+    bodyOffset += 1;
+  }
 
   // The item's own text is the paragraph it opens with; anything after that is
   // a block of its own, nested inside it.
@@ -511,9 +541,14 @@ function readListItem(
     .slice(0, paragraphEnd)
     .map((entry) => measureIndent(entry).content)
     .join("\n");
-  const children = readBlocks(body.slice(paragraphEnd));
+  const children = readBlocks(
+    body.slice(paragraphEnd),
+    bodyOffset + paragraphEnd,
+  );
   const nested =
-    children.length > 0 ? { children: asChildren(children, line) } : {};
+    children.length > 0
+      ? { children: asChildren(children, offset + index) }
+      : {};
 
   // GFM's checkbox is part of a bullet's content rather than its marker, which
   // is why a to-do and a bullet share a content column.
@@ -524,7 +559,9 @@ function readListItem(
         object: "block",
         type: "to_do",
         to_do: {
-          rich_text: inlineToRichText(checkbox[2] ?? ""),
+          rich_text: inlineToRichText(checkbox[2] ?? "", {
+            line: bodyOffset + 1,
+          }),
           checked: checkbox[1] !== " ",
           ...nested,
         },
@@ -538,7 +575,10 @@ function readListItem(
     block: {
       object: "block",
       type,
-      [type]: { rich_text: inlineToRichText(text), ...nested },
+      [type]: {
+        rich_text: inlineToRichText(text, { line: bodyOffset + 1 }),
+        ...nested,
+      },
     } as BlockObjectRequest,
     next: scan,
   };
@@ -549,7 +589,7 @@ function readListItem(
 // level without a word.
 function asChildren(
   blocks: BlockObjectRequest[],
-  line: string,
+  line: number,
 ): ChildBlockRequest[] {
   for (const block of blocks) {
     const record = block as unknown as Record<string, unknown>;
@@ -612,6 +652,7 @@ function splitTableCells(line: string): string[] {
 function readTable(
   lines: string[],
   index: number,
+  offset: number,
 ): { block: BlockObjectRequest; next: number } {
   const header = splitTableCells(measureIndent(lines[index]).content);
   const width = header.length;
@@ -619,7 +660,7 @@ function readTable(
   if (delimiter.length !== width) {
     throw unsupported(
       `a table whose delimiter row has ${delimiter.length} cells where its header has ${width}`,
-      lines[index],
+      offset + index,
     );
   }
 
@@ -641,7 +682,11 @@ function readTable(
         // GFM has no table without a header row, so the header markdown had to
         // write is the header Notion records.
         has_column_header: true,
-        children: rows.map((row) => tableRow(row, width)),
+        // The header is on the table's first line and the delimiter row takes
+        // the second, so every body row is one further down than its position.
+        children: rows.map((row, position) =>
+          tableRow(row, width, offset + index + (position === 0 ? 1 : position + 2)),
+        ),
       },
     },
     next: scan,
@@ -651,13 +696,17 @@ function readTable(
 // GFM pads a short row and drops whatever runs past the header's width. A cell
 // is the one inline context that can carry `<br />`, because a row is one line
 // and blocks-to-md has nowhere else to put a cell's line endings.
-function tableRow(cells: string[], width: number): TableRowRequest {
+function tableRow(
+  cells: string[],
+  width: number,
+  line: number,
+): TableRowRequest {
   return {
     object: "block",
     type: "table_row",
     table_row: {
       cells: Array.from({ length: width }, (_, column) =>
-        inlineToRichText(cells[column] ?? "", { tableCell: true }),
+        inlineToRichText(cells[column] ?? "", { tableCell: true, line }),
       ),
     },
   };

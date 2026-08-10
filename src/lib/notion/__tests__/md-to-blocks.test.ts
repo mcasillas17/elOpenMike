@@ -553,8 +553,12 @@ describe("markdownToBlocks", () => {
       );
     });
 
-    it("names the line it refused", () => {
-      expect(() => markdownToBlocks("# Title")).toThrow(/"# Title"/);
+    // The line number, never the line: the message is printed to a log and the
+    // line that reached a refusal is the odd one in the post. See
+    // error-redaction.test.ts.
+    it("numbers the line it refused without repeating it", () => {
+      expect(() => markdownToBlocks("Prose.\n\n# Title")).toThrow(/line 3/);
+      expect(() => markdownToBlocks("# Title")).not.toThrow(/Title/);
     });
   });
 

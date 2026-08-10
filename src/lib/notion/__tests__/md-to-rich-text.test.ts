@@ -431,7 +431,9 @@ describe("constructs with no rich-text equivalent", () => {
     rejects("![](https://example.com/a.png)");
   });
 
-  it("says what it choked on and where", () => {
+  // Where, and what kind — never the text itself, which is printed to a log and
+  // is the one line in the post odd enough to have been refused.
+  it("says what kind of thing it choked on and where, without quoting it", () => {
     try {
       inlineToRichText("prose with `unclosed code");
       expect.unreachable("should have thrown");
@@ -439,8 +441,9 @@ describe("constructs with no rich-text equivalent", () => {
       expect(error).toBeInstanceOf(UnsupportedInlineMarkdownError);
       const failure = error as UnsupportedInlineMarkdownError;
       expect(failure.message).toContain("code span");
-      expect(failure.source).toBe("prose with `unclosed code");
+      expect(failure.category).toBe("code-span");
       expect(failure.index).toBe(11);
+      expect(failure.message).not.toContain("prose with");
     }
   });
 });

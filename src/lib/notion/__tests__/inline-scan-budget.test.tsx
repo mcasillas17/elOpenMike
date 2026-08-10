@@ -108,7 +108,10 @@ describe("the budget behind the memo", () => {
       expect(error).toBeInstanceOf(UnsupportedInlineMarkdownError);
       const failure = error as UnsupportedInlineMarkdownError;
       expect(failure.message).toContain("scan");
-      expect(failure.source).toBe(line);
+      expect(failure.category).toBe("scan-budget");
+      // Located, not quoted: the offset says where to look and the message
+      // never repeats the line. See error-redaction.test.ts.
+      expect(failure.message).not.toContain(line);
       expect(failure.index).toBeGreaterThanOrEqual(0);
       expect(failure.index).toBeLessThanOrEqual(line.length);
     }
