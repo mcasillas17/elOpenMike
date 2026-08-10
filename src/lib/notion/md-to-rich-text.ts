@@ -56,36 +56,136 @@ export class UnsupportedInlineMarkdownError extends Error {
   }
 }
 
+// What one line cost to read: the character positions every scan visited, and
+// the deepest nesting it reached. Exposed so a test can pin the cost of a
+// pathological line to a number rather than to a stopwatch.
+export type InlineParseMetrics = { steps: number; depth: number };
+
+export type InlineParseOptions = {
+  // The ceiling on `steps`. Defaults to inlineScanBudget(markdown.length).
+  maxSteps?: number;
+  onMetrics?: (metrics: InlineParseMetrics) => void;
+};
+
+// The memo below makes the search polynomial rather than exponential, and the
+// budget is what stands behind it: a shape nobody anticipated stops with a
+// located refusal instead of holding a sync open or exhausting the heap. It is
+// deliberately far above anything prose reaches — the paragraph these posts
+// open with costs a few hundred steps for a few hundred characters — so a line
+// that meets it is not a line anyone wrote by hand.
+export const INLINE_SCAN_BUDGET_BASE = 20_000;
+export const INLINE_SCAN_BUDGET_PER_CHARACTER = 4_000;
+
+export function inlineScanBudget(length: number): number {
+  return INLINE_SCAN_BUDGET_BASE + INLINE_SCAN_BUDGET_PER_CHARACTER * length;
+}
+
+// Each unpaired opener recurses to look for its closer, so nesting is stack
+// depth. Real markdown nests three or four deep; hundreds is a line built to
+// break something, and a RangeError from a blown stack is not a refusal
+// anybody can act on.
+export const MAX_INLINE_DEPTH = 500;
+
+class ScanBudget {
+  steps = 0;
+  depth = 0;
+  deepest = 0;
+
+  constructor(
+    private readonly source: string,
+    private readonly maxSteps: number,
+  ) {}
+
+  // Charged per character visited, wherever the scan visits it, so `steps` is
+  // the honest total cost of reading the line.
+  spend(index: number, count = 1): void {
+    this.steps += count;
+    if (this.steps > this.maxSteps) {
+      throw new UnsupportedInlineMarkdownError(
+        `inline markdown whose delimiters need more than ${this.maxSteps} scan ` +
+          "steps to resolve — simplify the emphasis on this line",
+        this.source,
+        index,
+      );
+    }
+  }
+
+  descend<T>(index: number, work: () => T): T {
+    if (this.depth >= MAX_INLINE_DEPTH) {
+      throw new UnsupportedInlineMarkdownError(
+        `inline markdown nested more than ${MAX_INLINE_DEPTH} levels deep`,
+        this.source,
+        index,
+      );
+    }
+    this.depth += 1;
+    if (this.depth > this.deepest) this.deepest = this.depth;
+    try {
+      return work();
+    } finally {
+      this.depth -= 1;
+    }
+  }
+}
+
+// Everything one call to inlineToRichText shares: the text, the runs being
+// built, the answers already worked out, and what is left of the budget.
+type Scan = {
+  source: string;
+  items: TextItem[];
+  closers: CloserMemo;
+  budget: ScanBudget;
+};
+
 // The runs one line of inline Markdown describes. Throws
-// UnsupportedInlineMarkdownError for anything Notion's rich text cannot hold.
-export function inlineToRichText(markdown: string): RichTextInput {
-  const items: TextItem[] = [];
-  parse(markdown, 0, markdown.length, { annotations: [] }, items, new Map(), []);
-  return items;
+// UnsupportedInlineMarkdownError for anything Notion's rich text cannot hold,
+// and for anything that would cost more to read than the budget allows.
+export function inlineToRichText(
+  markdown: string,
+  { maxSteps, onMetrics }: InlineParseOptions = {},
+): RichTextInput {
+  const budget = new ScanBudget(
+    markdown,
+    maxSteps ?? inlineScanBudget(markdown.length),
+  );
+  const scan: Scan = {
+    source: markdown,
+    items: [],
+    closers: new Map(),
+    budget,
+  };
+
+  try {
+    parse(scan, 0, markdown.length, { annotations: [] }, NOTHING_ENCLOSING);
+  } finally {
+    onMetrics?.({ steps: budget.steps, depth: budget.deepest });
+  }
+
+  return scan.items;
 }
 
 function parse(
-  source: string,
+  scan: Scan,
   start: number,
   end: number,
   context: Context,
-  items: TextItem[],
-  closers: CloserMemo,
-  // The characters of the delimiter runs still open around this text. A run of
-  // one of them inside is a pair crossing this one rather than nesting in it.
-  enclosing: readonly string[],
+  // The delimiter runs still open around this text. A run of one of them
+  // inside is a pair crossing this one rather than nesting in it.
+  enclosing: Enclosing,
 ): void {
+  const { source, budget } = scan;
   let literal = "";
   let index = start;
 
   const flush = () => {
     if (literal !== "") {
-      items.push(textItem(literal, context));
+      scan.items.push(textItem(literal, context));
       literal = "";
     }
   };
 
   while (index < end) {
+    budget.spend(index);
     const char = source[index];
 
     if (char === "\\") {
@@ -120,7 +220,7 @@ function parse(
     // elements rich-text.ts writes on purpose, which are annotations spelled
     // another way. See readGeneratedElement.
     if (char === "<") {
-      const element = readGeneratedElement(source, index, end);
+      const element = readGeneratedElement(scan, index, end);
       if (!element) {
         throw new UnsupportedInlineMarkdownError(
           "raw HTML, JSX or an autolink",
@@ -129,14 +229,14 @@ function parse(
         );
       }
       flush();
-      parse(
-        source,
-        element.contentStart,
-        element.contentEnd,
-        annotate(context, element.annotation),
-        items,
-        closers,
-        enclosing,
+      budget.descend(index, () =>
+        parse(
+          scan,
+          element.contentStart,
+          element.contentEnd,
+          annotate(context, element.annotation),
+          enclosing,
+        ),
       );
       index = element.end;
       continue;
@@ -158,7 +258,7 @@ function parse(
     }
 
     if (char === "`") {
-      const span = readCodeSpan(source, index, end);
+      const span = readCodeSpan(scan, index, end);
       if (!span) {
         throw new UnsupportedInlineMarkdownError(
           "a code span that never closes",
@@ -167,13 +267,13 @@ function parse(
         );
       }
       flush();
-      items.push(textItem(span.content, annotate(context, "code")));
+      scan.items.push(textItem(span.content, annotate(context, "code")));
       index = span.end;
       continue;
     }
 
     if (char === "[") {
-      const link = readLink(source, index, end);
+      const link = readLink(scan, index, end);
       if (!link.ok) {
         throw new UnsupportedInlineMarkdownError(link.reason, source, index);
       }
@@ -185,21 +285,21 @@ function parse(
         );
       }
       flush();
-      parse(
-        source,
-        link.labelStart,
-        link.labelEnd,
-        { ...context, href: link.url },
-        items,
-        closers,
-        enclosing,
+      budget.descend(index, () =>
+        parse(
+          scan,
+          link.labelStart,
+          link.labelEnd,
+          { ...context, href: link.url },
+          enclosing,
+        ),
       );
       index = link.end;
       continue;
     }
 
     if (isDelimiter(char)) {
-      const run = delimiterRunAt(source, index, end);
+      const run = delimiterRunAt(scan, index, end);
       if (run.canOpen) {
         if (run.length > maxRunLength(char)) {
           throw new UnsupportedInlineMarkdownError(
@@ -209,11 +309,10 @@ function parse(
           );
         }
         const closer = findCloser(
-          source,
+          scan,
           index + run.length,
           end,
           run,
-          closers,
           enclosing,
         );
         if (closer.sawMismatch) {
@@ -232,16 +331,17 @@ function parse(
         }
         if (closer.index !== undefined) {
           flush();
-          parse(
-            source,
-            index + run.length,
-            closer.index,
-            annotate(context, ...emphasisOf(char, run.length)),
-            items,
-            closers,
-            [...enclosing, char],
+          const inner = closer.index;
+          budget.descend(index, () =>
+            parse(
+              scan,
+              index + run.length,
+              inner,
+              annotate(context, ...emphasisOf(char, run.length)),
+              open(enclosing, char),
+            ),
           );
-          index = closer.index + run.length;
+          index = inner + run.length;
           continue;
         }
       }
@@ -322,14 +422,12 @@ type DelimiterRun = {
 // default attentionMarkers, and micromark-extension-gfm-strikethrough.
 const ATTENTION_MARKERS = new Set(["*", "_", "~"]);
 
-function delimiterRunAt(
-  source: string,
-  index: number,
-  end: number,
-): DelimiterRun {
+function delimiterRunAt(scan: Scan, index: number, end: number): DelimiterRun {
+  const { source } = scan;
   const char = source[index];
   let length = 0;
   while (index + length < end && source[index + length] === char) length += 1;
+  scan.budget.spend(index, length);
 
   // The real neighbours, not the ends of the range being parsed: markdown
   // classified them against the whole line.
@@ -378,44 +476,68 @@ type CloserSearch = {
   sawCrossing: boolean;
 };
 
-// Every answer is a pure function of where the search starts, where it stops
-// and which run it is looking for, and the same question is asked again for
-// every opener that turns out not to pair off. Remembering the answers is what
-// keeps a line of unpaired delimiters — "*.ts *.tsx *.js *.jsx …" — from taking
-// exponential time to refuse.
+// Every answer is a pure function of where the search starts, where it stops,
+// which run it is looking for, and which markers are open around it — and the
+// same question is asked again for every opener that turns out not to pair off.
+// Remembering the answers is what keeps a line of unpaired delimiters —
+// "*.ts *.tsx *.js *.jsx …" — from taking exponential time to refuse.
+//
+// The key has to be canonical or the memo does not work. The scan asks one
+// thing of the delimiters open around it: is this marker one of them. So the
+// *set* of markers is the state, and the key spells it as a bitmask. Keying on
+// the stack itself — "*_~" against "~_*" against "**_" — made every permutation
+// a separate entry, the memo missed on all of them, and the exponential search
+// it exists to prevent came straight back: seventy-five characters of
+// interleaved markers took three seconds, and a hundred did not finish.
+type Enclosing = number;
+
+const NOTHING_ENCLOSING: Enclosing = 0;
+
+const MARKER_BIT: Record<string, Enclosing> = { "*": 1, _: 2, "~": 4 };
+
+function open(enclosing: Enclosing, char: string): Enclosing {
+  return enclosing | (MARKER_BIT[char] ?? 0);
+}
+
+function encloses(enclosing: Enclosing, char: string): boolean {
+  return (enclosing & (MARKER_BIT[char] ?? 0)) !== 0;
+}
+
 type CloserMemo = Map<string, CloserSearch>;
 
 function findCloser(
-  source: string,
+  scan: Scan,
   start: number,
   end: number,
   opener: DelimiterRun,
-  memo: CloserMemo,
-  enclosing: readonly string[],
+  enclosing: Enclosing,
 ): CloserSearch {
-  const key = `${start}:${end}:${opener.char}:${opener.length}:${enclosing.join("")}`;
-  const remembered = memo.get(key);
+  const key = `${start}:${end}:${opener.char}:${opener.length}:${enclosing}`;
+  const remembered = scan.closers.get(key);
   if (remembered) return remembered;
 
-  const found = scanForCloser(source, start, end, opener, memo, enclosing);
-  memo.set(key, found);
+  const found = scan.budget.descend(start, () =>
+    scanForCloser(scan, start, end, opener, enclosing),
+  );
+  scan.closers.set(key, found);
   return found;
 }
 
 function scanForCloser(
-  source: string,
+  scan: Scan,
   start: number,
   end: number,
   opener: DelimiterRun,
-  memo: CloserMemo,
-  enclosing: readonly string[],
+  enclosing: Enclosing,
 ): CloserSearch {
-  const inside = [...enclosing, opener.char];
+  const { source, budget } = scan;
+  const inside = open(enclosing, opener.char);
   let index = start;
   let sawMismatch = false;
   let sawCrossing = false;
 
   while (index < end) {
+    budget.spend(index);
     const char = source[index];
 
     if (char === "\\") {
@@ -425,25 +547,25 @@ function scanForCloser(
     // A delimiter inside a code span or a link's destination belongs to that
     // construct, not to the emphasis being closed.
     if (char === "`") {
-      const span = readCodeSpan(source, index, end);
+      const span = readCodeSpan(scan, index, end);
       index = span ? span.end : index + 1;
       continue;
     }
     if (char === "[") {
-      const link = readLink(source, index, end);
+      const link = readLink(scan, index, end);
       index = link.ok ? link.end : index + 1;
       continue;
     }
     // The children of a generated element are parsed as markdown, but a
     // delimiter inside one cannot pair with a delimiter outside it.
     if (char === "<") {
-      const element = readGeneratedElement(source, index, end);
+      const element = readGeneratedElement(scan, index, end);
       index = element ? element.end : index + 1;
       continue;
     }
 
     if (isDelimiter(char)) {
-      const run = delimiterRunAt(source, index, end);
+      const run = delimiterRunAt(scan, index, end);
       if (run.char === opener.char && run.canClose) {
         if (run.length === opener.length) {
           return { index, sawMismatch, sawCrossing };
@@ -455,7 +577,7 @@ function scanForCloser(
       // A run that closes a pair opened outside this one: the two overlap
       // instead of nesting, and markdown resolves that in a way no set of
       // annotations reproduces.
-      if (run.canClose && enclosing.includes(run.char)) {
+      if (run.canClose && encloses(enclosing, run.char)) {
         sawCrossing = true;
       }
       if (run.canOpen) {
@@ -463,14 +585,7 @@ function scanForCloser(
         // mistaken for the closer being looked for. What it could not pair off
         // carries out: in "*foo **bar* baz**" the runs interleave rather than
         // nest, and CommonMark splits them across both pairs.
-        const inner = findCloser(
-          source,
-          index + run.length,
-          end,
-          run,
-          memo,
-          inside,
-        );
+        const inner = findCloser(scan, index + run.length, end, run, inside);
         sawMismatch = sawMismatch || inner.sawMismatch;
         sawCrossing = sawCrossing || inner.sawCrossing;
         if (inner.index !== undefined) {
@@ -517,10 +632,11 @@ type GeneratedElement = {
 };
 
 function readGeneratedElement(
-  source: string,
+  scan: Scan,
   index: number,
   end: number,
 ): GeneratedElement | undefined {
+  const { source, budget } = scan;
   const match = OPENING_TAG.exec(source.slice(index, end));
   if (!match) return undefined;
 
@@ -532,27 +648,28 @@ function readGeneratedElement(
   // The closing tag that belongs to *this* opening one, so an element of the
   // same name nested inside closes itself first.
   let depth = 0;
-  let scan = contentStart;
-  while (scan < end) {
-    if (scan + opening.length <= end && source.startsWith(opening, scan)) {
+  let scanned = contentStart;
+  while (scanned < end) {
+    budget.spend(scanned);
+    if (scanned + opening.length <= end && source.startsWith(opening, scanned)) {
       depth += 1;
-      scan += opening.length;
+      scanned += opening.length;
       continue;
     }
-    if (scan + closing.length <= end && source.startsWith(closing, scan)) {
+    if (scanned + closing.length <= end && source.startsWith(closing, scanned)) {
       if (depth === 0) {
         return {
           annotation: GENERATED_ELEMENTS[name],
           contentStart,
-          contentEnd: scan,
-          end: scan + closing.length,
+          contentEnd: scanned,
+          end: scanned + closing.length,
         };
       }
       depth -= 1;
-      scan += closing.length;
+      scanned += closing.length;
       continue;
     }
-    scan += 1;
+    scanned += 1;
   }
 
   return undefined;
@@ -563,25 +680,31 @@ type CodeSpan = { content: string; end: number };
 // length, which is what lets a span quote backticks of its own. Nothing inside
 // is interpreted — no escapes, no character references.
 function readCodeSpan(
-  source: string,
+  scan: Scan,
   index: number,
   end: number,
 ): CodeSpan | undefined {
+  const { source, budget } = scan;
   let opener = 0;
   while (index + opener < end && source[index + opener] === "`") opener += 1;
 
-  let scan = index + opener;
-  while (scan < end) {
-    if (source[scan] !== "`") {
-      scan += 1;
+  let scanned = index + opener;
+  budget.spend(index, opener);
+  while (scanned < end) {
+    budget.spend(scanned);
+    if (source[scanned] !== "`") {
+      scanned += 1;
       continue;
     }
     let run = 0;
-    while (scan + run < end && source[scan + run] === "`") run += 1;
+    while (scanned + run < end && source[scanned + run] === "`") run += 1;
     if (run === opener) {
-      return { content: stripPadding(source.slice(index + opener, scan)), end: scan + run };
+      return {
+        content: stripPadding(source.slice(index + opener, scanned)),
+        end: scanned + run,
+      };
     }
-    scan += run;
+    scanned += run;
   }
 
   return undefined;
@@ -608,8 +731,9 @@ type LinkParse =
 // `[label](destination)` and nothing else. A title has nowhere to go in a
 // Notion run, and a reference link has no definition to resolve against once
 // the paragraph is on its own, so both are refused instead of dropped.
-function readLink(source: string, index: number, end: number): LinkParse {
-  const labelEnd = findLabelEnd(source, index + 1, end);
+function readLink(scan: Scan, index: number, end: number): LinkParse {
+  const { source } = scan;
+  const labelEnd = findLabelEnd(scan, index + 1, end);
   if (labelEnd === undefined) {
     return { ok: false, reason: "an opening bracket that never closes" };
   }
@@ -629,7 +753,7 @@ function readLink(source: string, index: number, end: number): LinkParse {
     };
   }
 
-  const destination = readDestination(source, labelEnd + 2, end);
+  const destination = readDestination(scan, labelEnd + 2, end);
   if (!destination.ok) return destination;
 
   return {
@@ -642,21 +766,23 @@ function readLink(source: string, index: number, end: number): LinkParse {
 }
 
 function findLabelEnd(
-  source: string,
+  scan: Scan,
   start: number,
   end: number,
 ): number | undefined {
+  const { source, budget } = scan;
   let depth = 0;
   let index = start;
 
   while (index < end) {
+    budget.spend(index);
     const char = source[index];
     if (char === "\\") {
       index += 2;
       continue;
     }
     if (char === "`") {
-      const span = readCodeSpan(source, index, end);
+      const span = readCodeSpan(scan, index, end);
       index = span ? span.end : index + 1;
       continue;
     }
@@ -675,11 +801,8 @@ type Destination =
   | { ok: true; url: string; end: number }
   | { ok: false; reason: string };
 
-function readDestination(
-  source: string,
-  start: number,
-  end: number,
-): Destination {
+function readDestination(scan: Scan, start: number, end: number): Destination {
+  const { source, budget } = scan;
   if (source[start] === "<") {
     return {
       ok: false,
@@ -692,6 +815,7 @@ function readDestination(
   let index = start;
 
   while (index < end) {
+    budget.spend(index);
     const char = source[index];
 
     if (char === "\\") {
