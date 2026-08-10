@@ -7,6 +7,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
 import { createNotionClient } from "../src/lib/notion/client";
+import {
+  titlePropertyName,
+  buildStatusProperty,
+  type DataSourceSchema,
+} from "../src/lib/notion/properties";
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
 
@@ -87,19 +92,14 @@ async function main(): Promise<void> {
 
   const client = createNotionClient(token);
 
-  // Notion names the title property "Name" by default. Look it up by type so
-  // the migration writes to whatever the database actually calls it — matching
-  // how fetch-post.ts reads it back.
-  const dataSource = await client.request<{
-    properties: Record<string, { type: string }>;
-  }>({
+  // Both the title property's name and the Status property's write shape depend
+  // on how the database was set up, so read the schema before writing anything.
+  const dataSource = await client.request<{ properties: DataSourceSchema }>({
     path: `data_sources/${dataSourceId}`,
     method: "get",
   });
-  const titleProp =
-    Object.entries(dataSource.properties).find(
-      ([, property]) => property.type === "title",
-    )?.[0] ?? "Name";
+  const titleProp = titlePropertyName(dataSource.properties);
+  const statusValue = buildStatusProperty(dataSource.properties);
 
   const names = (await fs.readdir(BLOG_DIR)).filter((n) => n.endsWith(".mdx"));
 
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
               (tag: string) => ({ name: String(tag) }),
             ),
           },
-          Status: { status: { name: "Published" } },
+          Status: statusValue,
           Published: { date: { start: String(data.date) } },
         },
         children: markdownToBlocks(content),
