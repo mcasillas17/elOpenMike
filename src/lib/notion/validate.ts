@@ -36,10 +36,10 @@ export type PostMetadata = {
   // module must never do is coerce one into a plausible string. The sync's own
   // direction always passes real strings.
   title: unknown;
-  date: string;
+  date: unknown;
   excerpt: unknown;
   tags: unknown;
-  updated?: string;
+  updated?: unknown;
 };
 
 // What a value is, without repeating what it says.
@@ -79,12 +79,7 @@ export function metadataProblems(meta: PostMetadata): string[] {
   const { title, date, excerpt, updated } = meta;
 
   problems.push(...textProblems(title, "title"));
-
-  if (!isValidDate(date)) {
-    problems.push(
-      `date must be a valid YYYY-MM-DD value (got ${JSON.stringify(date)})`,
-    );
-  }
+  problems.push(...dateProblems(date, "date"));
 
   problems.push(...textProblems(excerpt, "excerpt"));
   if (typeof excerpt === "string" && excerpt.length > MAX_EXCERPT) {
@@ -100,15 +95,28 @@ export function metadataProblems(meta: PostMetadata): string[] {
   // Only its shape is checked. Ordering against `date` is not an invariant: a
   // post scheduled with a Published date in the future is edited before that
   // day arrives, so `updated` legitimately precedes `date`.
-  if (updated !== undefined && updated !== "" && !isValidDate(updated)) {
-    problems.push(
-      `updated must be a valid YYYY-MM-DD value (got ${JSON.stringify(updated)})`,
-    );
+  if (updated !== undefined && updated !== "") {
+    problems.push(...dateProblems(updated, "updated"));
   }
 
   problems.push(...tagProblems(meta.tags));
 
   return problems;
+}
+
+// A day, or the reason this is not one. A value that is not text at all cannot
+// be narrowed to a day and must never be stringified into something that looks
+// like one — `["2026-05-20"]` stringifies to exactly the day it is not.
+function dateProblems(value: unknown, name: string): string[] {
+  if (typeof value !== "string") {
+    return [
+      `${name} must be a YYYY-MM-DD value written as a string (the ` +
+        `frontmatter holds ${describeType(value)})`,
+    ];
+  }
+  return isValidDate(value)
+    ? []
+    : [`${name} must be a valid YYYY-MM-DD value (got ${JSON.stringify(value)})`];
 }
 
 // Tag names become both /blog/tag/<slug> urls and Notion multi-select options,
@@ -232,6 +240,8 @@ export type MigratablePost = PostMetadata & {
   rawTags?: { value: unknown };
   rawTitle?: { value: unknown };
   rawExcerpt?: { value: unknown };
+  rawDate?: { value: unknown };
+  rawUpdated?: { value: unknown };
 };
 
 function localTagInput(post: MigratablePost): unknown {
@@ -249,6 +259,19 @@ function authoredInput(
   return raw === undefined || raw.value === undefined ? fallback : raw.value;
 }
 
+// A date reaches this already narrowed to the day the file names (see
+// migrate.ts), so the narrowed value is the one to check — a valid timestamp
+// must not be refused for being a timestamp. The raw value is only consulted
+// when it is not text at all, which is the one case narrowing cannot express
+// and the one case a message has to describe rather than quote.
+function authoredDateInput(
+  raw: { value: unknown } | undefined,
+  narrowed: unknown,
+): unknown {
+  const value = raw?.value;
+  return value === undefined || typeof value === "string" ? narrowed : value;
+}
+
 // The same invariants, keyed by the file they came from rather than by a slug.
 // Slug validity and two files claiming one slug are left to planMigration,
 // which also knows what the database already holds and can say which page a
@@ -263,6 +286,10 @@ export function validateLocalPosts(posts: readonly MigratablePost[]): string[] {
         ...post,
         title: authoredInput(post.rawTitle, post.title),
         excerpt: authoredInput(post.rawExcerpt, post.excerpt),
+        date: authoredDateInput(post.rawDate, post.date),
+        ...(post.updated === undefined
+          ? {}
+          : { updated: authoredDateInput(post.rawUpdated, post.updated) }),
         tags: localTagInput(post),
       }).map(at),
     );

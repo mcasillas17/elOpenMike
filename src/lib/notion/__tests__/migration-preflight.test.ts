@@ -710,6 +710,111 @@ describe("what toLocalPost carries into the check", () => {
     ).toBe("2026-06-01");
   });
 
+  // Narrowing used to be "does it start with ten digits and a T or a space?",
+  // and everything after that was thrown away unread. So `2026-05-20T` on its
+  // own, `2026-05-20 tomorrow`, `2026-05-20T99:99:99Z` and a timestamp with a
+  // paragraph stapled to it all became a perfectly good day — the garbage was
+  // not refused, it was deleted. A value is either exactly a day or a whole
+  // valid timestamp; anything else is kept as written so the validator can
+  // refuse it by name.
+  const authored = (value: string) =>
+    toLocalPost("a.mdx", `---\ndate: ${value}\n---\n\nB.\n`).date;
+
+  it.each([
+    "2026-05-20T18:30",
+    "2026-05-20T18:30:00",
+    "2026-05-20T18:30:00.5",
+    "2026-05-20T18:30:00.123456789",
+    "2026-05-20T18:30:00Z",
+    "2026-05-20t18:30:00z",
+    "2026-05-20 18:30:00",
+    "2026-05-20T18:30:00+05:45",
+    "2026-05-20T18:30:00-07:00",
+    "2026-05-20T18:30:00.250-07:00",
+    "2026-05-20T18:30:00+0545",
+    "2026-05-20T18:30:00+05",
+    "2026-05-20T00:00:00.000Z",
+    "2026-05-20T23:59:59.999+14:00",
+  ])("narrows the valid timestamp %s to the day it was written on", (written) => {
+    expect(authored(`"${written}"`)).toBe("2026-05-20");
+  });
+
+  it.each([
+    "2026-05-20T",
+    "2026-05-20 ",
+    "2026-05-20T18",
+    "2026-05-20T18:30:00 tomorrow",
+    "2026-05-20T18:30:00Zulu",
+    "2026-05-20T18:30:00+05:45:30",
+    "2026-05-20T18:30:00+5:45",
+    "2026-05-20T18:30:00.",
+    "2026-05-20T25:00:00Z",
+    "2026-05-20T18:60:00Z",
+    "2026-05-20T18:30:61Z",
+    "2026-05-20T18:30:00+25:00",
+    "2026-05-20T18:30:00+05:75",
+    "2026-05-20T18:30:00Z extra",
+    "2026-05-20Tnonsense",
+    "2026-05-20 18:30:00 America/Denver",
+    "2026-05-20T18:30:00ZZ",
+    "2026-05-20T18:30:00.123 456",
+  ])("refuses %s rather than deleting the part it cannot read", (written) => {
+    const post = toLocalPost(
+      "a.mdx",
+      `---\ntitle: "T"\ndate: "${written}"\nexcerpt: "E"\ntags: ["AI"]\n---\n\nB.\n`,
+    );
+
+    expect(post.date).not.toBe("2026-05-20");
+    expect(validateLocalPosts([post]).join("\n")).toMatch(/date/i);
+  });
+
+  it.each([
+    ["a sequence", '["2026-05-20"]'],
+    ["a mapping", "{ start: 2026-05-20 }"],
+    ["a number", "20260520"],
+    ["a boolean", "true"],
+    ["null", "null"],
+  ])("refuses a date written as %s rather than coercing it", (_name, written) => {
+    const post = toLocalPost(
+      "a.mdx",
+      `---\ntitle: "T"\ndate: ${written}\nexcerpt: "E"\ntags: ["AI"]\n---\n\nB.\n`,
+    );
+
+    expect(post.date).not.toBe("2026-05-20");
+    expect(validateLocalPosts([post]).join("\n")).toMatch(/date/i);
+  });
+
+  it("holds the written day either side of an offset that crosses midnight", () => {
+    expect(authored('"2026-05-20T23:59:59-07:00"')).toBe("2026-05-20");
+    expect(authored('"2026-05-20T00:00:00+13:00"')).toBe("2026-05-20");
+    expect(authored("2026-05-20T23:59:59-07:00")).toBe("2026-05-20");
+    expect(authored("2026-05-20T00:00:00+13:00")).toBe("2026-05-20");
+  });
+
+  it.each([
+    "2026-06-01T",
+    "2026-06-01T23:59:59-07:00 and later",
+    "2026-06-01T99:00:00Z",
+  ])("refuses the same shapes in `updated` (%s)", (written) => {
+    const post = toLocalPost(
+      "a.mdx",
+      `---\ntitle: "T"\ndate: 2026-05-20\nexcerpt: "E"\ntags: ["AI"]\nupdated: "${written}"\n---\n\nB.\n`,
+    );
+
+    expect(post.updated).not.toBe("2026-06-01");
+    expect(validateLocalPosts([post]).join("\n")).toMatch(/updated/i);
+  });
+
+  it("refuses an `updated` written as anything but text", () => {
+    const post = toLocalPost(
+      "a.mdx",
+      `---\ntitle: "T"\ndate: 2026-05-20\nexcerpt: "E"\ntags: ["AI"]\nupdated: ["2026-06-01"]\n---\n\nB.\n`,
+    );
+
+    expect(post.updated).not.toBe("2026-06-01");
+    expect(validateLocalPosts([post]).join("\n")).toMatch(/updated/i);
+  });
+
   it("keeps YAML arrays and quoted escapes while disabling timestamps", () => {
     const post = toLocalPost(
       "a.mdx",

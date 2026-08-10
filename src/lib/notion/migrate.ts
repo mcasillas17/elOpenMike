@@ -82,6 +82,8 @@ export type LocalPost = {
   rawTags?: { value: unknown };
   rawTitle?: { value: unknown };
   rawExcerpt?: { value: unknown };
+  rawDate?: { value: unknown };
+  rawUpdated?: { value: unknown };
   // Only what the file itself carries. Notion has no column for it — the sync
   // derives a post's `updated` from the page's last_edited_time — so this is
   // never written; it is read so a file claiming an unreadable one is caught
@@ -233,6 +235,8 @@ export function toLocalPost(file: string, raw: string): LocalPost {
     ["rawTags", rawTags],
     ["rawTitle", rawTitle],
     ["rawExcerpt", rawExcerpt],
+    ["rawDate", data.date],
+    ["rawUpdated", data.updated],
   ] as const) {
     Object.defineProperty(post, name, { value: { value }, enumerable: false });
   }
@@ -259,17 +263,62 @@ function authoredText(value: unknown, fallback: string): string {
 // Dates and timestamps reach this function as the scalar text the author wrote.
 // A timestamp is narrowed to its written day for the same reason on both sides
 // of the migration: the Notion property and the generated frontmatter are days.
-// The day is taken as the first ten characters, never by parsing.
+// The day is taken as the ten characters that spell it, never by parsing.
 // `new Date("2026-05-20T18:30:00")` — a date-time with no offset — is read by
 // JS as *local* time, so round-tripping it through toISOString() moves the post
 // a day west of Greenwich and makes the same file mean two different days on
 // two machines. The ten characters mean the same thing everywhere, and a day
 // that does not exist is refused by the validator rather than rolled over.
-const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]/;
+//
+// Narrowing is only allowed to happen when the *whole* value is a timestamp.
+// The old test was "does it start with a day and a T or a space?", and whatever
+// followed was dropped unread — so `2026-05-20T`, `2026-05-20 tomorrow`,
+// `2026-05-20T99:99:99Z` and a timestamp with a paragraph stapled to it all
+// became a perfectly good day. That is not a lenient parser, it is a parser
+// that deletes the evidence: the file says one thing, the site publishes
+// another, and nothing ever reports it.
+//
+// So a value is accepted as exactly a day, or as a whole ISO-8601 timestamp
+// whose time, fractional seconds and offset all parse and are all in range.
+// Anything else is kept exactly as written and refused by name downstream.
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+// day, separator, hh:mm, optional :ss with optional fraction, optional zone.
+// RFC 3339 allows the lowercase spellings and the space separator, both of
+// which turn up in files people wrote by hand; ISO's basic-format offsets
+// (+HH, +HHMM) are accepted beside the extended one.
+const ISO_TIMESTAMP =
+  /^(\d{4}-\d{2}-\d{2})[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?([Zz]|[+-]\d{2}(?::?\d{2})?)?$/;
+
+function inRange(value: string | undefined, max: number): boolean {
+  return value === undefined || Number(value) <= max;
+}
+
+// 60 seconds is a leap second, which ISO-8601 permits; only the day is kept
+// either way, so refusing one would cost an author a real timestamp.
+function isRealTimeOfDay(match: RegExpExecArray): boolean {
+  const [, , hour, minute, second, zone] = match;
+  if (!inRange(hour, 23) || !inRange(minute, 59) || !inRange(second, 60)) {
+    return false;
+  }
+  if (zone === undefined || zone === "Z" || zone === "z") return true;
+
+  const digits = zone.slice(1).replace(":", "");
+  return (
+    inRange(digits.slice(0, 2), 23) && inRange(digits.slice(2) || undefined, 59)
+  );
+}
 
 function frontmatterDate(value: unknown): string {
-  const written = String(value ?? "").trim();
-  return ISO_DATETIME.test(written) ? written.slice(0, 10) : written;
+  // Not text at all — a sequence, a mapping, a number, a boolean, a null. There
+  // is no day in it to keep, and String() would invent one: `["2026-05-20"]`
+  // stringifies to exactly the day it is not. The raw value travels beside the
+  // post instead, so the validator can say what the file actually holds.
+  if (typeof value !== "string") return "";
+  if (ISO_DAY.test(value)) return value;
+
+  const match = ISO_TIMESTAMP.exec(value);
+  return match && isRealTimeOfDay(match) ? match[1] : value;
 }
 
 function isTrashed(page: RemotePage): boolean {

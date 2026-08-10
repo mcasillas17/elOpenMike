@@ -131,9 +131,13 @@ drift apart:
   published as though somebody had typed it. A file with no `title:` line at
   all still falls back to its file name;
 - a **date** that is a real `YYYY-MM-DD` day. A date carrying a time is narrowed
-  to its day as the file is read, so what the database holds is what the sync
-  reads back; anything else — `2026/05/20`, `May 20, 2026`, `2026-02-31` — is
-  refused by name;
+  to its day as the file is read — but only when the *whole* value is a valid
+  ISO-8601 timestamp, time, fraction and offset included, so `2026-05-20T`,
+  `2026-05-20 tomorrow` and `2026-05-20T99:99:99Z` are refused instead of having
+  the part nobody could read quietly deleted. The written day survives whatever
+  the offset is, so a file means the same day on every machine; anything else —
+  `2026/05/20`, `May 20, 2026`, `2026-02-31`, or a date written as anything but
+  text — is refused by name;
 - an **`updated`**, where the file carries one, that is a real day too. Notion
   has no column for it (the sync derives it from the page's last-edited time),
   but an unreadable one would reach the sitemap as `<lastmod>` and the article
