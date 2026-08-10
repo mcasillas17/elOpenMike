@@ -141,7 +141,7 @@ describe("blocksToMarkdown", () => {
         ],
         ctx({ imagePath: (blockId) => `/assets/${blockId}.webp` }),
       ),
-    ).toBe(`![*Caption ***Alt**](/assets/${image.id}.webp)\n\n| Name | Value |\n| --- | --- |\n| A | 1 |\n| B |  |\n`);
+    ).toBe(`![*Caption* **Alt**](/assets/${image.id}.webp)\n\n| Name | Value |\n| --- | --- |\n| A | 1 |\n| B |  |\n`);
   });
 
   it("escapes pipes and normalizes newlines inside GFM table cells", () => {
