@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getAllSlugs } from "@/data/projects";
-import { getAllPosts } from "@/lib/blog";
+import { getAllPosts, getAllTags } from "@/lib/blog";
 import { absoluteUrl, routes } from "@/lib/site";
 
 // Fallback used when no blog posts exist yet (or none have a date). Bump
@@ -29,6 +29,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const slug of getAllSlugs()) {
     entries.push({
       url: absoluteUrl(routes.projectDetail(slug)),
+      lastModified: siteUpdated,
+    });
+  }
+  for (const tag of getAllTags()) {
+    entries.push({
+      url: absoluteUrl(routes.blogTag(tag.slug)),
       lastModified: siteUpdated,
     });
   }

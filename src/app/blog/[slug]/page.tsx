@@ -8,7 +8,7 @@ import rehypePrettyCode, {
 } from "rehype-pretty-code";
 import { Container } from "@/components/ui/Container";
 import { Tag } from "@/components/ui/Tag";
-import { getPost, getPostSlugs } from "@/lib/blog";
+import { getPost, getPostSlugs, tagSlug } from "@/lib/blog";
 import { mdxComponents } from "@/components/blog/mdx-components";
 import { ArticleJsonLd } from "@/components/seo/ArticleJsonLd";
 import { routes, alternatesFor } from "@/lib/site";
@@ -103,7 +103,13 @@ export default async function PostPage({
         {post.meta.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {post.meta.tags.map((t) => (
-              <Tag key={t}>{t}</Tag>
+              <Link
+                key={t}
+                href={routes.blogTag(tagSlug(t))}
+                className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+              >
+                <Tag>{t}</Tag>
+              </Link>
             ))}
           </div>
         )}
