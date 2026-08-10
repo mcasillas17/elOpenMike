@@ -297,6 +297,122 @@ describe("raw frontmatter tags", () => {
   });
 });
 
+// The same reasoning as the raw tags above, applied to the two properties a
+// page is *identified* by. `String(data.title ?? stem)` turned a YAML sequence
+// into "A,B", a mapping into "[object Object]", a number into its digits and a
+// boolean into "true" — and each of those was then written into Notion as the
+// post's title or excerpt, compared against a live page's, and published to the
+// site. A file that says something the frontmatter format cannot express is a
+// file the author has to fix, not a value this run gets to invent.
+describe("raw frontmatter title and excerpt", () => {
+  const fromFrontmatter = (lines: string[]) =>
+    toLocalPost(
+      "raw-scalars.mdx",
+      ["---", ...lines, "---", "", "Body."].join("\n"),
+    );
+
+  async function rejects(lines: string[]): Promise<string> {
+    const notion = new FakeNotion();
+    const prepared = await prepare(notion, [fromFrontmatter(lines)]);
+
+    expect(prepared.writes).toEqual([]);
+    expect(notion.mutations).toEqual([]);
+    expect(notion.pages.size).toBe(0);
+    return prepared.errors.join("\n");
+  }
+
+  const withTitle = (value: string) => [
+    `title: ${value}`,
+    "date: 2026-05-20",
+    'excerpt: "An excerpt."',
+    'tags: ["AI"]',
+  ];
+
+  const withExcerpt = (value: string) => [
+    'title: "A title"',
+    "date: 2026-05-20",
+    `excerpt: ${value}`,
+    'tags: ["AI"]',
+  ];
+
+  it.each([
+    ["a sequence", '["A", "B"]', "A,B"],
+    ["a mapping", "{ a: 1 }", "[object Object]"],
+    ["a number", "42", "42"],
+    ["a boolean", "true", "true"],
+  ])("refuses a title written as %s rather than coercing it", async (
+    _name,
+    written,
+    coerced,
+  ) => {
+    expect(fromFrontmatter(withTitle(written)).title).not.toBe(coerced);
+    expect(await rejects(withTitle(written))).toMatch(/title/i);
+  });
+
+  it.each([
+    ["a sequence", '["A", "B"]', "A,B"],
+    ["a mapping", "{ a: 1 }", "[object Object]"],
+    ["a number", "42", "42"],
+    ["a boolean", "false", "false"],
+  ])("refuses an excerpt written as %s rather than coercing it", async (
+    _name,
+    written,
+    coerced,
+  ) => {
+    expect(fromFrontmatter(withExcerpt(written)).excerpt).not.toBe(coerced);
+    expect(await rejects(withExcerpt(written))).toMatch(/excerpt/i);
+  });
+
+  // `title:` with nothing after it is a key the author wrote and left empty,
+  // which is not the same as a file that carries no title line at all.
+  it("refuses an explicitly null title and excerpt", async () => {
+    expect(await rejects(withTitle(""))).toMatch(/title/i);
+    expect(await rejects(withExcerpt(""))).toMatch(/excerpt/i);
+    expect(
+      await rejects([
+        "title: null",
+        "date: 2026-05-20",
+        'excerpt: "E"',
+        'tags: ["AI"]',
+      ]),
+    ).toMatch(/title/i);
+  });
+
+  it("names the file it refused and writes nothing", async () => {
+    expect(await rejects(withTitle("42"))).toMatch(/raw-scalars\.mdx/);
+  });
+
+  it("still falls back to the file name when there is no title line at all", async () => {
+    const notion = new FakeNotion();
+    const post = fromFrontmatter([
+      "date: 2026-05-20",
+      'excerpt: "An excerpt."',
+      'tags: ["AI"]',
+    ]);
+
+    expect(post.title).toBe("raw-scalars");
+    expect((await prepare(notion, [post])).errors).toEqual([]);
+  });
+
+  it("keeps an authored string exactly, including one that looks like a number", async () => {
+    const notion = new FakeNotion();
+    const post = fromFrontmatter([
+      'title: "2026"',
+      "date: 2026-05-20",
+      'excerpt: "42"',
+      'tags: ["AI"]',
+    ]);
+    const prepared = await prepare(notion, [post]);
+
+    expect(prepared.errors).toEqual([]);
+    expect(post.title).toBe("2026");
+    expect(post.excerpt).toBe("42");
+    expect(prepared.writes[0].page.properties.Excerpt).toEqual({
+      rich_text: [{ type: "text", text: { content: "42" } }],
+    });
+  });
+});
+
 describe("slugs", () => {
   it("refuses a file with no url-safe characters to build a slug from", async () => {
     const errors = await refuses([local("", { file: "!!!.mdx" })]);

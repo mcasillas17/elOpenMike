@@ -124,8 +124,12 @@ site, while every sync from then on refuses the **whole blog** because of it.
 The checks are literally the sync's, in one shared module, so the two cannot
 drift apart:
 
-- a non-empty **title** and **excerpt**, and an excerpt of at most 200
-  characters;
+- a **title** and an **excerpt** the author actually wrote as text, non-empty,
+  with the excerpt at most 200 characters. Neither is ever coerced: a `title:`
+  holding a sequence, a mapping, a number, a boolean or a null is refused by
+  name rather than becoming `A,B`, `[object Object]`, `42` or `true` and being
+  published as though somebody had typed it. A file with no `title:` line at
+  all still falls back to its file name;
 - a **date** that is a real `YYYY-MM-DD` day. A date carrying a time is narrowed
   to its day as the file is read, so what the database holds is what the sync
   reads back; anything else — `2026/05/20`, `May 20, 2026`, `2026-02-31` — is

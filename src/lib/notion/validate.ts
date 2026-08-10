@@ -31,12 +31,38 @@ export function isValidDate(value: string): boolean {
 // content/blog/*.mdx file. `updated` is optional because a local file need not
 // carry one — the sync derives it from the page's last_edited_time.
 export type PostMetadata = {
-  title: string;
+  // `unknown` for the same reason `tags` is: on the way *into* Notion these are
+  // whatever YAML parsed out of a file anyone can edit, and the one thing this
+  // module must never do is coerce one into a plausible string. The sync's own
+  // direction always passes real strings.
+  title: unknown;
   date: string;
-  excerpt: string;
+  excerpt: unknown;
   tags: unknown;
   updated?: string;
 };
+
+// What a value is, without repeating what it says.
+function describeType(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "a list";
+  return typeof value === "object" ? "a mapping" : `a ${typeof value}`;
+}
+
+// Text the author wrote, or the reason it is not text. A title or an excerpt
+// that YAML parsed as a sequence, a mapping, a number, a boolean or a null is
+// refused here rather than being turned into "A,B", "[object Object]", "42" or
+// "true" — each of which would be written into Notion as the post's own title
+// and published to the site as though somebody had typed it.
+function textProblems(value: unknown, name: string): string[] {
+  if (typeof value !== "string") {
+    return [
+      `${name} must be text written as a string (the frontmatter holds ` +
+        `${describeType(value)})`,
+    ];
+  }
+  return value.trim() === "" ? [`${name} is empty`] : [];
+}
 
 // Every invariant one post's metadata has to satisfy, whichever direction it is
 // travelling in. Messages carry no identifier: the caller knows whether this
@@ -52,7 +78,7 @@ export function metadataProblems(meta: PostMetadata): string[] {
   const problems: string[] = [];
   const { title, date, excerpt, updated } = meta;
 
-  if (title.trim() === "") problems.push("title is empty");
+  problems.push(...textProblems(title, "title"));
 
   if (!isValidDate(date)) {
     problems.push(
@@ -60,8 +86,8 @@ export function metadataProblems(meta: PostMetadata): string[] {
     );
   }
 
-  if (excerpt.trim() === "") problems.push("excerpt is empty");
-  else if (excerpt.length > MAX_EXCERPT) {
+  problems.push(...textProblems(excerpt, "excerpt"));
+  if (typeof excerpt === "string" && excerpt.length > MAX_EXCERPT) {
     problems.push(`excerpt is ${excerpt.length} chars (max ${MAX_EXCERPT})`);
   }
 
@@ -204,10 +230,23 @@ export type MigratablePost = PostMetadata & {
   file: string;
   content: string;
   rawTags?: { value: unknown };
+  rawTitle?: { value: unknown };
+  rawExcerpt?: { value: unknown };
 };
 
 function localTagInput(post: MigratablePost): unknown {
   return post.rawTags === undefined ? post.tags : post.rawTags.value;
+}
+
+// The value the file itself carries. A key the file does not have at all is
+// answered by what toLocalPost fell back to — the file name for a title, ""
+// for an excerpt — because a post with no `title:` line still has a title,
+// while a `title:` holding a sequence is a different thing entirely.
+function authoredInput(
+  raw: { value: unknown } | undefined,
+  fallback: unknown,
+): unknown {
+  return raw === undefined || raw.value === undefined ? fallback : raw.value;
 }
 
 // The same invariants, keyed by the file they came from rather than by a slug.
@@ -220,7 +259,12 @@ export function validateLocalPosts(posts: readonly MigratablePost[]): string[] {
   for (const post of posts) {
     const at = (message: string) => `${post.file}: ${message}`;
     errors.push(
-      ...metadataProblems({ ...post, tags: localTagInput(post) }).map(at),
+      ...metadataProblems({
+        ...post,
+        title: authoredInput(post.rawTitle, post.title),
+        excerpt: authoredInput(post.rawExcerpt, post.excerpt),
+        tags: localTagInput(post),
+      }).map(at),
     );
     if (post.content.trim() === "") errors.push(at("body is empty"));
   }

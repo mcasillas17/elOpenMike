@@ -77,9 +77,11 @@ export type LocalPost = {
   excerpt: string;
   tags: string[];
   // The scalar/sequence exactly as YAML parsed it. Present only on posts read
-  // from disk, so preflight can reject malformed authored tags without ever
-  // coercing them into strings that could reach a Notion request.
+  // from disk, so preflight can reject malformed authored frontmatter without
+  // ever coercing it into strings that could reach a Notion request.
   rawTags?: { value: unknown };
+  rawTitle?: { value: unknown };
+  rawExcerpt?: { value: unknown };
   // Only what the file itself carries. Notion has no column for it — the sync
   // derives a post's `updated` from the page's last_edited_time — so this is
   // never written; it is read so a file claiming an unreadable one is caught
@@ -207,6 +209,8 @@ export function toLocalPost(file: string, raw: string): LocalPost {
   const { data, content } = matter(raw, FRONTMATTER_OPTIONS);
   const updated = frontmatterDate(data.updated);
   const rawTags: unknown = data.tags;
+  const rawTitle: unknown = data.title;
+  const rawExcerpt: unknown = data.excerpt;
   const tags =
     Array.isArray(rawTags) &&
     rawTags.every((tag): tag is string => typeof tag === "string")
@@ -216,20 +220,40 @@ export function toLocalPost(file: string, raw: string): LocalPost {
   const post: LocalPost = {
     file,
     slug: slugify(stem),
-    title: String(data.title ?? stem),
+    title: authoredText(rawTitle, stem),
     date: frontmatterDate(data.date),
-    excerpt: String(data.excerpt ?? ""),
+    excerpt: authoredText(rawExcerpt, ""),
     tags,
     ...(data.updated === undefined ? {} : { updated }),
     content,
   };
   // Validation-only provenance must not become part of a request or change the
   // enumerable LocalPost shape consumed by the rest of the migration.
-  Object.defineProperty(post, "rawTags", {
-    value: { value: rawTags },
-    enumerable: false,
-  });
+  for (const [name, value] of [
+    ["rawTags", rawTags],
+    ["rawTitle", rawTitle],
+    ["rawExcerpt", rawExcerpt],
+  ] as const) {
+    Object.defineProperty(post, name, { value: { value }, enumerable: false });
+  }
   return post;
+}
+
+// A title and an excerpt are text, and YAML is perfectly happy to hand back a
+// sequence, a mapping, a number, a boolean or a null instead. String() turned
+// each of those into something plausible — "A,B", "[object Object]", "42",
+// "true" — which was then written into Notion as the post's own title,
+// compared against a live page's, and published to the site. None of them is
+// what the author wrote, and a file saying something the frontmatter format
+// cannot express is a file to fix rather than a value to invent.
+//
+// So nothing is coerced here: a string is kept, a missing key falls back to
+// what the file name says, and anything else becomes the fallback *and* is
+// carried through raw, where validateLocalPosts refuses it by name before a
+// single request is built. See validate.ts.
+function authoredText(value: unknown, fallback: string): string {
+  if (typeof value === "string") return value;
+  return value === undefined ? fallback : "";
 }
 
 // Dates and timestamps reach this function as the scalar text the author wrote.
