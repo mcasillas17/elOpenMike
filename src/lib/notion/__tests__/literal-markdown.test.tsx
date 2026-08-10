@@ -172,6 +172,18 @@ describe("literal text that looks like MDX ESM", () => {
     );
   });
 
+  // A blank line inside a paragraph ends it, so what follows opens a block of
+  // its own — in column one, where MDX is looking.
+  it("defuses a keyword after a blank line in the same paragraph", () => {
+    expect(text("before\n\nexport const config = 1")).toBe(
+      "before\n\n&#101;xport const config = 1",
+    );
+    expect(text("\nimport the data")).toBe("\n&#105;mport the data");
+    expect(text("one\n\ntwo\n\nimport three")).toBe(
+      "one\n\ntwo\n\n&#105;mport three",
+    );
+  });
+
   it("leaves an annotated run alone, which opens with its own delimiter", () => {
     expect(paragraphText(["import x", { code: true }])).toBe("`import x`");
     expect(paragraphText(["import x", { bold: true }])).toBe("**import x**");
@@ -430,6 +442,15 @@ describe("compiled through the post page's MDX pipeline", () => {
   it("renders a keyword split across runs as prose", async () => {
     const container = await renderMdx(paragraph(["imp"], ["ort the data"]));
     expect(container.querySelector("p")?.textContent).toBe("import the data");
+  });
+
+  it("renders a keyword after a blank line in the same paragraph", async () => {
+    const container = await renderMdx(
+      paragraph(["before\n\nexport const config = 1"]),
+    );
+    expect([...container.querySelectorAll("p")].map((p) => p.textContent)).toEqual(
+      ["before", "export const config = 1"],
+    );
   });
 
   it("keeps the keyword out of the way inside a list item and a quote", async () => {

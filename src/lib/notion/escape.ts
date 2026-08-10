@@ -65,16 +65,31 @@ const INDENT = /[ \t]/;
 //
 // The trigger is narrow, and matching it exactly is what keeps "important" and
 // "exporting" out of it: the keyword must be the whole word, it must be
-// followed by a space (a tab does not arm it), and it must sit in column one —
-// indentation, a list marker or a blockquote marker all put the line out of
-// reach. See micromark-extension-mdxjs-esm.
+// followed by a space (a tab does not arm it), and it must sit in column one at
+// the start of a block — indentation, a list marker, a blockquote marker or
+// being a paragraph's second line all put it out of reach. See
+// micromark-extension-mdxjs-esm.
 const ESM_KEYWORDS = { import: "&#105;mport", export: "&#101;xport" };
 
-// The rewritten line, or the line unchanged when MDX would not read ESM in it.
-// Takes the assembled line rather than one run because Notion splits text at
-// arbitrary points: "imp" and "ort the data" are two runs of one word, and each
-// on its own looks harmless.
-export function defuseEsmKeyword(line: string): string {
+// The rewritten text, or the text unchanged when MDX would not read ESM in it.
+// Takes the assembled block rather than one run for two reasons: Notion splits
+// text at arbitrary points, so "imp" and "ort the data" are two runs of one
+// word; and a blank line ends the paragraph, so what follows it opens a block
+// of its own and lands back in column one.
+export function defuseEsmKeyword(text: string): string {
+  let flowStart = true;
+
+  return text
+    .split("\n")
+    .map((line) => {
+      const defused = flowStart ? defuseLine(line) : line;
+      flowStart = line.trim() === "";
+      return defused;
+    })
+    .join("\n");
+}
+
+function defuseLine(line: string): string {
   for (const [keyword, replacement] of Object.entries(ESM_KEYWORDS)) {
     if (line.startsWith(`${keyword} `)) {
       return `${replacement}${line.slice(keyword.length)}`;
