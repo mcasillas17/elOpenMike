@@ -37,13 +37,23 @@ const schema: DataSourceSchema = {
 
 // Runs `work` with the clock under control, so the code's own waits pass
 // without the test waiting for them.
+//
+// The outcome is captured before the clock moves. Awaiting the work only after
+// advancing the timers leaves a rejection unhandled for as long as the advance
+// takes, and Vitest fails the whole run over one — correctly, since a rejection
+// nobody is holding is exactly what a missed `await` looks like.
 async function withoutWaiting<T>(work: () => Promise<T>): Promise<T> {
   vi.useFakeTimers();
   try {
-    const promise = work();
+    const settled = work().then(
+      (value) => () => value,
+      (error: unknown) => () => {
+        throw error;
+      },
+    );
     // Long enough to cover every backoff the budget allows.
     await vi.advanceTimersByTimeAsync(10 * 60_000);
-    return await promise;
+    return (await settled)();
   } finally {
     vi.useRealTimers();
   }
