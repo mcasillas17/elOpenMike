@@ -3,21 +3,33 @@
 // Notion database so they don't need retyping. Run manually, once. Never wired
 // into CI — after migration Notion owns content/blog/ and this script is dead
 // weight kept only for the record.
+//
+// Safe to re-run: it reads the slugs already in the database first and creates
+// only what is missing, so a run interrupted halfway is finished by running it
+// again rather than duplicated. See src/lib/notion/migrate.ts.
 import fs from "node:fs/promises";
 import path from "node:path";
-import matter from "gray-matter";
-import { createNotionClient } from "../src/lib/notion/client";
+import { createNotionClient, queryPages } from "../src/lib/notion/client";
+import { pageSlug } from "../src/lib/notion/fetch-post";
+import { withRetry } from "../src/lib/notion/retry";
+import type { DataSourceSchema } from "../src/lib/notion/properties";
 import {
-  titlePropertyName,
-  buildStatusProperty,
-  type DataSourceSchema,
-} from "../src/lib/notion/properties";
-import {
-  markdownToBlocks,
-  plainRichText as text,
-} from "../src/lib/notion/md-to-blocks";
+  toLocalPost,
+  planMigration,
+  migrationRequests,
+  type RemotePage,
+} from "../src/lib/notion/migrate";
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
+
+async function readLocalPosts(dir: string) {
+  const names = (await fs.readdir(dir)).filter((n) => n.endsWith(".mdx")).sort();
+  return Promise.all(
+    names.map(async (name) =>
+      toLocalPost(name, await fs.readFile(path.join(dir, name), "utf8")),
+    ),
+  );
+}
 
 async function main(): Promise<void> {
   const token = process.env.NOTION_TOKEN;
@@ -30,43 +42,51 @@ async function main(): Promise<void> {
 
   // Both the title property's name and the Status property's write shape depend
   // on how the database was set up, so read the schema before writing anything.
-  const dataSource = await client.request<{ properties: DataSourceSchema }>({
-    path: `data_sources/${dataSourceId}`,
-    method: "get",
-  });
-  const titleProp = titlePropertyName(dataSource.properties);
-  const statusValue = buildStatusProperty(dataSource.properties);
+  const dataSource = await withRetry(() =>
+    client.request<{ properties: DataSourceSchema }>({
+      path: `data_sources/${dataSourceId}`,
+      method: "get",
+    }),
+  );
 
-  const names = (await fs.readdir(BLOG_DIR)).filter((n) => n.endsWith(".mdx"));
+  const existing: RemotePage[] = (
+    await queryPages(client, dataSourceId)
+  ).map((page) => ({
+    pageId: page.id,
+    slug: pageSlug(page),
+    archived: page.archived,
+    in_trash: page.in_trash,
+  }));
 
-  for (const name of names) {
-    const slug = name.replace(/\.mdx$/, "");
-    const raw = await fs.readFile(path.join(BLOG_DIR, name), "utf8");
-    const { data, content } = matter(raw);
+  const plan = planMigration(await readLocalPosts(BLOG_DIR), existing);
 
-    await client.request({
-      path: "pages",
-      method: "post",
-      body: {
-        parent: { type: "data_source_id", data_source_id: dataSourceId },
-        properties: {
-          [titleProp]: { title: text(String(data.title ?? slug)) },
-          Slug: { rich_text: text(slug) },
-          Excerpt: { rich_text: text(String(data.excerpt ?? "")) },
-          Tags: {
-            multi_select: (Array.isArray(data.tags) ? data.tags : []).map(
-              (tag: string) => ({ name: String(tag) }),
-            ),
-          },
-          Status: statusValue,
-          Published: { date: { start: String(data.date) } },
-        },
-        children: markdownToBlocks(content),
-      },
-    });
-
-    console.log(`✓ migrated ${slug}`);
+  if (plan.errors.length > 0) {
+    console.error(
+      `\n✗ ${plan.errors.length} problem(s) — nothing created:\n`,
+    );
+    for (const error of plan.errors) console.error(`  ${error}`);
+    process.exit(1);
   }
+
+  for (const { slug } of plan.skip) {
+    console.log(`· already in Notion, skipped ${slug}`);
+  }
+
+  // Built up front so an unusable Status property or an unknown fence fails
+  // before the first page is created rather than partway through.
+  const requests = migrationRequests(plan, {
+    dataSourceId,
+    schema: dataSource.properties,
+  });
+
+  for (const [index, body] of requests.entries()) {
+    await withRetry(() => client.request({ path: "pages", method: "post", body }));
+    console.log(`✓ migrated ${plan.create[index].slug}`);
+  }
+
+  console.log(
+    `\n✓ ${requests.length} created, ${plan.skip.length} already present`,
+  );
 }
 
 main().catch((error: unknown) => {

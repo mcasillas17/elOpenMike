@@ -56,6 +56,18 @@ Required GitHub secrets:
   sync reverts changes). Write posts in the Notion Blog database instead. See
   [`docs/authoring.md`](docs/authoring.md).
 
+## One-time migration into Notion
+
+`pnpm migrate:to-notion` pushes the hand-written `content/blog/*.mdx` posts into
+the Notion database. It needs `NOTION_TOKEN` and `NOTION_DATA_SOURCE_ID`.
+
+It is safe to re-run: it reads the slugs already in the database and creates
+only the posts that are missing, so a run interrupted partway is finished by
+running it again. It refuses to create anything if a slug is already claimed by
+two database pages, or if two local files map to the same slug. A page in the
+Notion trash does not hold its slug, so trashing a page and re-running is how a
+single post is redone.
+
 ## Deploy (Fly.io)
 
 Runs as a Next.js standalone server in a container (`Dockerfile` + `fly.toml`;

@@ -82,16 +82,12 @@ export async function retrievePage(
   return page;
 }
 
-// Deliberately queries WITHOUT a server-side status filter, then filters in
-// code via isPublished(). A server filter has to name the property's exact type
-// (`status:` vs `select:`), so it breaks if the database uses the other one.
-// Filtering client-side works with either, and at blog scale the cost is one
-// extra page of results. Draft bodies are never fetched — only published pages
-// reach fetchBlockTree — so nothing about a draft is ever written to disk.
-export async function queryPublishedPages(
+// Walks every page in the data source. Notion's query does not return trashed
+// pages, so what comes back is the live contents of the database.
+export async function queryPages(
   client: Client,
   dataSourceId: string,
-  isPublished: (page: PageObject) => boolean,
+  accept: (page: PageObject) => boolean = () => true,
 ): Promise<PageObject[]> {
   const pages: PageObject[] = [];
   let cursor: string | undefined;
@@ -107,12 +103,26 @@ export async function queryPublishedPages(
 
     for (const result of response.results) {
       const page = asPageObject(result);
-      if (page && isPublished(page)) pages.push(page);
+      if (page && accept(page)) pages.push(page);
     }
     cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
   } while (cursor);
 
   return pages;
+}
+
+// Deliberately queries WITHOUT a server-side status filter, then filters in
+// code via isPublished(). A server filter has to name the property's exact type
+// (`status:` vs `select:`), so it breaks if the database uses the other one.
+// Filtering client-side works with either, and at blog scale the cost is one
+// extra page of results. Draft bodies are never fetched — only published pages
+// reach fetchBlockTree — so nothing about a draft is ever written to disk.
+export async function queryPublishedPages(
+  client: Client,
+  dataSourceId: string,
+  isPublished: (page: PageObject) => boolean,
+): Promise<PageObject[]> {
+  return queryPages(client, dataSourceId, isPublished);
 }
 
 // Depth-first walk resolving every child list. Notion paginates children at 100.
