@@ -1563,7 +1563,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `MdBlock`, `PostSource`, `PostFrontmatter` (Task 1), `slugify` (Task 1).
-- Produces: `createNotionClient(token: string): Client`, `resolveDataSourceId(client, databaseId): Promise<string>`, `queryPublishedPages(client, dataSourceId): Promise<PageObject[]>`, `fetchBlockTree(client, blockId): Promise<MdBlock[]>`, `toPostSource(page: PageObject, blocks: MdBlock[]): PostSource`.
+- Produces: `createNotionClient(token: string): Client`, `resolveDataSourceId(client, databaseId): Promise<string>`, `queryPublishedPages(client, dataSourceId, isPublished): Promise<PageObject[]>`, `fetchBlockTree(client, blockId): Promise<MdBlock[]>`, `toPostSource(page: PageObject, blocks: MdBlock[]): PostSource`, `isPublished(page: PageObject): boolean`.
+
+**Robustness note:** the title property is located by **type** (`type === "title"`), not by name, because Notion names it "Name" by default. Publish status is filtered **client-side** so the database can use either a Status or a Select property. Both choices exist to stop a database-setup detail from becoming a code change.
 
 **API notes (spec §4):** version `2026-03-11`. Databases and data sources split in `2025-09-03`, so query goes through `/v1/data_sources/:id/query`, and the data source id comes from `GET /v1/databases/:id` → `data_sources[0].id`.
 
@@ -1652,9 +1654,16 @@ export async function resolveDataSourceId(
   return id;
 }
 
+// Deliberately queries WITHOUT a server-side status filter, then filters in
+// code via isPublished(). A server filter has to name the property's exact type
+// (`status:` vs `select:`), so it breaks if the database uses the other one.
+// Filtering client-side works with either, and at blog scale the cost is one
+// extra page of results. Draft bodies are never fetched — only published pages
+// reach fetchBlockTree — so nothing about a draft is ever written to disk.
 export async function queryPublishedPages(
   client: Client,
   dataSourceId: string,
+  isPublished: (page: PageObject) => boolean,
 ): Promise<PageObject[]> {
   const pages: PageObject[] = [];
   let cursor: string | undefined;
@@ -1664,15 +1673,11 @@ export async function queryPublishedPages(
       client.request({
         path: `data_sources/${dataSourceId}/query`,
         method: "post",
-        body: {
-          filter: { property: "Status", status: { equals: "Published" } },
-          start_cursor: cursor,
-          page_size: 100,
-        },
+        body: { start_cursor: cursor, page_size: 100 },
       }),
     )) as { results: PageObject[]; next_cursor: string | null; has_more: boolean };
 
-    pages.push(...response.results);
+    pages.push(...response.results.filter(isPublished));
     cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
   } while (cursor);
 
@@ -1739,11 +1744,29 @@ function dateStart(property: Property | undefined): string {
   );
 }
 
+// Notion names the title property "Name" by default and only calls it "Title"
+// if you rename it. Every database has exactly one property of type `title`,
+// so find it by type rather than by name — that works whatever it is called.
+function titleProperty(properties: Record<string, Property>): Property | undefined {
+  return Object.values(properties).find((p) => p?.type === "title");
+}
+
+// True when the page's Status (or Select) property reads "Published".
+// Accepts both property types so the database can use either.
+export function isPublished(page: PageObject): boolean {
+  const properties = page.properties as Record<string, Property>;
+  const property = properties.Status;
+  const value =
+    (property?.status as { name?: string } | undefined)?.name ??
+    (property?.select as { name?: string } | undefined)?.name;
+  return value === "Published";
+}
+
 // Maps a Notion page's properties onto post frontmatter. `updated` comes from
 // the page's last_edited_time; no Notion property is needed for it.
 export function toPostSource(page: PageObject, blocks: MdBlock[]): PostSource {
   const properties = page.properties as Record<string, Property>;
-  const title = plain(properties.Title);
+  const title = plain(titleProperty(properties));
   const explicitSlug = plain(properties.Slug);
 
   const frontmatter: PostFrontmatter = {
@@ -1798,7 +1821,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createNotionClient, resolveDataSourceId, queryPublishedPages, fetchBlockTree } from "../src/lib/notion/client";
-import { toPostSource } from "../src/lib/notion/fetch-post";
+import { toPostSource, isPublished } from "../src/lib/notion/fetch-post";
 import { blocksToMarkdown } from "../src/lib/notion/blocks-to-md";
 import { serializePost, contentProjection, resolveUpdated } from "../src/lib/notion/serialize";
 import { validatePosts, type ValidatablePost } from "../src/lib/notion/validate";
@@ -1879,7 +1902,7 @@ async function main(): Promise<void> {
     requireEnv("NOTION_DATABASE_ID"),
   );
 
-  const pages = await queryPublishedPages(client, dataSourceId);
+  const pages = await queryPublishedPages(client, dataSourceId, isPublished);
   const warnings: string[] = [];
   const desired = new Map<string, string>();
   const imageFiles = new Map<string, Uint8Array>();
@@ -2261,6 +2284,19 @@ async function main(): Promise<void> {
   }
 
   const client = createNotionClient(token);
+
+  // Notion names the title property "Name" by default. Look it up by type so
+  // the migration writes to whatever the database actually calls it — matching
+  // how fetch-post.ts reads it back.
+  const dataSource = (await client.request({
+    path: `data_sources/${dataSourceId}`,
+    method: "get",
+  })) as { properties: Record<string, { type: string }> };
+  const titleProp =
+    Object.entries(dataSource.properties).find(
+      ([, property]) => property.type === "title",
+    )?.[0] ?? "Name";
+
   const names = (await fs.readdir(BLOG_DIR)).filter((n) => n.endsWith(".mdx"));
 
   for (const name of names) {
@@ -2274,7 +2310,7 @@ async function main(): Promise<void> {
       body: {
         parent: { type: "data_source_id", data_source_id: dataSourceId },
         properties: {
-          Title: { title: text(String(data.title ?? slug)) },
+          [titleProp]: { title: text(String(data.title ?? slug)) },
           Slug: { rich_text: text(slug) },
           Excerpt: { rich_text: text(String(data.excerpt ?? "")) },
           Tags: {
@@ -2524,16 +2560,20 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Create the Notion database**
 
-Create a database named **Blog** with exactly these properties (names are matched literally by `fetch-post.ts`):
+Create a database named **Blog** with these properties:
 
-| Property | Type |
-| --- | --- |
-| `Title` | Title |
-| `Slug` | Rich text |
-| `Excerpt` | Rich text |
-| `Tags` | Multi-select |
-| `Status` | Status, with a `Published` option |
-| `Published` | Date |
+| Property | Type | Name matters? |
+| --- | --- | --- |
+| *(the title property)* | Title | **No** — found by type, so Notion's default "Name" is fine |
+| `Slug` | Rich text | Yes |
+| `Excerpt` | Rich text | Yes |
+| `Tags` | Multi-select | Yes |
+| `Status` | Status **or** Select, with a `Published` option | Yes (the name; either type works) |
+| `Published` | Date | Yes |
+
+The four names marked "Yes" are matched literally by `fetch-post.ts`. If you
+prefer different names, change them in one place — the property lookups in
+`toPostSource` and `isPublished`.
 
 - [ ] **Step 2: Create the integration and connect it**
 
