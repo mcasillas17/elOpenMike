@@ -117,6 +117,12 @@ refuse anything that has moved:
   the shape the database schema said, and hold exactly the blocks this run has
   written so far and nothing else. Anything else stops the run without another
   write, naming the file and the page;
+- a resumed draft's **date, excerpt and tags** are the post's frontmatter and
+  the migration's to write, so where they have drifted they are put back — in
+  one request, while the page is still a Draft the site cannot see — and the
+  whole page is then read again before the promotion. Its **title** and **slug**
+  are not: those are what say the page is this post at all, so a page carrying
+  somebody else's is refused rather than overwritten;
 - **after the promotion**, everything is read once more. A page that is not
   exactly this post — wrong status, wrong metadata, a block somebody added — is
   **demoted straight back to Draft**, which takes it off the site again, and the

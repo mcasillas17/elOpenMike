@@ -1,9 +1,12 @@
 import type { Client, UpdatePageParameters } from "@notionhq/client";
 import { fetchBlockTree, retrievePage } from "./client";
 import {
+  pageDate,
+  pageExcerpt,
   pageSlug,
   pageStatus,
   pageStatusType,
+  pageTags,
   pageTitle,
 } from "./fetch-post";
 import {
@@ -72,6 +75,9 @@ export function createMigrationExecutor(
         metadata: {
           title: pageTitle(after),
           slug: pageSlug(after),
+          date: pageDate(after),
+          excerpt: pageExcerpt(after),
+          tags: pageTags(after),
           statusType: pageStatusType(after),
         },
         status: pageStatus(after),
@@ -81,6 +87,8 @@ export function createMigrationExecutor(
         blocks,
       };
     },
+
+    updateMetadata: update,
 
     // The last write a page gets on a clean run, and the only one that makes it
     // visible to the sync: everything it holds is already there.

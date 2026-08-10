@@ -180,6 +180,27 @@ would publish to one url, and the file on disk cannot say which page it came
 from. The run stops with `slug "..." is claimed by 2 different Notion pages`
 and writes nothing. Give one of them its own Slug.
 
+## If you edit a draft the migration left behind
+
+The one-time migration into Notion (`pnpm migrate:to-notion`, see the README)
+creates each page as a **Draft** and only promotes it once the whole post has
+landed, so a run that was killed leaves drafts for the next run to finish.
+
+If you edit one of those drafts in the meantime, the next run does not simply
+publish what it finds:
+
+- change its **Excerpt**, **Published** date or **Tags** and the run puts them
+  back to what the file says, while the page is still a Draft. Those three are
+  the post's frontmatter, and the migration is the thing writing them;
+- change its **title** or **Slug** and the run stops and names the page. Those
+  are what say which post the page is, and overwriting them would quietly turn
+  one post's page into another's;
+- write into the **body** and the run stops too, leaving the page exactly as you
+  left it.
+
+Publish the page yourself, give it another slug, or move it to the trash, then
+run the migration again.
+
 ## If Notion answers a listing only halfway
 
 Notion returns long lists a page at a time: `has_more` says another page

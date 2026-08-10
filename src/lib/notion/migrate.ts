@@ -147,6 +147,11 @@ export type PageMetadata = {
   // amount of writing makes it one.
   title: string;
   slug: string;
+  // The post's frontmatter. These are the migration's to write, and so its to
+  // put back when a draft it left behind has been edited since.
+  date: string;
+  excerpt: string;
+  tags: string[];
   // "status" or "select": which of the two property shapes the page's Status
   // is. Notion refuses the value written in the other one, so promoting a page
   // whose shape has changed underneath the run would fail — or, worse, write a
@@ -392,10 +397,13 @@ export function migrationRequests(
       blocks,
       metadata: {
         // Trimmed because that is what fetch-post does when it reads a title
-        // back, and a page can only ever be compared against what it reads
-        // back as.
+        // or an excerpt back, and a page can only ever be compared against
+        // what it reads back as.
         title: post.title.trim(),
         slug: post.slug,
+        date: post.date,
+        excerpt: post.excerpt.trim(),
+        tags: post.tags,
         statusType: "status" in draft ? "status" : "select",
       },
       page: {
@@ -547,6 +555,13 @@ export type MigrationExecutor = {
   // The page exactly as Notion holds it now: metadata, status, trash flag,
   // version either side of the walk, and the whole paginated block tree.
   readPage(pageId: string): Promise<PageState>;
+  // Rewrites the properties this migration is answerable for. Only ever called
+  // while the page is still a Draft, so nothing it writes is ever visible on
+  // the site before it has been checked again.
+  updateMetadata(
+    pageId: string,
+    properties: Record<string, unknown>,
+  ): Promise<void>;
   // Promotes a finished page to Published. The one write that makes a post
   // visible to the sync, and the last one made for it.
   publishPage(pageId: string): Promise<void>;
@@ -564,30 +579,71 @@ export type MigrationProgress = {
 
 export type StateCheck = { ok: true } | { ok: false; reason: string };
 
-// What says a live page is not this post at all. Nothing here is repairable:
-// overwriting a title or a slug is exactly how one post's page becomes
-// another's, and writing a Status in the shape the property is not is refused
-// by the API.
+// The property each piece of repairable metadata is written under. Every one of
+// them is a column docs/authoring.md already documents: the migration adds no
+// column of its own, here or anywhere else.
+const METADATA_PROPERTY = {
+  date: "Published",
+  excerpt: "Excerpt",
+  tags: "Tags",
+} as const;
+
+export type RepairableField = keyof typeof METADATA_PROPERTY;
+
+export type MetadataDivergence = {
+  // Differences that say the page is not this post. Nothing repairs these:
+  // overwriting a title or a slug is exactly how one post's page becomes
+  // another's, and writing a Status into the shape the property is not is
+  // refused by the API.
+  identity: string[];
+  // Differences the migration is answerable for, and puts back while the page
+  // is still a draft the site cannot see.
+  repairable: RepairableField[];
+};
+
+// What a live page's properties say, against what this post's say.
 export function compareMetadata(
   desired: PageMetadata,
   actual: PageMetadata,
-): string[] {
-  const differences: string[] = [];
+): MetadataDivergence {
+  const identity: string[] = [];
 
   if (actual.title !== desired.title) {
-    differences.push(`its title reads "${actual.title}", not "${desired.title}"`);
+    identity.push(`its title reads "${actual.title}", not "${desired.title}"`);
   }
   if (actual.slug !== desired.slug) {
-    differences.push(`its slug reads "${actual.slug}", not "${desired.slug}"`);
+    identity.push(`its slug reads "${actual.slug}", not "${desired.slug}"`);
   }
   if (actual.statusType !== desired.statusType) {
-    differences.push(
+    identity.push(
       `its Status is a ${actual.statusType === "" ? "missing" : actual.statusType} ` +
         `property where the database schema says ${desired.statusType}`,
     );
   }
 
-  return differences;
+  const repairable: RepairableField[] = [];
+  if (actual.date !== desired.date) repairable.push("date");
+  if (actual.excerpt !== desired.excerpt) repairable.push("excerpt");
+  if (JSON.stringify(actual.tags) !== JSON.stringify(desired.tags)) {
+    repairable.push("tags");
+  }
+
+  return { identity, repairable };
+}
+
+// The property payload that puts exactly the named fields back, taken from the
+// create-page request so one description of a post's properties is used
+// everywhere.
+export function metadataRepair(
+  write: MigrationWrite,
+  fields: readonly RepairableField[],
+): Record<string, unknown> {
+  return Object.fromEntries(
+    fields.map((field) => {
+      const name = METADATA_PROPERTY[field];
+      return [name, write.page.properties[name]];
+    }),
+  );
 }
 
 function blockCheck(
@@ -638,10 +694,8 @@ export function checkDraftState(
     };
   }
 
-  const differences = compareMetadata(write.metadata, state.metadata);
-  if (differences.length > 0) {
-    return { ok: false, reason: differences.join("; ") };
-  }
+  const { identity } = compareMetadata(write.metadata, state.metadata);
+  if (identity.length > 0) return { ok: false, reason: identity.join("; ") };
 
   const blocks = blockCheck(write, state, expected, false);
   return blocks === undefined ? { ok: true } : { ok: false, reason: blocks };
@@ -674,7 +728,13 @@ export function checkPublishedState(
     };
   }
 
-  const differences = compareMetadata(write.metadata, state.metadata);
+  // Nothing is repairable here: the page is on the site from this moment on, so
+  // it is either exactly this post or it comes back off.
+  const { identity, repairable } = compareMetadata(write.metadata, state.metadata);
+  const differences = [
+    ...identity,
+    ...repairable.map((field) => `its ${field} is not the post's`),
+  ];
   if (differences.length > 0) {
     return { ok: false, reason: differences.join("; ") };
   }
@@ -759,9 +819,7 @@ async function writePages(
         held += batch.length;
       }
 
-      // The promotion is the write that puts the page on the site, so it goes
-      // out against a page proved whole a single request ago.
-      await proveDraft(write, executor, pageId, held);
+      await agreeOnMetadata(write, executor, pageId, held);
       await executor.publishPage(pageId);
     } catch (error: unknown) {
       throw unfinished(write, pageId, resumed, error);
@@ -799,6 +857,40 @@ async function proveDraft(
     );
   }
   return state;
+}
+
+// The last thing before the promotion. A page carries more than its blocks, and
+// a resumed one has been sitting in the database since the run that made it: its
+// date, excerpt or tags may have moved on, and publishing a page whose
+// properties are not the post's publishes somebody else's frontmatter.
+//
+// Title and slug are not repaired — they are what says the page is this post at
+// all, so a page under another one is refused by proveDraft rather than
+// rewritten, and the same goes for a Status property that has changed shape.
+// Everything else is put back while the page is still a Draft, invisible to the
+// site, and then the whole page is read once more: the promotion goes out
+// against a page proved whole a single request ago, not against one last seen
+// before the repair.
+async function agreeOnMetadata(
+  write: MigrationWrite,
+  executor: MigrationExecutor,
+  pageId: string,
+  held: number,
+): Promise<void> {
+  const state = await proveDraft(write, executor, pageId, held);
+  const { repairable } = compareMetadata(write.metadata, state.metadata);
+  if (repairable.length === 0) return;
+
+  await executor.updateMetadata(pageId, metadataRepair(write, repairable));
+
+  const after = await proveDraft(write, executor, pageId, held);
+  const { repairable: left } = compareMetadata(write.metadata, after.metadata);
+  if (left.length > 0) {
+    throw new Error(
+      `page ${pageId} still disagrees with ${write.file} about its ` +
+        `${left.join(" and ")} after they were rewritten — nothing was published`,
+    );
+  }
 }
 
 // The page is visible to the site from here on, so what it holds is read back

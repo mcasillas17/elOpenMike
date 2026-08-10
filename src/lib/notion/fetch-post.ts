@@ -78,6 +78,21 @@ export function pageSlug(page: PageObject): string {
   return slugify(explicit === "" ? plain(titleProperty(properties)) : explicit);
 }
 
+// The three properties that are a post's frontmatter rather than its identity
+// or its state. Read exactly the way toPostSource reads them, so what the
+// migration compares a page against is what the site would publish from it.
+export function pageExcerpt(page: PageObject): string {
+  return plain((page.properties as Record<string, Property>).Excerpt);
+}
+
+export function pageTags(page: PageObject): string[] {
+  return multiSelect((page.properties as Record<string, Property>).Tags);
+}
+
+export function pageDate(page: PageObject): string {
+  return dateStart((page.properties as Record<string, Property>).Published);
+}
+
 // Maps a Notion page's properties onto post frontmatter. `updated` comes from
 // the page's last_edited_time; no Notion property is needed for it.
 export function toPostSource(page: PageObject, blocks: MdBlock[]): PostSource {
