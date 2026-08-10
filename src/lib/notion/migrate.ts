@@ -294,11 +294,14 @@ function inRange(value: string | undefined, max: number): boolean {
   return value === undefined || Number(value) <= max;
 }
 
-// 60 seconds is a leap second, which ISO-8601 permits; only the day is kept
-// either way, so refusing one would cost an author a real timestamp.
+// ISO-8601 allows a 60th second, but only where a leap second was actually
+// inserted — at 23:59:60 UTC, on a date from a table nothing here has. A `:60`
+// at any other moment is not a time at all, and telling the two apart is not
+// something this can do, so both are refused: the cost is a one-character edit
+// to a value only the day is ever taken from.
 function isRealTimeOfDay(match: RegExpExecArray): boolean {
   const [, , hour, minute, second, zone] = match;
-  if (!inRange(hour, 23) || !inRange(minute, 59) || !inRange(second, 60)) {
+  if (!inRange(hour, 23) || !inRange(minute, 59) || !inRange(second, 59)) {
     return false;
   }
   if (zone === undefined || zone === "Z" || zone === "z") return true;
