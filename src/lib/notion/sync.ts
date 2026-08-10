@@ -4,7 +4,7 @@ import type { ImagePlan } from "./image-plan";
 import { isValidSlug } from "./slug";
 import { planReconcile, type ReconcilePlan } from "./reconcile";
 import { desiredFiles, postPath, postSlug, type RenderedPost } from "./plan";
-import type { MdBlock, PostSource } from "./types";
+import type { MdBlock, PostFailure, PostSource } from "./types";
 
 // One post failing — an image whose signed URL expired mid-run, a host that
 // refuses the fetch — used to reject out of the whole sync, so a single bad
@@ -15,7 +15,7 @@ export type ImageDownloader = (
   url: string,
 ) => Promise<{ bytes: Uint8Array; contentType: string }>;
 
-export type PostFailure = { slug: string; pageId: string; message: string };
+export type { PostFailure };
 
 export type RenderOutcome = {
   rendered: RenderedPost[];
@@ -67,15 +67,20 @@ async function capturePostImages(
 // Renders every post, isolating failures. A post's images are only merged into
 // the shared set once that post has rendered completely, so a half-downloaded
 // post never leaves stray files behind.
+//
+// `priorFailures` carries the posts that never reached rendering — a page that
+// failed revalidation, say — so every way of losing a post ends up in one list
+// and gets the same preserve-or-skip treatment from planSync().
 export async function renderPosts(
   sources: PostSource[],
   download: ImageDownloader,
+  priorFailures: PostFailure[] = [],
 ): Promise<RenderOutcome> {
   const outcome: RenderOutcome = {
     rendered: [],
     images: new Map(),
     warnings: [],
-    failures: [],
+    failures: [...priorFailures],
   };
 
   for (const post of sources) {

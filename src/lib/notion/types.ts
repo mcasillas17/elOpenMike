@@ -9,3 +9,7 @@ export type MdBlock = NotionBlock & { children: MdBlock[] };
 export type PostFrontmatter = { title: string; date: string; excerpt: string; tags: string[]; updated: string; };
 // Published source metadata is the canonical package emitted for MDX generation.
 export type PostSource = { pageId: string; slug: string; frontmatter: PostFrontmatter; blocks: MdBlock[]; };
+// One post that could not be published this run. Every stage that can drop a
+// single post — fetching, revalidating, rendering — reports it in this shape so
+// they all land in the same preserve/skip handling.
+export type PostFailure = { slug: string; pageId: string; message: string };

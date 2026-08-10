@@ -5,8 +5,9 @@ import {
   resolveDataSourceId,
   queryPublishedPages,
   fetchBlockTree,
+  retrievePage,
 } from "../src/lib/notion/client";
-import { toPostSource, isPublished, pageSlug } from "../src/lib/notion/fetch-post";
+import { isPublished, pageSlug } from "../src/lib/notion/fetch-post";
 import { validatePosts, validateSourceSlugs } from "../src/lib/notion/validate";
 import { postPath, massDeleteError } from "../src/lib/notion/plan";
 import { downloadImage } from "../src/lib/notion/images";
@@ -15,7 +16,7 @@ import {
   readImageFiles,
   applyImagePlan,
 } from "../src/lib/notion/image-plan";
-import { mapWithConcurrency } from "../src/lib/notion/pool";
+import { collectSources } from "../src/lib/notion/collect";
 import {
   renderPosts,
   planSync,
@@ -113,18 +114,25 @@ async function main(): Promise<void> {
 
   // Bounded fan-out: Notion allows ~3 requests/second per integration, so a
   // Promise.all over every page would burst straight into 429s (see pool.ts).
+  // Each page's metadata is read again once its blocks are in hand, because the
+  // page could have been unpublished or rewritten in between (see collect.ts).
   // Stable ordering keeps logs and any downstream diff deterministic.
-  const sources = (
-    await mapWithConcurrency(pages, async (page) =>
-      toPostSource(page, await fetchBlockTree(client, page.id)),
-    )
-  ).sort((a, b) =>
+  const collected = await collectSources(pages, {
+    fetchBlocks: (pageId) => fetchBlockTree(client, pageId),
+    retrievePage: (pageId) => retrievePage(client, pageId),
+  });
+
+  const sources = collected.sources.sort((a, b) =>
     a.frontmatter.date === b.frontmatter.date
       ? a.slug.localeCompare(b.slug)
       : b.frontmatter.date.localeCompare(a.frontmatter.date),
   );
 
-  const outcome = await renderPosts(sources, (url) => downloadImage(url));
+  const outcome = await renderPosts(
+    sources,
+    (url) => downloadImage(url),
+    collected.failures,
+  );
 
   const errors = validatePosts(outcome.rendered);
   if (errors.length > 0) {

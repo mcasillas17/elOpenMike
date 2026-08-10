@@ -9,6 +9,10 @@ export const NOTION_VERSION = "2026-03-11";
 export type PageObject = {
   id: string;
   last_edited_time: string;
+  // `archived` is the legacy flag and `in_trash` its replacement; both are read
+  // so a trashed page is recognized whichever one the API version returns.
+  archived?: boolean;
+  in_trash?: boolean;
   properties: Record<string, unknown>;
 };
 
@@ -46,13 +50,36 @@ function asPageObject(result: { id: string }): PageObject | undefined {
   const page = result as {
     id: string;
     last_edited_time: string;
+    archived?: boolean;
+    in_trash?: boolean;
     properties: Record<string, unknown>;
   };
   return {
     id: page.id,
     last_edited_time: page.last_edited_time,
+    archived: page.archived,
+    in_trash: page.in_trash,
     properties: page.properties,
   };
+}
+
+// Reads a single page's current metadata. Used to revalidate the snapshot the
+// query returned once the page's blocks have been fetched (see collect.ts), so
+// it goes through the same 429 retry as every other call.
+export async function retrievePage(
+  client: Client,
+  pageId: string,
+): Promise<PageObject> {
+  const result = await withRetry(() =>
+    client.pages.retrieve({ page_id: pageId }),
+  );
+  const page = asPageObject(result);
+  if (!page) {
+    throw new Error(
+      `page ${pageId} returned no properties — the integration may have lost access to it`,
+    );
+  }
+  return page;
 }
 
 // Deliberately queries WITHOUT a server-side status filter, then filters in

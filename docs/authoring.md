@@ -142,6 +142,22 @@ and then failed is indistinguishable from a post you unpublished — and one of
 those two readings deletes live content. Unpublishing therefore takes effect on
 the next run in which every post syncs cleanly.
 
+## If a post changes mid-sync
+
+A sync reads the list of published pages first and each page's body afterwards,
+so a post can be unpublished or rewritten in the seconds between the two. Every
+page's Status and version are therefore read a second time once its body has
+loaded, and the post is only published if it is still **Published**, still out
+of the trash, and still reports the same last-edited timestamp. Otherwise it is
+reported like any other per-post failure — the file already on disk is left
+alone and nothing new is published for it.
+
+Notion has no way to say "read this page as of the version I already saw", so
+the check narrows the window rather than closing it: an edit that lands after
+that second read is picked up by the next run, about ten minutes later. What it
+does guarantee is that a body is never published on the strength of a status
+read before the body was fetched.
+
 ## If two posts share a slug
 
 Two published pages with the same **Slug** (or, with no Slug, the same title)
