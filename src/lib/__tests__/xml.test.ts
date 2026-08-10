@@ -86,7 +86,20 @@ describe("escapeXml", () => {
     expect(escapeXml("a\ud800<b")).toBe("a&lt;b");
   });
 
-  it("keeps tab, newline and carriage return", () => {
-    expect(escapeXml("a\tb\nc\rd")).toBe("a\tb\nc\rd");
+  // A parser normalizes a literal carriage return to a line feed before the
+  // document is read (XML 1.0 §2.11), so the only way to keep one is to write
+  // it as a reference — which is not a line ending in the source at all.
+  it("keeps tab and newline literal, and a carriage return as a reference", () => {
+    expect(escapeXml("a\tb\nc\rd")).toBe("a\tb\nc&#13;d");
+  });
+
+  it("keeps a CRLF pair intact through a parse", () => {
+    const document = new DOMParser().parseFromString(
+      `<r><t>${escapeXml("a\r\nb")}</t></r>`,
+      "application/xml",
+    );
+
+    expect(document.querySelector("parsererror")).toBeNull();
+    expect(document.querySelector("t")?.textContent).toBe("a\r\nb");
   });
 });

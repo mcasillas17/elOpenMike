@@ -71,6 +71,13 @@ const ENTITIES: Record<string, string> = {
   ">": "&gt;",
   '"': "&quot;",
   "'": "&apos;",
+  // XML 1.0 §2.11: a parser normalizes every literal carriage return in the
+  // document to a line feed before anything else sees it, so a CR written
+  // literally is a CR the reader never receives. Written as a reference it is
+  // not a line ending in the source at all, and survives the parse as the
+  // character the author typed. This is the one escape that is about keeping a
+  // character rather than about defusing one.
+  "\r": "&#13;",
 };
 
 // Text as it may appear inside an element or an attribute: repaired, then
@@ -79,7 +86,7 @@ const ENTITIES: Record<string, string> = {
 // titles they came from.
 export function escapeXml(value: string): string {
   return sanitizeXmlText(value).replace(
-    /[&<>"']/g,
+    /[&<>"'\r]/g,
     (character) => ENTITIES[character],
   );
 }
