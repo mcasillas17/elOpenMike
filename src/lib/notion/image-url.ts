@@ -1,4 +1,5 @@
 import { lookup } from "node:dns/promises";
+import { redactUrl } from "./safe-url";
 
 // The sync fetches whatever URL a Notion image block carries. Without a policy
 // that is a server-side request forgery primitive: an `external` image block
@@ -6,6 +7,11 @@ import { lookup } from "node:dns/promises";
 // (or a maintainer's laptop) fetch cloud instance metadata and commit the
 // response into the repo as an "image". Every URL therefore has to clear this
 // module before any bytes are read, and every redirect hop has to clear it too.
+
+// How a url is written into a message lives in one module for the whole sync;
+// re-exported because every error below already reads redactUrl(...) at the end
+// of a sentence about a fetch.
+export { redactUrl };
 
 export type AddressResolver = (hostname: string) => Promise<string[]>;
 
@@ -35,18 +41,6 @@ export const ALLOWED_IMAGE_HOST_SUFFIXES: readonly string[] = [
 
 const HTTPS_PORTS = new Set(["", "443"]);
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-
-// Notion's file URLs are pre-signed S3 links whose query string carries
-// X-Amz-Signature and X-Amz-Security-Token. The sync's errors are printed to a
-// public Actions log, so only the location — never the credentials — is shown.
-export function redactUrl(url: string | URL): string {
-  try {
-    const parsed = typeof url === "string" ? new URL(url) : url;
-    return `${parsed.origin}${parsed.pathname}`;
-  } catch {
-    return "<unparseable url>";
-  }
-}
 
 function ipv4Octets(address: string): number[] | undefined {
   const match = IPV4.exec(address);

@@ -90,6 +90,14 @@ content disappears silently:
 Sub-pages nested under a post are also skipped, which makes them a safe place
 for outlines and research notes.
 
+Every one of those warnings names the block it came from — its type and its
+Notion block id — because the sync's log is public and a warning about a
+block's *content* deliberately says nothing about that content. A link the
+converter refuses (`javascript:`, `data:`, and anything else that runs code
+rather than going somewhere) is reported by its scheme alone: not its host, its
+path, its query or its fragment, any of which can carry a token somebody pasted
+into a link. The link is kept in the post as plain text; only the log is quiet.
+
 ## Images
 
 Upload images into the page (`/image`, or paste from the camera roll) rather

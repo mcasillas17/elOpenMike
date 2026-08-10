@@ -108,19 +108,17 @@ describe("renderPosts", () => {
 
   it("records warnings per slug, and none for a failed post", async () => {
     const { download } = downloader();
+    const unsupported = block("unsupported_block", {});
     const outcome = await renderPosts(
       [
-        source("fine", [block("unsupported_block", {})]),
-        source("broken", [
-          block("unsupported_block", {}),
-          imageBlock("https://img/fail.png"),
-        ]),
+        source("fine", [unsupported]),
+        source("broken", [unsupported, imageBlock("https://img/fail.png")]),
       ],
       download,
     );
 
     expect(outcome.warnings).toEqual([
-      "fine: skipped unsupported block: unsupported_block",
+      `fine: unsupported_block block ${unsupported.id}: skipped unsupported block`,
     ]);
   });
 

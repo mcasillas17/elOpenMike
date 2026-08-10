@@ -221,6 +221,10 @@ describe("a link destination compiled through the MDX pipeline", () => {
 
     const bookmarked = bookmark("javascript:alert(1)");
     expect(await renderMdx(bookmarked).then((c) => c.querySelector("a"))).toBeNull();
-    expect(warnings.join("\n")).toContain("javascript:alert(1)");
+
+    // Warned about by scheme and by the block it was in — never by the url,
+    // which goes to a public Actions log. See safe-url.ts.
+    expect(warnings.join("\n")).toContain('scheme "javascript:"');
+    expect(warnings.join("\n")).not.toContain("alert(1)");
   });
 });

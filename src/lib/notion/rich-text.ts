@@ -2,6 +2,7 @@ import type { Annotations, RichText } from "./types";
 import { inlineCode } from "./code-span";
 import { endsAtLineStart, escapeMarkdown } from "./escape";
 import { markdownDestination } from "./link-destination";
+import { describeUrlSafely } from "./safe-url";
 import {
   classifyCharacter,
   firstCharacter,
@@ -131,7 +132,12 @@ function renderGroup(
   const destination =
     typeof href === "string" ? markdownDestination(href) : undefined;
   if (typeof href === "string" && destination === undefined) {
-    onWarning?.(`dropped a link to an unsupported url: ${href}`);
+    // The url is not repeated. These warnings are printed to a public Actions
+    // log, and a link the converter refuses is by definition an odd one — a
+    // `javascript:` url carrying a token, a preview link with a key in its
+    // query. What is worth saying is the kind of url it was; which block it was
+    // in is added by the caller. See safe-url.ts.
+    onWarning?.(`dropped a link to an unsupported url (${describeUrlSafely(href)})`);
   }
   const insideLink = destination !== undefined;
   const emphasised = bold || italic || strikethrough || underline;

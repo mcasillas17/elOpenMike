@@ -174,16 +174,21 @@ describe("blocksToMarkdown", () => {
 
   it("warns for unsupported blocks and flattens toggle summaries with children", () => {
     const warnings: string[] = [];
+    const skipped = block("breadcrumb", {});
 
     expect(
       blocksToMarkdown(
         [
-          block("breadcrumb", {}),
+          skipped,
           block("toggle", { rich_text: [rt("More")] }, [block("paragraph", { rich_text: [rt("Child")] })]),
         ],
         ctx({ onWarning: (message) => warnings.push(message) }),
       ),
     ).toBe("More\n\nChild\n");
-    expect(warnings).toEqual(["skipped unsupported block: breadcrumb"]);
+    // Every warning names the block it came from, because the ones about a
+    // block's content cannot name the url that caused them. See safe-url.ts.
+    expect(warnings).toEqual([
+      `breadcrumb block ${skipped.id}: skipped unsupported block`,
+    ]);
   });
 });
