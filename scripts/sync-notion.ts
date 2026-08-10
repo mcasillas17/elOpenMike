@@ -8,23 +8,25 @@ import {
 } from "../src/lib/notion/client";
 import { toPostSource, isPublished } from "../src/lib/notion/fetch-post";
 import { blocksToMarkdown } from "../src/lib/notion/blocks-to-md";
-import {
-  serializePost,
-  contentProjection,
-  resolveUpdated,
-} from "../src/lib/notion/serialize";
 import { validatePosts, type ValidatablePost } from "../src/lib/notion/validate";
-import { planReconcile } from "../src/lib/notion/reconcile";
+import {
+  planFiles,
+  postPath,
+  massDeleteError,
+  type RenderedPost,
+} from "../src/lib/notion/plan";
 import {
   downloadImage,
   imageFileName,
   imageDir,
 } from "../src/lib/notion/images";
+import { isValidSlug } from "../src/lib/notion/slug";
 import type { MdBlock, PostSource } from "../src/lib/notion/types";
 
 const ROOT = process.cwd();
 const BLOG_DIR = path.join(ROOT, "content", "blog");
 const CHECK_ONLY = process.argv.includes("--check");
+const ALLOW_MASS_DELETE = process.argv.includes("--allow-mass-delete");
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -75,17 +77,12 @@ async function readExisting(dir: string): Promise<Map<string, string>> {
   for (const name of names) {
     if (name.endsWith(".mdx")) {
       existing.set(
-        path.join("content", "blog", name),
+        postPath(name.replace(/\.mdx$/, "")),
         await fs.readFile(path.join(dir, name), "utf8"),
       );
     }
   }
   return existing;
-}
-
-function existingUpdated(mdx: string | undefined): string | undefined {
-  const line = mdx?.split("\n").find((l) => l.startsWith("updated: "));
-  return line?.slice('updated: "'.length, -1);
 }
 
 async function main(): Promise<void> {
@@ -97,7 +94,7 @@ async function main(): Promise<void> {
 
   const pages = await queryPublishedPages(client, dataSourceId, isPublished);
   const warnings: string[] = [];
-  const desired = new Map<string, string>();
+  const rendered: RenderedPost[] = [];
   const imageFiles = new Map<string, Uint8Array>();
   const validatable: ValidatablePost[] = [];
 
@@ -125,20 +122,7 @@ async function main(): Promise<void> {
       onWarning: (message) => warnings.push(`${post.slug}: ${message}`),
     });
 
-    const filePath = path.join("content", "blog", `${post.slug}.mdx`);
-    const onDisk = existing.get(filePath);
-    const candidate = serializePost(post.frontmatter, body);
-
-    // Notion's last_edited_time moves whenever a page is opened. Only adopt the
-    // new value when the content itself changed (spec §7).
-    const unchanged =
-      onDisk !== undefined &&
-      contentProjection(candidate) === contentProjection(onDisk);
-    const updated = unchanged
-      ? resolveUpdated(post.frontmatter.updated, existingUpdated(onDisk))
-      : post.frontmatter.updated;
-
-    desired.set(filePath, serializePost({ ...post.frontmatter, updated }, body));
+    rendered.push({ slug: post.slug, frontmatter: post.frontmatter, body });
     validatable.push({ slug: post.slug, frontmatter: post.frontmatter, body });
   }
 
@@ -153,7 +137,16 @@ async function main(): Promise<void> {
 
   for (const warning of warnings) console.warn(`  warning: ${warning}`);
 
-  const plan = planReconcile(desired, existing);
+  const { desired, plan } = planFiles(rendered, existing);
+
+  // Fail closed on a run that would remove most of the blog — see plan.ts.
+  const massDelete = ALLOW_MASS_DELETE
+    ? undefined
+    : massDeleteError(plan, existing.size);
+  if (massDelete) {
+    console.error(`\n\u2717 ${massDelete}`);
+    process.exit(1);
+  }
 
   if (CHECK_ONLY) {
     const dirty = plan.write.length + plan.delete.length;
@@ -171,7 +164,12 @@ async function main(): Promise<void> {
   }
   for (const file of plan.delete) {
     await fs.rm(path.join(ROOT, file), { force: true });
-    await fs.rm(path.join(ROOT, imageDir(path.basename(file, ".mdx"))), {
+    // Only a real slug may reach a recursive delete: path.basename turns
+    // "..mdx" into "." and "...mdx" into "..", which would resolve to
+    // public/images/blog or public/images and remove every site image.
+    const slug = path.basename(file, ".mdx");
+    if (!isValidSlug(slug)) continue;
+    await fs.rm(path.join(ROOT, imageDir(slug)), {
       recursive: true,
       force: true,
     });

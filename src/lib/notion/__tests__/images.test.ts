@@ -97,9 +97,10 @@ describe("downloadImage error redaction", () => {
     const fake = async () => new Response("nope", { status: 403 });
     await expect(
       downloadImage(signed, fake as typeof fetch),
-    ).rejects.toSatisfy((error: Error) => {
-      expectRedacted(error.message);
-      return error.message.includes("403");
+    ).rejects.toSatisfy((error: unknown) => {
+      const message = (error as Error).message;
+      expectRedacted(message);
+      return message.includes("403");
     });
   });
 
@@ -110,9 +111,10 @@ describe("downloadImage error redaction", () => {
       });
     await expect(
       downloadImage(signed, fake as typeof fetch),
-    ).rejects.toSatisfy((error: Error) => {
-      expectRedacted(error.message);
-      return /too large/i.test(error.message);
+    ).rejects.toSatisfy((error: unknown) => {
+      const message = (error as Error).message;
+      expectRedacted(message);
+      return /too large/i.test(message);
     });
   });
 });
