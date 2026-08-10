@@ -13,7 +13,15 @@ pnpm install
 pnpm dev          # http://localhost:3000
 pnpm test         # run unit/component tests
 pnpm run build    # production build
+pnpm start        # serve the production build the way the container does
+pnpm e2e          # Playwright, against that same server
 ```
+
+`pnpm start` runs `.next/standalone/server.js` — the artifact the `Dockerfile`
+builds and Fly runs — after staging `public` and `.next/static` beside it
+exactly as the `Dockerfile` does. (`next start` does not work under
+`output: "standalone"` and says so.) It builds first if there is nothing to
+serve, so `pnpm e2e` works from a clean checkout.
 
 ## Environment variables
 
