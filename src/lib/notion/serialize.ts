@@ -1,4 +1,5 @@
 import type { PostFrontmatter } from "./types";
+import { isValidDate } from "./validate";
 
 // Frontmatter key order is fixed so identical content always serializes to
 // identical bytes — a prerequisite for the sync being idempotent (spec §7).
@@ -93,9 +94,16 @@ export function contentProjection(mdx: string): string {
 
 // Preserve the on-disk `updated` when nothing about the content changed;
 // otherwise adopt the new timestamp.
+//
+// The on-disk value is only preserved if it is a date. It comes out of a file
+// anyone can edit, and it is published as the sitemap's <lastmod> and the
+// article's dateModified — so a value that is not a day would be handed to a
+// crawler and, since the content still matches, carried over again every run
+// after that. The value from Notion is always a real day, and is the answer
+// when the file's is not.
 export function resolveUpdated(
   next: string,
   existing: string | undefined,
 ): string {
-  return existing ?? next;
+  return existing !== undefined && isValidDate(existing) ? existing : next;
 }

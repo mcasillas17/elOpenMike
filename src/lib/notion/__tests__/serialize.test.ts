@@ -78,6 +78,18 @@ describe("resolveUpdated", () => {
   it("uses the new value when there is no existing file", () => {
     expect(resolveUpdated("2026-08-03", undefined)).toBe("2026-08-03");
   });
+
+  // The value carried over is whatever the file on disk says, and a file can be
+  // hand-edited. `updated` is published as the sitemap's <lastmod> and the
+  // article's dateModified, so one that is not a date is one a crawler is
+  // handed — and, because the content matches, it is preserved every run after
+  // that too. The sync's own value is a real day, so it is the safe answer.
+  it.each(["", "  ", "yesterday", "2026-13-01", "2026-02-31", "2026-8-3"])(
+    "refuses to carry over %s and uses Notion's day instead",
+    (existing) => {
+      expect(resolveUpdated("2026-08-03", existing)).toBe("2026-08-03");
+    },
+  );
 });
 
 // gray-matter splits the frontmatter block on a literal `---` line before YAML
