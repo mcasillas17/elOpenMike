@@ -2,8 +2,6 @@ import type { Annotations, RichText } from "./types";
 import { inlineCodeSpan } from "./code-span";
 import { endsAtLineStart, escapeMarkdown } from "./escape";
 import {
-  afterOpeningRun,
-  beforeClosingRun,
   classifyCharacter,
   firstCharacter,
   lastCharacter,
@@ -165,8 +163,20 @@ function renderGroup(
   }
 
   const { lead, core, trail } = splitEdgeWhitespace(inner);
+  const layers = delimiterLayers(annotations);
   const wrapped = wrapDelimiters(core, annotations);
-  const marker = bold || italic ? "*" : "~";
+  const marker = layers[0][0];
+  // What the outermost delimiter run actually touches on the inside. Delimiter
+  // runs are maximal, so the `**` of bold and the `*` of italic written back to
+  // back are one run of three, and what it touches is the first layer written
+  // with another character — or the text itself. Read from the structure rather
+  // than scanned back off `wrapped`, where a trailing `\*` the escaper wrote is
+  // indistinguishable from a delimiter of our own.
+  let outermost = 0;
+  while (outermost < layers.length && layers[outermost][0] === marker) {
+    outermost += 1;
+  }
+  const inside = layers[outermost] ?? core;
   const withElements = `${lead}${wrapElements(core, annotations)}${trail}`;
   const withDelimiters = `${lead}${wrapped}${trail}`;
 
@@ -180,11 +190,11 @@ function renderGroup(
       openNeedsPunctuation:
         !insideLink &&
         lead === "" &&
-        needsPunctuationOpposite(afterOpeningRun(wrapped, marker)),
+        needsPunctuationOpposite(firstCharacter(inside), marker),
       closeNeedsPunctuation:
         !insideLink &&
         trail === "" &&
-        needsPunctuationOpposite(beforeClosingRun(wrapped, marker)),
+        needsPunctuationOpposite(lastCharacter(inside), marker),
       opensFlush: !insideLink && lead === "",
       closesFlush: !insideLink && trail === "",
       opensLink: insideLink,
@@ -207,13 +217,22 @@ function plainSegment(markdown: string, opensLink: boolean): Segment {
 }
 
 // Strikethrough sits innermost and bold outermost, so code, strike and italic
-// all stay inside whatever wraps them — and inside a link's anchor text.
+// all stay inside whatever wraps them — and inside a link's anchor text. The
+// layers are listed outermost first, because only the outermost run of the
+// group ever touches a neighbouring one.
+function delimiterLayers(annotations: Annotations): string[] {
+  const layers: string[] = [];
+  if (annotations.bold) layers.push("**");
+  if (annotations.italic) layers.push("*");
+  if (annotations.strikethrough) layers.push("~~");
+  return layers;
+}
+
 function wrapDelimiters(core: string, annotations: Annotations): string {
-  let wrapped = core;
-  if (annotations.strikethrough) wrapped = `~~${wrapped}~~`;
-  if (annotations.italic) wrapped = `*${wrapped}*`;
-  if (annotations.bold) wrapped = `**${wrapped}**`;
-  return wrapped;
+  return delimiterLayers(annotations).reduceRight(
+    (wrapped, layer) => `${layer}${wrapped}${layer}`,
+    core,
+  );
 }
 
 // The same nesting, in the elements the delimiters stand for. MDX reads these

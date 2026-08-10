@@ -127,6 +127,63 @@ describe("punctuation at the edge of an annotated run", () => {
   });
 });
 
+// `*`, `_` and `~` are attention markers, so a `*` run touching one of them may
+// still open or close. GFM strikethrough is tokenized by an extension that
+// never consults that set, so a `~~` run touching a literal `*` is a `~~` run
+// touching punctuation and nothing more — the exemption is the asterisk's, not
+// the tilde's.
+describe("a marker the run beside it gets no exemption from", () => {
+  const LITERAL_MARKERS = ["*", "_", "~"] as const;
+
+  for (const marker of LITERAL_MARKERS) {
+    it(`neutralises the neighbour of a struck run edged with ${marker}`, () => {
+      expect(
+        source([`${marker}x${marker}`, { strikethrough: true }], ["after"]),
+      ).toBe(`~~\\${marker}x\\${marker}~~&#97;fter`);
+      expect(
+        source(["before"], [`${marker}x${marker}`, { strikethrough: true }]),
+      ).toBe(`befor&#101;~~\\${marker}x\\${marker}~~`);
+    });
+
+    it(`still needs the escape's backslash covered for a bold run edged with ${marker}`, () => {
+      // The closing side needs nothing: the escaped `${marker}` beside it is an
+      // attention marker, which a `*` run may touch. The opening side is a
+      // different character — the backslash the escaper wrote — and that one
+      // flanks nothing on its own.
+      expect(source([`${marker}x${marker}`, { bold: true }], ["after"])).toBe(
+        `**\\${marker}x\\${marker}**after`,
+      );
+      expect(source(["before"], [`${marker}x${marker}`, { bold: true }])).toBe(
+        `befor&#101;**\\${marker}x\\${marker}**`,
+      );
+    });
+  }
+
+  it("renders each of them as the annotation Notion recorded", async () => {
+    for (const marker of LITERAL_MARKERS) {
+      const struck = await renderMdx(
+        paragraph(
+          ["before"],
+          [`${marker}x${marker}`, { strikethrough: true }],
+          ["after"],
+        ),
+      );
+      expect(struck.querySelector("del")?.textContent).toBe(
+        `${marker}x${marker}`,
+      );
+      expect(struck.textContent).toBe(`before${marker}x${marker}after`);
+
+      const bold = await renderMdx(
+        paragraph(["before"], [`${marker}x${marker}`, { bold: true }], ["after"]),
+      );
+      expect(bold.querySelector("strong")?.textContent).toBe(
+        `${marker}x${marker}`,
+      );
+      expect(bold.textContent).toBe(`before${marker}x${marker}after`);
+    }
+  });
+});
+
 describe("code spans keep their own padding rules", () => {
   it("pads only where CommonMark would strip or swallow", () => {
     expect(richTextToMarkdown([rt("useState", { code: true })])).toBe(
@@ -220,6 +277,9 @@ const TEXTS = [
   "(parens)",
   "e.g.",
   "50%",
+  "*star*",
+  "_under_",
+  "~tilde~",
 ];
 
 const TAG_OF_MARK = {

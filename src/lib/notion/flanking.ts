@@ -25,10 +25,17 @@ const WHITESPACE = /\s/u;
 // CommonMark counts every Unicode punctuation *and* symbol as punctuation.
 const PUNCTUATION = /\p{P}|\p{S}/u;
 
-// The characters a delimiter run may touch whatever sits opposite it, because
-// they are themselves emphasis markers: `*` and `_` from CommonMark, `~` from
-// GFM's strikethrough. A wrapper nested inside another one ends up beside
-// exactly these, which is what lets `**~~a~~**` stand as it is.
+// The characters a `*` or `_` delimiter run may touch whatever sits opposite
+// it, because they are themselves attention markers: `*` and `_` from
+// CommonMark, `~` added by GFM's strikethrough. A wrapper nested inside another
+// one ends up beside exactly these, which is what lets `**~~a~~**` stand as it
+// is.
+//
+// The exemption belongs to the marker being written, not to the character it
+// touches. Strikethrough is tokenized by an extension of its own
+// (micromark-extension-gfm-strikethrough) which never consults the marker set,
+// so a `~~` run beside a literal `*` is a run beside punctuation and nothing
+// more — which is why `~~\*x\*~~a` used to come out as four literal tildes.
 const ATTENTION_MARKERS = new Set(["*", "_", "~"]);
 
 export function classifyCharacter(char: string | undefined): CharacterGroup {
@@ -36,14 +43,16 @@ export function classifyCharacter(char: string | undefined): CharacterGroup {
   return PUNCTUATION.test(char) ? "punctuation" : "other";
 }
 
-// True when a delimiter run sitting beside this character can only flank if the
-// character on its far side is whitespace or punctuation.
-export function needsPunctuationOpposite(char: string | undefined): boolean {
-  return (
-    char !== undefined &&
-    classifyCharacter(char) === "punctuation" &&
-    !ATTENTION_MARKERS.has(char)
-  );
+// True when a delimiter run of `marker` sitting beside this character can only
+// flank if the character on its far side is whitespace or punctuation.
+export function needsPunctuationOpposite(
+  char: string | undefined,
+  marker: string,
+): boolean {
+  if (char === undefined || classifyCharacter(char) !== "punctuation") {
+    return false;
+  }
+  return marker === "~" || !ATTENTION_MARKERS.has(char);
 }
 
 // The same character, written so Markdown reads punctuation where the reader
@@ -77,28 +86,6 @@ export function splitEdgeWhitespace(text: string): EdgeWhitespace {
     core: characters.slice(start, end).join(""),
     trail: characters.slice(end).join(""),
   };
-}
-
-// The character a generated delimiter run opens against: whatever follows the
-// run, which for a wrapper nested inside another one is the inner marker.
-export function afterOpeningRun(
-  wrapped: string,
-  marker: string,
-): string | undefined {
-  const characters = [...wrapped];
-  let index = 0;
-  while (index < characters.length && characters[index] === marker) index += 1;
-  return characters[index];
-}
-
-export function beforeClosingRun(
-  wrapped: string,
-  marker: string,
-): string | undefined {
-  const characters = [...wrapped];
-  let index = characters.length - 1;
-  while (index >= 0 && characters[index] === marker) index -= 1;
-  return characters[index];
 }
 
 export function firstCharacter(text: string): string | undefined {
