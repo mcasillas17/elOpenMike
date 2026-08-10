@@ -36,16 +36,19 @@ const HEADING_MARKERS = {
 } as const;
 
 type RenderOptions = {
-  depth: number;
+  // The exact column every line of this block starts at. Carried as a string
+  // rather than a depth because a list item's children line up with the width
+  // of its own marker, which "1." and "10." do not share with "-".
+  indent: string;
   numberedOrdinal?: number;
 };
 
 export function blocksToMarkdown(blocks: MdBlock[], context: BlocksToMarkdownContext): string {
-  const body = renderSequence(blocks, context, 0, "\n\n");
+  const body = renderSequence(blocks, context, "", "\n\n");
   return body === "" ? "" : `${body}\n`;
 }
 
-function renderSequence(blocks: MdBlock[], context: BlocksToMarkdownContext, depth: number, separator: string): string {
+function renderSequence(blocks: MdBlock[], context: BlocksToMarkdownContext, indent: string, separator: string): string {
   const chunks: string[] = [];
   let numberedOrdinal = 0;
   let previousRenderedType: string | undefined;
@@ -55,7 +58,7 @@ function renderSequence(blocks: MdBlock[], context: BlocksToMarkdownContext, dep
     const isNumbered = block.type === "numbered_list_item";
     const candidateOrdinal = isNumbered && previousRenderedType === "numbered_list_item" ? numberedOrdinal + 1 : isNumbered ? 1 : 0;
 
-    let rendered = renderBlock(block, context, { depth, numberedOrdinal: isNumbered ? candidateOrdinal : undefined });
+    let rendered = renderBlock(block, context, { indent, numberedOrdinal: isNumbered ? candidateOrdinal : undefined });
     if (rendered === "") {
       if (!isListType(block.type)) {
         numberedOrdinal = 0;
@@ -64,8 +67,8 @@ function renderSequence(blocks: MdBlock[], context: BlocksToMarkdownContext, dep
       }
       continue;
     }
-    if (depth > 0 && !isListType(block.type)) {
-      rendered = indentBlock(rendered, "  ".repeat(depth));
+    if (indent !== "" && !isListType(block.type)) {
+      rendered = indentBlock(rendered, indent);
     }
     numberedOrdinal = candidateOrdinal;
     previousRenderedType = block.type;
@@ -99,11 +102,15 @@ function renderBlock(block: MdBlock, context: BlocksToMarkdownContext, options: 
     case "divider":
       return "---";
     case "bulleted_list_item":
-      return renderListItem("-", data.rich_text, block.children, context, options.depth);
-    case "numbered_list_item":
-      return renderListItem(`${options.numberedOrdinal ?? 1}.`, data.rich_text, block.children, context, options.depth);
+      return renderListItem("-", "-", data.rich_text, block.children, context, options.indent);
+    case "numbered_list_item": {
+      const ordinal = `${options.numberedOrdinal ?? 1}.`;
+      return renderListItem(ordinal, ordinal, data.rich_text, block.children, context, options.indent);
+    }
     case "to_do":
-      return renderListItem(data.checked === true ? "- [x]" : "- [ ]", data.rich_text, block.children, context, options.depth);
+      // GFM's checkbox is part of the item's content, not its marker, so a task
+      // item's content column is the same as a plain bullet's.
+      return renderListItem(data.checked === true ? "- [x]" : "- [ ]", "-", data.rich_text, block.children, context, options.indent);
     case "code":
       return renderCode(data);
     case "image":
@@ -130,7 +137,7 @@ function renderHeading(marker: string, value: unknown): string {
 
 function renderQuote(value: unknown, children: MdBlock[], context: BlocksToMarkdownContext): string {
   const text = renderRichText(value);
-  const renderedChildren = renderSequence(children, context, 0, "\n\n");
+  const renderedChildren = renderSequence(children, context, "", "\n\n");
   const content = [isBlank(text) ? "" : text, renderedChildren].filter(Boolean).join("\n\n");
   return isBlank(content) ? "" : renderBlockquote(content);
 }
@@ -139,27 +146,33 @@ function renderCallout(data: Record<string, unknown>, children: MdBlock[], conte
   const text = renderRichText(data.rich_text);
   const emoji = readEmoji(data.icon);
   const summary = [emoji, text].filter(Boolean).join(" ");
-  const renderedChildren = renderSequence(children, context, 0, "\n\n");
+  const renderedChildren = renderSequence(children, context, "", "\n\n");
   const content = [isBlank(summary) ? "" : summary, renderedChildren].filter(Boolean).join("\n\n");
   return isBlank(content) ? "" : renderBlockquote(content);
 }
 
 function renderListItem(
+  prefix: string,
   marker: string,
   value: unknown,
   children: MdBlock[],
   context: BlocksToMarkdownContext,
-  depth: number,
+  indent: string,
 ): string {
   const text = renderRichText(value);
   if (isBlank(text) && children.length === 0) {
     return "";
   }
 
-  // Two spaces per depth keeps nested markers valid in GFM without changing top-level list shape.
-  const indent = "  ".repeat(depth);
-  const ownLine = `${indent}${marker}${isBlank(text) ? "" : ` ${text}`}`;
-  const childLines = renderSequence(children, context, depth + 1, "\n");
+  // CommonMark: a list item's content column is the width of its marker plus
+  // the space after it, and everything belonging to the item has to start
+  // there. Two spaces are right under "-" and one short under "1.", where the
+  // parser reads a shallower line as the end of the item and opens a sibling
+  // list instead of a nested one. Deriving the indent from the marker keeps
+  // bullets where they were and follows "10." out to four columns.
+  const childIndent = `${indent}${" ".repeat(marker.length + 1)}`;
+  const ownLine = `${indent}${prefix}${isBlank(text) ? "" : ` ${text}`}`;
+  const childLines = renderSequence(children, context, childIndent, "\n");
   return childLines === "" ? ownLine : `${ownLine}\n${childLines}`;
 }
 
@@ -220,7 +233,7 @@ function renderLinkBlock(data: Record<string, unknown>): string {
 
 function renderToggle(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext): string {
   const summary = renderRichText(data.rich_text);
-  const renderedChildren = renderSequence(children, context, 0, "\n\n");
+  const renderedChildren = renderSequence(children, context, "", "\n\n");
   return [summary, renderedChildren].filter(Boolean).join("\n\n");
 }
 
