@@ -281,7 +281,9 @@ function renderTableLine(cells: string[]): string {
 }
 
 function normalizeTableCell(cell: string): string {
-  return cell.replace(/\|/g, "\\|").replace(/\r\n|\r|\n/g, "<br>");
+  // MDX parses raw HTML as JSX, so the line break must be self-closing —
+  // a bare `<br>` makes the generated .mdx fail to compile.
+  return cell.replace(/\|/g, "\\|").replace(/\r\n|\r|\n/g, "<br />");
 }
 
 function indentBlock(markdown: string, indent: string): string {

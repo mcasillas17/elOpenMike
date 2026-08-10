@@ -155,7 +155,9 @@ describe("blocksToMarkdown", () => {
         ],
         ctx(),
       ),
-    ).toBe("| Name | Value |\n| --- | --- |\n| A \\| B | Line one<br>Line two |\n");
+    ).toBe(
+      "| Name | Value |\n| --- | --- |\n| A \\| B | Line one<br />Line two |\n",
+    );
   });
 
   it("renders quote and callout children inside the quoted content", () => {
