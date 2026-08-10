@@ -251,11 +251,27 @@ function renderFlowText(value: unknown): string {
 }
 
 function renderRichText(value: unknown, atLineStart = true): string {
-  return richTextToMarkdown(readRichText(value), { atLineStart });
+  return normalizeLineEndings(
+    richTextToMarkdown(readRichText(value), { atLineStart }),
+  );
 }
 
 function readPlainText(value: unknown): string {
-  return readRichText(value).map((run) => run.plain_text).join("");
+  return normalizeLineEndings(readRichText(value).map((run) => run.plain_text).join(""));
+}
+
+// CRLF, a lone carriage return and a newline are the same line ending to every
+// markdown parser, and Notion hands over whichever the author's editor
+// produced. Escaping has already run by the time this does, so nothing about
+// where a block could open is being decided here — only which bytes stand for
+// the line ending that was decided on. Writing one of them keeps identical
+// content serializing to identical bytes, which the sync's idempotency rests
+// on, and keeps every line-based step below (indenting, blockquoting, table
+// cells) looking for a single character.
+const OTHER_LINE_ENDINGS = /\r\n|\r/g;
+
+function normalizeLineEndings(text: string): string {
+  return text.replace(OTHER_LINE_ENDINGS, "\n");
 }
 
 function readRichText(value: unknown): RichText[] {

@@ -24,13 +24,17 @@ function quote(value: string): string {
   );
 }
 
+// Markdown ends a line on CRLF and on a lone carriage return as readily as on
+// a newline, so all three are written out as the one the repo stores.
+const OTHER_LINE_ENDINGS = /\r\n|\r/g;
+
 export function serializePost(fm: PostFrontmatter, body: string): string {
   const lines = KEY_ORDER.map((key) =>
     key === "tags"
       ? `tags: [${fm.tags.map(quote).join(", ")}]`
       : `${key}: ${quote(fm[key])}`,
   );
-  const normalizedBody = body.replace(/\r\n/g, "\n").replace(/\n+$/, "");
+  const normalizedBody = body.replace(OTHER_LINE_ENDINGS, "\n").replace(/\n+$/, "");
   return `---\n${lines.join("\n")}\n---\n\n${normalizedBody}\n`;
 }
 

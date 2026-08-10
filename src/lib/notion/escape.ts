@@ -50,6 +50,18 @@ const ALPHANUMERIC = /[\p{L}\p{N}]/u;
 // "still at the start of the line" state alone.
 const INDENT = /[ \t]/;
 
+// Markdown ends a line on CRLF, on LF and on a lone carriage return alike, and
+// a run pasted out of a Windows editor or a spreadsheet cell carries whichever
+// of the three that editor writes. Every place that asks "is this the start of
+// a line?" therefore has to count all of them: a `#` after a lone CR opens a
+// heading just as surely as one after a newline, and treating the CR as
+// ordinary text left it unescaped.
+const LINE_ENDING = /[\r\n]/;
+
+function lastLineEnding(text: string): number {
+  return Math.max(text.lastIndexOf("\n"), text.lastIndexOf("\r"));
+}
+
 // MDX, unlike Markdown, reads a line that begins `import ` or `export ` as an
 // ESM statement and hands it straight to acorn. Prose is not JavaScript, so a
 // paragraph opening "import the data first" either fails to parse — taking the
@@ -125,7 +137,7 @@ export function escapeMarkdown(text: string, atLineStart = true): string {
   for (let i = 0; i < text.length; ) {
     const char = text[i];
 
-    if (char === "\n") {
+    if (LINE_ENDING.test(char)) {
       out += char;
       lineStart = true;
       i += 1;
@@ -157,7 +169,7 @@ export function escapeMarkdown(text: string, atLineStart = true): string {
 // True when the next character written after `text` would still be at the start
 // of a line, so a run's escaping can continue where the previous one left off.
 export function endsAtLineStart(text: string, atLineStart: boolean): boolean {
-  const lastBreak = text.lastIndexOf("\n");
+  const lastBreak = lastLineEnding(text);
   const tail = lastBreak === -1 ? text : text.slice(lastBreak + 1);
   const blank = [...tail].every((char) => INDENT.test(char));
   return lastBreak === -1 ? blank && atLineStart : blank;
@@ -248,13 +260,13 @@ function blockMarkerAt(text: string, index: number): BlockMarker | undefined {
 
 function atLineBoundary(text: string, index: number): boolean {
   const char = text[index];
-  return char === undefined || char === "\n" || INDENT.test(char);
+  return char === undefined || LINE_ENDING.test(char) || INDENT.test(char);
 }
 
 // The rest of the line is nothing but `char` and spaces.
 function isRuleLine(text: string, index: number, char: string): boolean {
   for (let i = index; i < text.length; i++) {
-    if (text[i] === "\n") return true;
+    if (LINE_ENDING.test(text[i])) return true;
     if (text[i] !== char && !INDENT.test(text[i])) return false;
   }
   return true;
@@ -268,7 +280,7 @@ function isTableDelimiterLine(text: string, index: number): boolean {
   let dashes = 0;
   for (let i = index; i < text.length; i++) {
     const char = text[i];
-    if (char === "\n") break;
+    if (LINE_ENDING.test(char)) break;
     if (char === "-") dashes += 1;
     else if (char !== "|" && char !== ":" && !INDENT.test(char)) return false;
   }

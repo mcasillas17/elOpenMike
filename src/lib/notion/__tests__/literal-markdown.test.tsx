@@ -3,7 +3,7 @@ import { render } from "@testing-library/react";
 import { compileMDX } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 import type { ReactElement } from "react";
-import { escapeMarkdown } from "../escape";
+import { endsAtLineStart, escapeMarkdown } from "../escape";
 import { richTextToMarkdown } from "../rich-text";
 import { blocksToMarkdown } from "../blocks-to-md";
 import { block, rt } from "./fixtures/blocks";
@@ -65,6 +65,27 @@ describe("escapeMarkdown", () => {
   it("leaves an intraword underscore alone but escapes an emphasis-capable one", () => {
     expect(escapeMarkdown("last_edited_time")).toBe("last_edited_time");
     expect(escapeMarkdown("_emphasis_")).toBe("\\_emphasis\\_");
+  });
+
+  // Markdown ends a line on CRLF and on a lone carriage return exactly as
+  // readily as on a newline, and a run pasted out of a Windows editor or a
+  // spreadsheet cell carries whichever of the three that editor writes.
+  it("counts every line ending when deciding where a block could open", () => {
+    expect(escapeMarkdown("before\r# heading")).toBe("before\r\\# heading");
+    expect(escapeMarkdown("before\r\n# heading")).toBe("before\r\n\\# heading");
+    expect(escapeMarkdown("before\r> quote")).toBe("before\r\\> quote");
+    expect(escapeMarkdown("before\r1. item")).toBe("before\r1\\. item");
+    expect(escapeMarkdown("before\r---")).toBe("before\r\\---");
+    expect(escapeMarkdown("before\r| a | b |\r|---|---|")).toBe(
+      "before\r| a | b |\r\\|---|---|",
+    );
+  });
+
+  it("carries the line-start state across runs on every line ending", () => {
+    expect(endsAtLineStart("a\r", true)).toBe(true);
+    expect(endsAtLineStart("a\r  ", false)).toBe(true);
+    expect(endsAtLineStart("a\r\n", false)).toBe(true);
+    expect(endsAtLineStart("a\rb", true)).toBe(false);
   });
 });
 
@@ -185,16 +206,17 @@ describe("literal text that looks like MDX ESM", () => {
   });
 
   // Markdown ends a line on a lone carriage return as readily as on a newline,
-  // and a pasted run can carry either.
+  // and a pasted run can carry either. What is written out is one line ending
+  // either way, so identical content always serializes to identical bytes.
   it("counts every line ending markdown counts", () => {
     expect(text("before\r\rexport const config = 1")).toBe(
-      "before\r\r&#101;xport const config = 1",
+      "before\n\n&#101;xport const config = 1",
     );
     expect(text("before\r\n\r\nimport the data")).toBe(
-      "before\r\n\r\n&#105;mport the data",
+      "before\n\n&#105;mport the data",
     );
     expect(text("a continuation\rimport the data")).toBe(
-      "a continuation\rimport the data",
+      "a continuation\nimport the data",
     );
   });
 
@@ -297,6 +319,31 @@ describe("compiled through the post page's MDX pipeline", () => {
     const container = await renderMdx(paragraph(["# Not a heading"]));
     expect(container.querySelector("h1, h2, h3")).toBeNull();
     expect(container.textContent).toBe("# Not a heading");
+  });
+
+  // A run pasted with Windows or classic-Mac line endings puts the second line
+  // in column one just as a newline does, and `---` under a paragraph line is a
+  // setext heading rather than prose.
+  it("renders prose after a lone carriage return as prose", async () => {
+    const hash = await renderMdx(paragraph(["before\r# Not a heading"]));
+    expect(hash.querySelector("h1, h2, h3")).toBeNull();
+    expect(hash.querySelectorAll("p")).toHaveLength(1);
+    expect(hash.textContent).toBe("before\n# Not a heading");
+
+    const rule = await renderMdx(paragraph(["before\r---"]));
+    expect(rule.querySelector("h1, h2, h3")).toBeNull();
+    expect(rule.querySelector("hr")).toBeNull();
+    expect(rule.textContent).toBe("before\n---");
+  });
+
+  it("writes generated markdown with one kind of line ending", () => {
+    expect(paragraph(["a\rb\r\nc"])).not.toContain("\r");
+    expect(
+      blocksToMarkdown(
+        [block("code", { rich_text: [rt("one\r\ntwo\rthree")], language: "typescript" })],
+        ctx,
+      ),
+    ).toBe("```ts\none\ntwo\nthree\n```\n");
   });
 
   it("renders literal rules and quotes as prose", async () => {

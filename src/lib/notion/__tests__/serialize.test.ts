@@ -42,9 +42,9 @@ describe("serializePost", () => {
     expect(serializePost({ ...fm, tags: [] }, "x\n")).toContain("tags: []");
   });
 
-  it("normalizes CRLF and collapses trailing blank lines", () => {
-    const out = serializePost(fm, "a\r\nb\n\n\n");
-    expect(out.endsWith("a\nb\n")).toBe(true);
+  it("normalizes every line ending and collapses trailing blank lines", () => {
+    const out = serializePost(fm, "a\r\nb\rc\n\n\n");
+    expect(out.endsWith("a\nb\nc\n")).toBe(true);
     expect(out).not.toContain("\r");
   });
 });
