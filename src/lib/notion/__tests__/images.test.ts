@@ -1,0 +1,79 @@
+import { describe, it, expect } from "vitest";
+import {
+  imageFileName,
+  imageDir,
+  downloadImage,
+  MAX_IMAGE_BYTES,
+} from "@/lib/notion/images";
+
+const bytes = (s: string) => new TextEncoder().encode(s);
+
+describe("imageFileName", () => {
+  it("is deterministic for identical bytes", () => {
+    expect(imageFileName(bytes("abc"), "image/png")).toBe(
+      imageFileName(bytes("abc"), "image/png"),
+    );
+  });
+
+  it("differs for different bytes", () => {
+    expect(imageFileName(bytes("abc"), "image/png")).not.toBe(
+      imageFileName(bytes("xyz"), "image/png"),
+    );
+  });
+
+  it("uses a 12-character hash and the mapped extension", () => {
+    expect(imageFileName(bytes("abc"), "image/png")).toMatch(
+      /^[0-9a-f]{12}\.png$/,
+    );
+    expect(imageFileName(bytes("abc"), "image/webp")).toMatch(/\.webp$/);
+    expect(imageFileName(bytes("abc"), "image/jpeg")).toMatch(/\.jpg$/);
+    expect(imageFileName(bytes("abc"), "image/gif")).toMatch(/\.gif$/);
+    expect(imageFileName(bytes("abc"), "image/svg+xml")).toMatch(/\.svg$/);
+  });
+
+  it("ignores content-type parameters", () => {
+    expect(imageFileName(bytes("abc"), "image/png; charset=binary")).toMatch(
+      /\.png$/,
+    );
+  });
+
+  it("falls back to .bin for unknown types", () => {
+    expect(imageFileName(bytes("abc"), "application/octet-stream")).toMatch(
+      /\.bin$/,
+    );
+  });
+});
+
+describe("imageDir", () => {
+  it("namespaces images by post slug", () => {
+    expect(imageDir("my-post")).toBe("public/images/blog/my-post");
+  });
+});
+
+describe("downloadImage", () => {
+  it("returns bytes and content type", async () => {
+    const fake = async () =>
+      new Response(bytes("png-data"), {
+        headers: { "content-type": "image/png" },
+      });
+    const result = await downloadImage("https://s3/signed", fake as typeof fetch);
+    expect(new TextDecoder().decode(result.bytes)).toBe("png-data");
+    expect(result.contentType).toBe("image/png");
+  });
+
+  it("throws on a non-OK response", async () => {
+    const fake = async () => new Response("nope", { status: 403 });
+    await expect(
+      downloadImage("https://s3/expired", fake as typeof fetch),
+    ).rejects.toThrow(/403/);
+  });
+
+  it("throws when the payload exceeds the size cap", async () => {
+    const huge = new Uint8Array(MAX_IMAGE_BYTES + 1);
+    const fake = async () =>
+      new Response(huge, { headers: { "content-type": "image/png" } });
+    await expect(
+      downloadImage("https://s3/huge", fake as typeof fetch),
+    ).rejects.toThrow(/too large/i);
+  });
+});
