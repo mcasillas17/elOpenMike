@@ -23,7 +23,8 @@ allowBuilds:
 
 # Refuse to install package versions published in the last 7 days.
 # Protects against freshly-compromised / typosquatted releases.
-# Requires pnpm 10.16+. If your pnpm version warns "unrecognized setting",
-# see .npmrc for the fallback key, or upgrade pnpm.
-# TODO: verify pnpm 11.1.2 accepts this key (no "unrecognized setting" warning).
-minimumReleaseAge: "10080 minutes"
+# Requires pnpm 10.16+. The value is a plain number of minutes: 10080 = 7 days.
+# Verified on pnpm 11.1.2 — the key is recognized, but it must NOT be quoted or
+# suffixed ("10080 minutes" is misread and rejects year-old releases, which
+# makes every `pnpm add` fail).
+minimumReleaseAge: 10080
