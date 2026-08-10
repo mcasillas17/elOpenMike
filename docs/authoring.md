@@ -119,6 +119,19 @@ pnpm sync:notion --check  # exit 1 if a sync would change anything
 
 Requires `NOTION_TOKEN` and `NOTION_DATABASE_ID` in your environment.
 
+## If one post fails to sync
+
+A post whose images can't be downloaded — an expired link, a file over the
+size cap, a host the sync refuses — doesn't stop the run any more. The rest of
+the blog syncs normally and the failure is reported per post:
+
+- if the post is **already on disk**, its file and its images are left exactly
+  as they are, so the live post keeps working;
+- if the post has **never synced**, it is skipped and nothing is published.
+
+Fix the image in Notion and the next run picks the post up. The run itself
+still exits 0 so the posts that did sync are committed.
+
 ## If the sync refuses to delete posts
 
 A run that would remove more than half the posts stops with

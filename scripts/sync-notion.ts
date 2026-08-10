@@ -7,21 +7,15 @@ import {
   fetchBlockTree,
 } from "../src/lib/notion/client";
 import { toPostSource, isPublished } from "../src/lib/notion/fetch-post";
-import { blocksToMarkdown } from "../src/lib/notion/blocks-to-md";
-import { validatePosts, type ValidatablePost } from "../src/lib/notion/validate";
+import { validatePosts } from "../src/lib/notion/validate";
+import { postPath, massDeleteError } from "../src/lib/notion/plan";
+import { downloadImage, imageDir } from "../src/lib/notion/images";
 import {
-  planFiles,
-  postPath,
-  massDeleteError,
-  type RenderedPost,
-} from "../src/lib/notion/plan";
-import {
-  downloadImage,
-  imageFileName,
-  imageDir,
-} from "../src/lib/notion/images";
+  renderPosts,
+  planSync,
+  type PostFailure,
+} from "../src/lib/notion/sync";
 import { isValidSlug } from "../src/lib/notion/slug";
-import type { MdBlock, PostSource } from "../src/lib/notion/types";
 
 const ROOT = process.cwd();
 const BLOG_DIR = path.join(ROOT, "content", "blog");
@@ -32,38 +26,6 @@ function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`missing required environment variable ${name}`);
   return value;
-}
-
-// Walks a post's block tree, downloads every image while its signed URL is
-// still valid (they expire after one hour), and returns a blockId → path map.
-async function captureImages(
-  post: PostSource,
-): Promise<{ paths: Map<string, string>; files: Map<string, Uint8Array> }> {
-  const paths = new Map<string, string>();
-  const files = new Map<string, Uint8Array>();
-
-  const walk = async (blocks: MdBlock[]): Promise<void> => {
-    for (const block of blocks) {
-      if (block.type === "image") {
-        const payload = block.image as {
-          type?: string;
-          file?: { url: string };
-          external?: { url: string };
-        };
-        const url = payload.file?.url ?? payload.external?.url;
-        if (url) {
-          const { bytes, contentType } = await downloadImage(url);
-          const name = imageFileName(bytes, contentType);
-          files.set(path.join(imageDir(post.slug), name), bytes);
-          paths.set(block.id, `/images/blog/${post.slug}/${name}`);
-        }
-      }
-      await walk(block.children);
-    }
-  };
-
-  await walk(post.blocks);
-  return { paths, files };
 }
 
 async function readExisting(dir: string): Promise<Map<string, string>> {
@@ -85,6 +47,31 @@ async function readExisting(dir: string): Promise<Map<string, string>> {
   return existing;
 }
 
+// A post that failed keeps whatever is already on disk, so the run is not a
+// failure for the rest of the blog — but it must be loud. Under Actions the
+// ::error:: prefix surfaces it as an annotation on the run without failing the
+// job, which would otherwise skip the commit step and discard the posts that
+// did sync.
+function reportFailures(
+  failures: PostFailure[],
+  preserved: string[],
+  skipped: string[],
+): void {
+  if (failures.length === 0) return;
+
+  const annotate = process.env.GITHUB_ACTIONS === "true" ? "::error::" : "";
+  console.error(`\n\u2717 ${failures.length} post(s) failed to sync:`);
+  for (const failure of failures) {
+    const fate = preserved.includes(failure.slug)
+      ? "kept the existing file"
+      : "not published";
+    console.error(`  ${annotate}${failure.slug}: ${failure.message} (${fate})`);
+  }
+  if (skipped.length > 0) {
+    console.error(`  never published: ${skipped.join(", ")}`);
+  }
+}
+
 async function main(): Promise<void> {
   const client = createNotionClient(requireEnv("NOTION_TOKEN"));
   const dataSourceId = await resolveDataSourceId(
@@ -93,11 +80,6 @@ async function main(): Promise<void> {
   );
 
   const pages = await queryPublishedPages(client, dataSourceId, isPublished);
-  const warnings: string[] = [];
-  const rendered: RenderedPost[] = [];
-  const imageFiles = new Map<string, Uint8Array>();
-  const validatable: ValidatablePost[] = [];
-
   const existing = await readExisting(BLOG_DIR);
 
   // Stable ordering keeps logs and any downstream diff deterministic.
@@ -113,20 +95,9 @@ async function main(): Promise<void> {
       : b.frontmatter.date.localeCompare(a.frontmatter.date),
   );
 
-  for (const post of sources) {
-    const { paths, files } = await captureImages(post);
-    for (const [file, bytes] of files) imageFiles.set(file, bytes);
+  const outcome = await renderPosts(sources, (url) => downloadImage(url));
 
-    const body = blocksToMarkdown(post.blocks, {
-      imagePath: (id) => paths.get(id) ?? "",
-      onWarning: (message) => warnings.push(`${post.slug}: ${message}`),
-    });
-
-    rendered.push({ slug: post.slug, frontmatter: post.frontmatter, body });
-    validatable.push({ slug: post.slug, frontmatter: post.frontmatter, body });
-  }
-
-  const errors = validatePosts(validatable);
+  const errors = validatePosts(outcome.rendered);
   if (errors.length > 0) {
     console.error(
       `\n✗ ${errors.length} validation error(s) — nothing written:\n`,
@@ -135,9 +106,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  for (const warning of warnings) console.warn(`  warning: ${warning}`);
+  for (const warning of outcome.warnings) console.warn(`  warning: ${warning}`);
 
-  const { desired, plan } = planFiles(rendered, existing);
+  const { desired, plan, preserved, skipped } = planSync(outcome, existing);
+  // Reported before the early exits so a failure is visible even when the run
+  // stops at the mass-delete guard or in --check mode.
+  reportFailures(outcome.failures, preserved, skipped);
 
   // Fail closed on a run that would remove most of the blog — see plan.ts.
   const massDelete = ALLOW_MASS_DELETE
@@ -175,15 +149,17 @@ async function main(): Promise<void> {
     });
   }
 
-  // Write images, then prune any that no post references any more.
-  for (const [file, bytes] of imageFiles) {
+  // Write images, then prune any that no post references any more. Only posts
+  // that rendered are pruned: a preserved post's images are still referenced by
+  // the file left on disk, but this run never downloaded them.
+  for (const [file, bytes] of outcome.images) {
     await fs.mkdir(path.join(ROOT, path.dirname(file)), { recursive: true });
     await fs.writeFile(path.join(ROOT, file), bytes);
   }
-  for (const post of sources) {
+  for (const post of outcome.rendered) {
     const dir = path.join(ROOT, imageDir(post.slug));
     const kept = new Set(
-      [...imageFiles.keys()]
+      [...outcome.images.keys()]
         .filter((file) => file.startsWith(imageDir(post.slug)))
         .map((file) => path.basename(file)),
     );
