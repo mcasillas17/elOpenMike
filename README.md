@@ -24,10 +24,25 @@ are optional; the site builds and runs without any of them.
   client-side token). Forwarded to the Docker build via `fly.toml` →
   `[build.args]` so Next bakes it into the client bundle. Unset = analytics off.
 
+## Blog content sync
+
+Posts are written in Notion and synced into `content/blog/` by
+`.github/workflows/sync-content.yml` (every 10 minutes, plus a manual
+"Run workflow" button). See [`docs/authoring.md`](docs/authoring.md) for the
+authoring workflow.
+
+Required GitHub secrets:
+
+- `NOTION_TOKEN` — the internal integration token.
+- `NOTION_DATABASE_ID` — the Blog database id.
+- `CONTENT_SYNC_TOKEN` — a fine-grained PAT scoped to this repo with
+  `contents: write`. **Required:** pushes made with the default `GITHUB_TOKEN`
+  do not trigger other workflows, so the deploy would never run.
+
 ## Supply-chain hardening
 
 - **Script blocking**: pnpm 10+ blocks dependency install/build scripts by default. The allowlist in `pnpm-workspace.yaml` → `allowBuilds` permits only `esbuild` (native binary setup) and `unrs-resolver` (Tailwind v4 Rust binding). All other lifecycle scripts are blocked.
-- **Release-age cooldown**: `minimumReleaseAge: "10080 minutes"` (7 days) in `pnpm-workspace.yaml` prevents installing package versions published in the past week, reducing exposure to freshly-compromised or typosquatted releases (requires pnpm 10.16+).
+- **Release-age cooldown**: `minimumReleaseAge: 10080` (minutes, i.e. 7 days) in `pnpm-workspace.yaml` prevents installing package versions published in the past week, reducing exposure to freshly-compromised or typosquatted releases (requires pnpm 10.16+). The value must be an unquoted number of minutes — a suffixed string like `"10080 minutes"` is misread and rejects even year-old releases.
 - **Lockfile committed**: `pnpm-lock.yaml` is committed to the repo, pinning all resolved versions for reproducible installs.
 - **Audit**: Run `pnpm audit` at any time to check for known vulnerability advisories.
 
@@ -37,7 +52,9 @@ are optional; the site builds and runs without any of them.
 - `src/data/projects.ts` — your projects (slug, summary, tags, stack, links). Tags drive panel tint on listings (AI/Full-stack → blue, Web app → red, Game/Unity → green, Open source → purple). Add screenshots under `public/images/projects/` and reference them in each project's `images` array — they appear in the detail-page carousel; listing cards are styled as comic panels and don't render screenshots.
 - `public/resume.pdf` — your real résumé (replace the placeholder).
 - `src/lib/site.ts` — name, tagline, role, and social links (incl. the LinkedIn URL placeholder).
-- `content/blog/*.mdx` — blog posts (frontmatter: title, date, excerpt, tags; body in MDX with fenced code blocks).
+- `content/blog/*.mdx` — **generated from Notion; do not hand-edit** (the next
+  sync reverts changes). Write posts in the Notion Blog database instead. See
+  [`docs/authoring.md`](docs/authoring.md).
 
 ## Deploy (Fly.io)
 
