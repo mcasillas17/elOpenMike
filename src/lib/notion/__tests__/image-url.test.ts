@@ -72,6 +72,22 @@ describe("isPublicUnicastAddress", () => {
     }
   });
 
+  // Every way an IPv4 address can hide inside a v6 literal has to be unwrapped,
+  // not just the common ::ffff: one: ::127.0.0.1 and ::ffff:0:127.0.0.1 name
+  // the same host as ::ffff:127.0.0.1.
+  it("rejects the deprecated IPv4-compatible and IPv4-translated forms", () => {
+    for (const address of [
+      "::127.0.0.1",
+      "::169.254.169.254",
+      "::10.0.0.1",
+      "0:0:0:0:0:0:a9fe:a9fe", // ::169.254.169.254 written in hex
+      "::ffff:0:127.0.0.1",
+      "::ffff:0:a9fe:a9fe",
+    ]) {
+      expect(isPublicUnicastAddress(address)).toBe(false);
+    }
+  });
+
   it("rejects anything that is not an IP literal", () => {
     for (const value of ["", "not-an-ip", "1.2.3", "1.2.3.4.5", "300.1.1.1"]) {
       expect(isPublicUnicastAddress(value)).toBe(false);

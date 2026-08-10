@@ -122,9 +122,10 @@ function embeddedIpv4(hextets: number[]): number[] {
   return [high >> 8, high & 0xff, low >> 8, low & 0xff];
 }
 
-// Blocks the IPv6 equivalents plus the transition formats that smuggle an IPv4
-// address inside a v6 literal (IPv4-mapped, 6to4, NAT64) — each of those is a
-// working route to 127.0.0.1 or 169.254.169.254 if left unchecked.
+// Blocks the IPv6 equivalents plus every transition format that smuggles an
+// IPv4 address inside a v6 literal (IPv4-mapped, IPv4-compatible,
+// IPv4-translated, 6to4, NAT64) — each of those names 127.0.0.1 or
+// 169.254.169.254 just as well as the dotted form does.
 function isPublicIpv6(hextets: number[]): boolean {
   const [h0, h1] = hextets;
 
@@ -133,6 +134,18 @@ function isPublicIpv6(hextets: number[]): boolean {
 
   // ::ffff:0:0/96 — IPv4-mapped.
   if (hextets.slice(0, 5).every((g) => g === 0) && hextets[5] === 0xffff) {
+    return isPublicIpv4(embeddedIpv4(hextets));
+  }
+  // ::/96 — the deprecated IPv4-compatible form, e.g. ::127.0.0.1.
+  if (hextets.slice(0, 6).every((g) => g === 0)) {
+    return isPublicIpv4(embeddedIpv4(hextets));
+  }
+  // ::ffff:0:0:0/96 — IPv4-translated.
+  if (
+    hextets.slice(0, 4).every((g) => g === 0) &&
+    hextets[4] === 0xffff &&
+    hextets[5] === 0
+  ) {
     return isPublicIpv4(embeddedIpv4(hextets));
   }
   // 64:ff9b::/96 — NAT64.
