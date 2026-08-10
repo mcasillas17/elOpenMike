@@ -312,13 +312,20 @@ function renderLinkBlock(
     context.onWarning?.(
       `kept a link to an unsupported url as text (${describeUrlSafely(data.url)})`,
     );
-    // A block of its own now, so its first character does open a line.
-    const text = renderRichText(data.caption, true, context);
-    return text === "" ? escapeMarkdown(data.url) : text;
+    // Nothing is written in front of this: the caption — or, failing that, the
+    // url itself — becomes a block of its own, so its first character lands in
+    // column one exactly as a paragraph's does. That is the one column MDX
+    // reads `import ` and `export ` as ESM in, and a caption Notion split into
+    // "imp" + "ort the data" or one carrying a blank line reaches it just the
+    // same, so the assembled text goes through the flow-context treatment
+    // paragraphs get rather than plain escaping.
+    const text = renderFlowText(data.caption, context);
+    return isBlank(text) ? defuseEsmKeyword(escapeMarkdown(data.url)) : text;
   }
 
   // With no caption the url doubles as the link text, where it is literal prose
-  // like any other and is escaped as such.
+  // like any other and is escaped as such. Both halves sit inside `[...]`, past
+  // column one, so no ESM keyword in either can open a statement.
   const caption = renderRichText(data.caption, false, context);
   const label = caption === "" ? escapeMarkdown(data.url, false) : caption;
   return `[${label}](${destination})`;
