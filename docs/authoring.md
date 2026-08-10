@@ -112,6 +112,14 @@ by Notion itself — its signed S3 URLs, `file.notion.so`, `www.notion.so/image/
 else is refused by host, because a blindly fetched URL turns the sync runner
 into a request-forwarding proxy for whatever the URL points at.
 
+Under `amazonaws.com` only S3's own endpoint shapes are allowed — a bucket's
+virtual-hosted regional name, the legacy dash spelling of it, the path-style
+regional endpoint and the legacy global one. `.amazonaws.com` on its own is not
+a service but the whole of AWS, so an API Gateway stage, an EC2 instance's
+public name, a Lambda URL, a queue or a database endpoint is refused like any
+other host: every one of them is a public address the runner would otherwise
+have fetched on behalf of whoever wrote the link.
+
 Images larger than 10 MB are refused too; the post keeps whatever it had on
 disk and the run reports the failure. Image failures name only a generic reason:
 the public log never repeats a hostname, IP or DNS result, credentials, path,

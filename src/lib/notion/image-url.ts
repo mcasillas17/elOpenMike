@@ -56,16 +56,90 @@ export const ALLOWED_IMAGE_HOSTS: readonly string[] = [
   "notion.so",
   "file.notion.so",
   "images.unsplash.com",
-  "s3.amazonaws.com",
 ];
 
 // Subdomain suffixes of the same services. Matched only on a label boundary, so
 // "evil-notion.so" and "notnotion.so" do not qualify.
+//
+// `.amazonaws.com` is deliberately not among them — see below.
 export const ALLOWED_IMAGE_HOST_SUFFIXES: readonly string[] = [
-  ".amazonaws.com",
   ".notion-static.com",
   ".notion.so",
 ];
+
+// `.amazonaws.com` is not a service. It is the whole of AWS.
+//
+// Allowing the suffix allowed every host anybody has ever put behind that
+// domain: an API Gateway stage (`<id>.execute-api.<region>.amazonaws.com`), an
+// EC2 instance's public name (`ec2-<ip>.compute-1.amazonaws.com`), a queue, a
+// database endpoint, a search domain. Every one of them resolves to a public
+// address, so the range check below waves them through, and each is a request
+// this runner makes on behalf of whoever wrote the url — with the response
+// committed into the repo as an "image".
+//
+// Notion serves image bytes from S3 and from nothing else under that domain, so
+// what is allowed is S3's own endpoint shapes rather than its domain:
+//
+//   <bucket>.s3.<region>.amazonaws.com   virtual-hosted, regional (current)
+//   <bucket>.s3-<region>.amazonaws.com   the legacy dash spelling of the same
+//   s3.<region>.amazonaws.com            path-style, regional (legacy uploads)
+//   s3-<region>.amazonaws.com            path-style, legacy dash spelling
+//   <bucket>.s3.amazonaws.com            the legacy global endpoint
+//   s3.amazonaws.com                     the same, path-style
+//
+// and nothing else: no dualstack, no transfer acceleration, no other service,
+// whatever region it names. A bucket name is checked as a bucket name, so a
+// label that is not one cannot smuggle a different host in front of the
+// endpoint.
+const AWS_DOMAIN = ".amazonaws.com";
+
+// A region as AWS spells one: two or more letters, one or more hyphenated
+// words, then a number. `us-west-2`, `eu-central-1`, `ap-southeast-4`,
+// `us-gov-west-1` and `cn-north-1` all match; `notaregion` does not.
+const AWS_REGION = /^[a-z]{2,}(-[a-z]+)+-\d{1,2}$/;
+
+// S3 bucket naming: 3 to 63 characters, lowercase letters, digits, hyphens and
+// dots, starting and ending with a letter or a digit, and no empty label.
+const S3_BUCKET_LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+const MIN_BUCKET_LENGTH = 3;
+const MAX_BUCKET_LENGTH = 63;
+
+function isS3Bucket(labels: readonly string[]): boolean {
+  if (labels.length === 0) return true; // path-style: no bucket in the host
+  const name = labels.join(".");
+  if (name.length < MIN_BUCKET_LENGTH || name.length > MAX_BUCKET_LENGTH) {
+    return false;
+  }
+  return labels.every((label) => S3_BUCKET_LABEL.test(label));
+}
+
+// True for an S3 endpoint, in any of the spellings above, and for nothing else
+// under .amazonaws.com.
+export function isS3ImageHost(host: string): boolean {
+  if (!host.endsWith(AWS_DOMAIN)) return false;
+
+  const head = host.slice(0, -AWS_DOMAIN.length);
+  if (head === "") return false;
+
+  const labels = head.split(".");
+  const endpoint = labels[labels.length - 1];
+
+  // `s3.<region>` — the endpoint is two labels, so the bucket is everything
+  // before them.
+  if (labels.length >= 2 && labels[labels.length - 2] === "s3") {
+    return AWS_REGION.test(endpoint) && isS3Bucket(labels.slice(0, -2));
+  }
+
+  const bucket = labels.slice(0, -1);
+  // The legacy global endpoint.
+  if (endpoint === "s3") return isS3Bucket(bucket);
+  // The legacy dash spelling of a regional endpoint.
+  if (endpoint.startsWith("s3-")) {
+    return AWS_REGION.test(endpoint.slice(3)) && isS3Bucket(bucket);
+  }
+
+  return false;
+}
 
 const HTTPS_PORTS = new Set(["", "443"]);
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -198,7 +272,10 @@ export function isPublicUnicastAddress(address: string): boolean {
 export function isAllowedImageHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   if (ALLOWED_IMAGE_HOSTS.includes(host)) return true;
-  return ALLOWED_IMAGE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  if (ALLOWED_IMAGE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) {
+    return true;
+  }
+  return isS3ImageHost(host);
 }
 
 async function resolveWithDns(hostname: string): Promise<string[]> {
