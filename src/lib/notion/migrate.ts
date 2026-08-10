@@ -782,6 +782,11 @@ export type MigrationProgress = {
   pageId: string;
   batches: number;
   resumed: boolean;
+  // Set only when the promotion's answer was lost and the page had to be read
+  // back to discover that the write had in fact landed. The post is published
+  // and proved whole either way; this says the run had to find that out the
+  // hard way, which is worth printing.
+  recovered?: true;
 };
 
 export type StateCheck = { ok: true } | { ok: false; reason: string };
@@ -990,6 +995,12 @@ function withMigrationLock<T>(run: () => Promise<T>): Promise<T> {
 // re-examines it, and the check after the promotion catches what fell into the
 // last one — which is why that page is demoted rather than left published.
 //
+// The promotion's *failure* is the other half of that window, and it is not a
+// failure at all until the database says so: a 5xx or a lost connection on
+// `pages.update` may be the write never happening or the answer never coming
+// back. So it is followed by a read rather than by an assumption — see
+// resolveLostPromotion.
+//
 // There is deliberately no rollback of content. Trashing a half-written page
 // would throw away the blocks that did land, which the next run would otherwise
 // pick up and carry on from — and it could never run at all for the failure
@@ -999,14 +1010,22 @@ export function runMigration(
   writes: readonly MigrationWrite[],
   executor: MigrationExecutor,
   onPage?: (progress: MigrationProgress) => void,
+  options: MigrationRunOptions = {},
 ): Promise<MigrationProgress[]> {
-  return withMigrationLock(() => writePages(writes, executor, onPage));
+  return withMigrationLock(() => writePages(writes, executor, onPage, options));
 }
+
+export type MigrationRunOptions = {
+  // How the recheck after a lost promotion waits between attempts. Injected so
+  // a test can drive the retry without waiting for it.
+  sleep?: (ms: number) => Promise<void>;
+};
 
 async function writePages(
   writes: readonly MigrationWrite[],
   executor: MigrationExecutor,
   onPage?: (progress: MigrationProgress) => void,
+  options: MigrationRunOptions = {},
 ): Promise<MigrationProgress[]> {
   const written: MigrationProgress[] = [];
 
@@ -1021,6 +1040,9 @@ async function writePages(
       write.blocks.length -
       write.appends.reduce((count, batch) => count + batch.length, 0);
 
+    // Everything up to but not including the promotion. Nothing here asks for
+    // the page to be published, so a failure cannot have published it: whatever
+    // the page's Status now reads, it is not one this run wrote.
     try {
       for (const batch of write.appends) {
         await proveDraft(write, executor, pageId, held);
@@ -1029,18 +1051,28 @@ async function writePages(
       }
 
       await agreeOnMetadata(write, executor, pageId, held);
-      await executor.publishPage(pageId);
     } catch (error: unknown) {
-      throw unfinished(write, pageId, resumed, error);
+      throw unfinished(write, pageId, resumed, error, NEVER_ASKED);
     }
 
-    await provePublished(write, executor, pageId);
+    // The promotion, and the one failure in this whole run that means nothing
+    // by itself. See resolveLostPromotion.
+    let recovered = false;
+    try {
+      await executor.publishPage(pageId);
+    } catch (error: unknown) {
+      await resolveLostPromotion(write, executor, pageId, resumed, error, options);
+      recovered = true;
+    }
 
-    const progress = {
+    if (!recovered) await provePublished(write, executor, pageId);
+
+    const progress: MigrationProgress = {
       slug: write.slug,
       pageId,
       batches: write.appends.length,
       resumed,
+      ...(recovered ? { recovered: true as const } : {}),
     };
     written.push(progress);
     onPage?.(progress);
@@ -1166,14 +1198,19 @@ async function agreeOnMetadata(
 // in full one last time. A page that is not exactly this post goes straight
 // back to Draft, which is the one write that takes it off the site again, and
 // the run fails saying so.
+//
+// `known` is the state a caller has already read — the recheck after a lost
+// promotion has just read exactly this — so the proof is the same one either
+// way and the page is not walked twice.
 async function provePublished(
   write: MigrationWrite,
   executor: MigrationExecutor,
   pageId: string,
+  known?: PageState,
 ): Promise<void> {
   let problem: string | undefined;
   try {
-    const state = await executor.readPage(pageId);
+    const state = known ?? (await executor.readPage(pageId));
     const verdict = checkPublishedState(write, state);
     if (!verdict.ok) problem = verdict.reason;
   } catch (error: unknown) {
@@ -1187,17 +1224,138 @@ async function provePublished(
     throw new Error(
       `${write.file}: page ${pageId} was published and is not this post ` +
         `(${problem}), and it could not be demoted back to "${DRAFT_STATUS}" ` +
-        `either (${reasonFor(error)}) — it is still Published on the site under ` +
-        `the slug "${write.slug}"; set its Status back by hand before anything ` +
-        "else",
+        `either (${reasonFor(error)}) — it is still Published on the site; set ` +
+        "its Status back by hand before anything else",
     );
   }
 
   throw new Error(
     `${write.file}: page ${pageId} was published and is not this post ` +
       `(${problem}) — it has been demoted back to "${DRAFT_STATUS}", so nothing ` +
-      `is published under the slug "${write.slug}"; check the page by hand and ` +
-      "run the migration again",
+      "this run wrote is published; check the page by hand and run the " +
+      "migration again",
+  );
+}
+
+// How many times the recheck after a lost promotion is willing to ask. A read
+// changes nothing, and this is the read the whole recovery rests on: giving up
+// on the first 503 puts the run straight back to guessing.
+export const PROMOTION_RECHECK_ATTEMPTS = 3;
+const PROMOTION_RECHECK_DELAY_MS = 1_000;
+
+const realSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+// The page as it reads now, asked for again while it keeps refusing. The
+// executor's own read already retries the statuses Notion retries; this covers
+// the rest of what an outage looks like — a socket that closed, a request that
+// never got an answer — which carries no status at all.
+async function readAgain(
+  executor: MigrationExecutor,
+  pageId: string,
+  sleep: (ms: number) => Promise<void>,
+): Promise<PageState> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await executor.readPage(pageId);
+    } catch (error: unknown) {
+      if (attempt >= PROMOTION_RECHECK_ATTEMPTS) throw error;
+      await sleep(attempt * PROMOTION_RECHECK_DELAY_MS);
+    }
+  }
+}
+
+// The promotion is the one write here whose failure says nothing on its own.
+// `pages.update` has no idempotency key and no conditional form, so a 502, a
+// 504 or a dropped connection leaves two possibilities that look identical from
+// this side: the request never landed, or it landed and the answer was lost. A
+// run that assumes the first publishes a post and then reports that it did not.
+//
+// So the page is read — the same full read every other check makes, retried,
+// because this is the one read the answer depends on — and what it says decides
+// what the run says. Always throws except when the page turns out to be
+// published and whole, which is the promotion having quietly succeeded.
+async function resolveLostPromotion(
+  write: MigrationWrite,
+  executor: MigrationExecutor,
+  pageId: string,
+  resumed: boolean,
+  cause: unknown,
+  { sleep = realSleep }: MigrationRunOptions,
+): Promise<void> {
+  let state: PageState;
+  try {
+    state = await readAgain(executor, pageId, sleep);
+  } catch (error: unknown) {
+    return unreadableAfterPromotion(write, executor, pageId, cause, error);
+  }
+
+  // The write landed; only its answer was lost. This is the promotion having
+  // happened, so it gets exactly the proof a promotion that answered gets —
+  // including the demotion when the page turns out not to be this post.
+  if (state.status === PUBLISHED_STATUS) {
+    return provePublished(write, executor, pageId, state);
+  }
+
+  if (state.status === DRAFT_STATUS && !state.trashed) {
+    // Read back, so this is a fact rather than an assumption.
+    throw unfinished(write, pageId, resumed, cause, READ_BACK_AS_DRAFT);
+  }
+
+  // Neither: the page has been moved by somebody else, or into the trash. It is
+  // not Published, so nothing this run did is on the site and there is nothing
+  // to take off it — and writing a Status over a deliberate one would be an
+  // edit nobody asked for.
+  throw new Error(
+    `${write.file}: the promotion of page ${pageId} failed ` +
+      `(${reasonFor(cause)}), and reading the page back afterwards found it ` +
+      `${describeStanding(state)} rather than "${DRAFT_STATUS}" or ` +
+      `"${PUBLISHED_STATUS}" — it was left exactly as it is; check it by hand ` +
+      "and run the migration again",
+  );
+}
+
+function describeStanding(state: PageState): string {
+  if (state.trashed) return "in the Notion trash";
+  return state.status === "" ? "in no status at all" : `"${state.status}"`;
+}
+
+// Neither outcome could be established: the promotion may or may not have
+// landed, and the page cannot be read to find out. Saying "still a Draft" here
+// is the guess that started all of this, so it is not said.
+//
+// A page that may have been published without proof must not be left on the
+// site, and the demote is safe in both worlds this is stuck between: over a
+// Draft it is a no-op, and over a page this run published it is exactly the
+// undo. If it goes through, the page is Draft — proved by the write. If it does
+// not, nothing is known at all, and the message says so in the one place an
+// operator will read it.
+async function unreadableAfterPromotion(
+  write: MigrationWrite,
+  executor: MigrationExecutor,
+  pageId: string,
+  cause: unknown,
+  readError: unknown,
+): Promise<never> {
+  const preamble =
+    `${write.file}: the promotion of page ${pageId} failed ` +
+    `(${reasonFor(cause)}) and the page could not be read back afterwards ` +
+    `(${reasonFor(readError)}), so whether the promotion landed is unknown`;
+
+  try {
+    await executor.demoteToDraft(pageId);
+  } catch (error: unknown) {
+    throw new Error(
+      `${preamble}, and setting its Status back to "${DRAFT_STATUS}" failed ` +
+        `too (${reasonFor(error)}) — it may still be published on the site; ` +
+        "check the page by hand before anything else",
+    );
+  }
+
+  throw new Error(
+    `${preamble} — its Status has been set back to "${DRAFT_STATUS}", so ` +
+      "nothing this run wrote is published; check the page by hand and run " +
+      "the migration again",
   );
 }
 
@@ -1205,16 +1363,25 @@ function reasonFor(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// What is known about the page's standing when a run gives up on it. Only the
+// second one is a reading; the first is what this run did and did not ask for.
+const NEVER_ASKED =
+  "this run never asked for it to be published, so nothing it wrote is on the site";
+const READ_BACK_AS_DRAFT =
+  `it was read back afterwards and is still a "${DRAFT_STATUS}", so nothing ` +
+  "this run wrote is published";
+
 function unfinished(
   write: MigrationWrite,
   pageId: string,
   resumed: boolean,
   cause: unknown,
+  standing: string,
 ): Error {
   return new Error(
     `${write.file}: the ${resumed ? "draft" : "newly created"} page ${pageId} ` +
-      `could not be finished (${reasonFor(cause)}) — it is still a ` +
-      `"${DRAFT_STATUS}", so nothing on the site changed and no published post ` +
-      `claims the slug "${write.slug}"; run the migration again to finish it`,
+      `could not be finished (${reasonFor(cause)}) — ${standing}; run the ` +
+      "migration again to finish it",
   );
 }
+

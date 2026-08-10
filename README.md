@@ -193,7 +193,20 @@ refuse anything that has moved:
   exactly this post — wrong status, wrong metadata, a block somebody added — is
   **demoted straight back to Draft**, which takes it off the site again, and the
   run fails saying so. If even the demotion fails, the message says the page is
-  still Published and has to be put back by hand.
+  still Published and has to be put back by hand;
+- **when the promotion itself fails**, nothing is assumed. `pages.update` has no
+  idempotency key, so a `502`, a `504` or a dropped connection leaves two
+  possibilities that look identical from here: the request never landed, or it
+  landed and the answer was lost. The page is therefore read back — the same
+  full read, retried, because this is the read the answer depends on — and what
+  it says is what the run says. **Published**: the write did land, so the page
+  gets exactly the proof above, demotion included, and the run carries on.
+  **Draft**: proved, and reported as the plain failure it is. **Anything else**:
+  reported as what it actually reads, and left alone. **Unreadable**: reported as
+  unknown, and the page is set back to Draft anyway, because a page that may be
+  published without proof must not stay on the site — if that write fails too,
+  the message says the page may still be published and has to be checked by
+  hand. The run never calls a page a Draft it has not read.
 
 Two runs inside one process are serialized against each other by a lock, so
 they cannot interleave their reads and writes.

@@ -82,6 +82,11 @@ async function migrate(notion: FakeNotion, posts: LocalPost[]) {
   const written = await runMigration(
     prepared.writes,
     createMigrationExecutor(notion.client, "ds-1", statusSchema),
+    undefined,
+    // A killed process fails every call after the one that killed it, including
+    // the recheck a lost promotion makes. Nothing here is about how long that
+    // recheck waits between attempts, so it does not.
+    { sleep: async () => {} },
   );
   return { ...prepared, written };
 }

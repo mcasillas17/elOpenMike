@@ -13,9 +13,11 @@
 // back in full immediately before each append and before the promotion, and
 // once more after it, and anything that is no longer exactly this post stops
 // the run — or, if it was already published, is demoted straight back to Draft.
-// The one window that cannot be closed is the round-trip between a read and the
-// write it justified; Notion has no conditional write to close it with. See the
-// migration section of README.md.
+// A promotion that fails without saying whether it landed is read back the same
+// way, so the run reports what the database actually holds rather than assuming
+// the write never happened. The one window that cannot be closed is the
+// round-trip between a read and the write it justified; Notion has no
+// conditional write to close it with. See the migration section of README.md.
 //
 // Pause .github/workflows/sync-content.yml first. That sync runs every ten
 // minutes and removes the content/blog/*.mdx of any post Notion has not
@@ -125,11 +127,15 @@ async function main(): Promise<void> {
   const written = await runMigration(
     prepared.writes,
     executor,
-    ({ slug, batches, resumed }) =>
+    ({ slug, batches, resumed, recovered }) =>
       console.log(
         `✓ ${resumed ? "finished" : "migrated"} ${slug}` +
           (batches > 0
             ? ` (+${batches} block batch${batches === 1 ? "" : "es"})`
+            : "") +
+          (recovered
+            ? " — the promotion's answer was lost, and the page was read back" +
+              " and proved published"
             : ""),
       ),
   );
