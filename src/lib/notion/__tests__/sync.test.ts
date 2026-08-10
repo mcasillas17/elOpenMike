@@ -8,6 +8,7 @@ import {
 } from "@/lib/notion/sync";
 import { serializePost } from "@/lib/notion/serialize";
 import { postPath, massDeleteError } from "@/lib/notion/plan";
+import { validateSourceSlugs } from "@/lib/notion/validate";
 import type { MdBlock, PostSource } from "@/lib/notion/types";
 import { block, rt } from "./fixtures/blocks";
 
@@ -221,6 +222,42 @@ describe("planSync", () => {
 
     expect(result.desired.get(postPath("dup"))).toContain("Body of dup.");
     expect(result.preserved).toEqual([]);
+  });
+
+  // Two *different* pages under one slug can only be told apart before the run
+  // renders: afterwards the survivor and the file on disk look like one post,
+  // and whichever page rendered wins. That is what validateSourceSlugs() has to
+  // refuse up front — planSync alone cannot see the problem.
+  it("cannot tell two distinct pages apart once one of them has failed", async () => {
+    const { download } = downloader();
+    const first = { ...source("dup"), pageId: "page-first" };
+    const second = {
+      ...source("dup", [imageBlock("https://img/fail.png")]),
+      pageId: "page-second",
+    };
+
+    expect(
+      validateSourceSlugs(
+        [first, second].map(({ pageId, slug }) => ({ pageId, slug })),
+      ),
+    ).toHaveLength(1);
+
+    const outcome = await renderPosts([first, second], download);
+    const existing = new Map([
+      [postPath("dup"), fileFor(second, "The other page.\n")],
+    ]);
+    const result = planSync(outcome, existing);
+
+    expect(outcome.failures.map((failure) => failure.pageId)).toEqual([
+      "page-second",
+    ]);
+    // Nothing here can stop it: the page that rendered publishes over the file
+    // the page that failed had on disk.
+    expect(result.plan.write).toEqual([postPath("dup")]);
+    expect(result.desired.get(postPath("dup"))).toContain("Body of dup.");
+    expect(result.desired.get(postPath("dup"))).not.toContain(
+      "The other page.",
+    );
   });
 
   it("names the image directories the pruner must leave alone", async () => {

@@ -6,9 +6,10 @@ type CodeBlockRequest = Extract<BlockObjectRequest, { code: unknown }>;
 export type NotionLanguage = CodeBlockRequest["code"]["language"];
 type RichTextInput = CodeBlockRequest["code"]["rich_text"];
 
-// Every value Notion's API accepts for a code block's language. Notion refuses
-// the entire create-page request when it sees anything else — one bad fence
-// costs the whole post — so a label is only forwarded if it appears here.
+// Every value Notion's API accepts for a code block's language, bar the legacy
+// composite "java/c/c++/c#" that no fence produces. Notion refuses the entire
+// create-page request when it sees anything else — one bad fence costs the
+// whole post — so a label is only forwarded if it appears here.
 export const NOTION_LANGUAGES = [
   "abap", "abc", "agda", "arduino", "ascii art", "assembly", "bash",
   "basic", "bnf", "c", "c#", "c++", "clojure", "coffeescript", "coq",

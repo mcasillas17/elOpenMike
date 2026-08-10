@@ -189,9 +189,9 @@ export function protectedImageDirs(plan: SyncPlan): string[] {
 
 // The image directories this run is entitled to prune: the posts it rendered
 // (it downloaded every image they reference, so anything else there is stale)
-// and the posts it removed. Everything protected above is excluded, and a
-// slug is only honored if it is a real slug — path.basename turns "..mdx" into
-// ".", which as a directory resolves to public/images/blog itself.
+// and the posts it removed. Everything protected above is excluded, and only a
+// real slug is honored — "content/blog/..mdx" yields the slug ".", whose
+// directory resolves to public/images/blog itself.
 export function prunableImageDirs(
   outcome: RenderOutcome,
   plan: SyncPlan,
