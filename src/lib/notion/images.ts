@@ -26,6 +26,18 @@ export function imageDir(slug: string): string {
   return `public/images/blog/${slug}`;
 }
 
+// Notion's file URLs are pre-signed S3 links whose query string carries
+// X-Amz-Signature and X-Amz-Security-Token. The sync's errors are printed to a
+// public Actions log, so only the location — never the credentials — is shown.
+function redactUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return "<unparseable url>";
+  }
+}
+
 // Notion's file URLs are signed and expire one hour after they are issued, so
 // this must run while the URL from the current fetch is still fresh.
 export async function downloadImage(
@@ -34,12 +46,14 @@ export async function downloadImage(
 ): Promise<{ bytes: Uint8Array; contentType: string }> {
   const response = await fetchImpl(url);
   if (!response.ok) {
-    throw new Error(`image download failed: ${response.status} ${url}`);
+    throw new Error(
+      `image download failed: ${response.status} ${redactUrl(url)}`,
+    );
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.byteLength > MAX_IMAGE_BYTES) {
     throw new Error(
-      `image too large: ${bytes.byteLength} bytes (max ${MAX_IMAGE_BYTES}) ${url}`,
+      `image too large: ${bytes.byteLength} bytes (max ${MAX_IMAGE_BYTES}) ${redactUrl(url)}`,
     );
   }
   return {

@@ -77,3 +77,42 @@ describe("downloadImage", () => {
     ).rejects.toThrow(/too large/i);
   });
 });
+
+// Notion file URLs are pre-signed S3 links carrying X-Amz-Signature and
+// X-Amz-Security-Token. The sync prints error messages to a public Actions log,
+// so a raw URL in an error hands out a working credential for the next hour.
+describe("downloadImage error redaction", () => {
+  const signed =
+    "https://s3.us-west-2.amazonaws.com/secure.notion-static.com/img.png" +
+    "?X-Amz-Credential=AKIAEXAMPLE&X-Amz-Signature=deadbeef&X-Amz-Security-Token=tok";
+
+  const expectRedacted = (message: string) => {
+    expect(message).not.toContain("X-Amz-Signature");
+    expect(message).not.toContain("X-Amz-Security-Token");
+    expect(message).not.toContain("deadbeef");
+    expect(message).toContain("secure.notion-static.com/img.png");
+  };
+
+  it("keeps the signature out of a failed-download message", async () => {
+    const fake = async () => new Response("nope", { status: 403 });
+    await expect(
+      downloadImage(signed, fake as typeof fetch),
+    ).rejects.toSatisfy((error: Error) => {
+      expectRedacted(error.message);
+      return error.message.includes("403");
+    });
+  });
+
+  it("keeps the signature out of an oversized-payload message", async () => {
+    const fake = async () =>
+      new Response(new Uint8Array(MAX_IMAGE_BYTES + 1), {
+        headers: { "content-type": "image/png" },
+      });
+    await expect(
+      downloadImage(signed, fake as typeof fetch),
+    ).rejects.toSatisfy((error: Error) => {
+      expectRedacted(error.message);
+      return /too large/i.test(error.message);
+    });
+  });
+});
