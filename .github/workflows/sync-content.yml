@@ -1,0 +1,42 @@
+name: Sync content from Notion
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: # the "Sync now" button
+
+# Never let two syncs race for the same files.
+concurrency: sync-content
+
+jobs:
+  sync:
+    name: Pull published posts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A push made with the default GITHUB_TOKEN does NOT trigger other
+          # workflows, so deploy.yml would never run. Use a fine-grained PAT
+          # scoped to this repo with contents:write.
+          token: ${{ secrets.CONTENT_SYNC_TOKEN }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm sync:notion
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+      - name: Commit and push any changes
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No content changes."
+            exit 0
+          fi
+          git config user.name "elopenmike-content-bot"
+          git config user.email "micasillm@gmail.com"
+          git add content/blog public/images/blog
+          git commit -m "content: sync from Notion"
+          git push
