@@ -117,6 +117,10 @@ pnpm sync:notion          # pull published posts now
 pnpm sync:notion --check  # exit 1 if a sync would change anything
 ```
 
+`--check` covers images as well as posts: a post whose picture changed, or one
+that no longer references an image it used to, counts as out of date even when
+the `.mdx` file itself is byte-identical.
+
 Requires `NOTION_TOKEN` and `NOTION_DATABASE_ID` in your environment.
 
 ## If one post fails to sync

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { renderPosts, planSync, protectedImageDirs } from "@/lib/notion/sync";
+import {
+  renderPosts,
+  planSync,
+  protectedImageDirs,
+  prunableImageDirs,
+  pendingOperations,
+} from "@/lib/notion/sync";
 import { serializePost } from "@/lib/notion/serialize";
 import { postPath, massDeleteError } from "@/lib/notion/plan";
 import type { MdBlock, PostSource } from "@/lib/notion/types";
@@ -323,5 +329,113 @@ describe("planSync deletion suppression", () => {
 
     expect(result.plan.delete).toEqual([]);
     expect(massDeleteError(result.plan, existing.size)).toBeUndefined();
+  });
+});
+
+// Which directories this run is entitled to prune. A directory it never
+// observed — a failed post's, a skipped post's, one behind a file whose
+// deletion was deferred — is not evidence of anything and must be left alone.
+describe("prunableImageDirs", () => {
+  it("may prune the posts that rendered", async () => {
+    const { download } = downloader();
+    const outcome = await renderPosts([source("a"), source("b")], download);
+    const result = planSync(outcome, new Map());
+
+    expect(prunableImageDirs(outcome, result)).toEqual([
+      "public/images/blog/a",
+      "public/images/blog/b",
+    ]);
+  });
+
+  it("may prune a post Notion really did unpublish", async () => {
+    const { download } = downloader();
+    const outcome = await renderPosts([source("kept")], download);
+    const result = planSync(
+      outcome,
+      new Map([
+        [postPath("kept"), fileFor(source("kept"), "Old.\n")],
+        [postPath("gone"), "---\ntitle: \"Gone\"\n---\n\nGone.\n"],
+      ]),
+    );
+
+    expect(result.plan.delete).toEqual([postPath("gone")]);
+    expect(prunableImageDirs(outcome, result)).toContain(
+      "public/images/blog/gone",
+    );
+  });
+
+  it("never prunes a failed, skipped, or deferred post's directory", async () => {
+    const { download } = downloader();
+    const outcome = await renderPosts(
+      [
+        source("fine"),
+        source("broken", [imageBlock("https://img/fail-1.png")]),
+        source("never-synced", [imageBlock("https://img/fail-2.png")]),
+      ],
+      download,
+    );
+    const result = planSync(
+      outcome,
+      new Map([
+        [postPath("broken"), fileFor(source("broken"), "Old.\n")],
+        [postPath("renamed-away"), fileFor(source("renamed-away"), "Old.\n")],
+      ]),
+    );
+
+    expect(prunableImageDirs(outcome, result)).toEqual([
+      "public/images/blog/fine",
+    ]);
+  });
+
+  it("refuses a directory a traversal-shaped file name would produce", async () => {
+    const { download } = downloader();
+    const outcome = await renderPosts([], download);
+    const result = planSync(
+      outcome,
+      new Map([
+        ["content/blog/..mdx", "x"],
+        ["content/blog/...mdx", "x"],
+        ["content/blog/a/../../..mdx", "x"],
+      ]),
+    );
+
+    expect(result.plan.delete).toHaveLength(3);
+    expect(prunableImageDirs(outcome, result)).toEqual([]);
+  });
+});
+
+// The drift `--check` reports and the work a normal run performs are the same
+// list, so the gate cannot pass a run that would change files.
+describe("pendingOperations", () => {
+  const empty = { write: [], delete: [], unchanged: [] };
+
+  it("is empty when neither plan would touch anything", () => {
+    expect(pendingOperations(empty, empty)).toEqual([]);
+  });
+
+  it("counts image work even when no mdx file changes", () => {
+    expect(
+      pendingOperations(empty, {
+        write: ["public/images/blog/a/new.png"],
+        delete: ["public/images/blog/a/old.png"],
+        unchanged: [],
+      }),
+    ).toEqual([
+      "public/images/blog/a/new.png",
+      "public/images/blog/a/old.png",
+    ]);
+  });
+
+  it("merges both plans, sorted", () => {
+    expect(
+      pendingOperations(
+        { write: ["content/blog/b.mdx"], delete: ["content/blog/a.mdx"], unchanged: [] },
+        { write: ["public/images/blog/b/new.png"], delete: [], unchanged: [] },
+      ),
+    ).toEqual([
+      "content/blog/a.mdx",
+      "content/blog/b.mdx",
+      "public/images/blog/b/new.png",
+    ]);
   });
 });

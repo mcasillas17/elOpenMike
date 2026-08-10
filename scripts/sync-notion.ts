@@ -9,15 +9,20 @@ import {
 import { toPostSource, isPublished, pageSlug } from "../src/lib/notion/fetch-post";
 import { validatePosts, validateSourceSlugs } from "../src/lib/notion/validate";
 import { postPath, massDeleteError } from "../src/lib/notion/plan";
-import { downloadImage, imageDir } from "../src/lib/notion/images";
+import { downloadImage } from "../src/lib/notion/images";
+import {
+  planImages,
+  readImageFiles,
+  applyImagePlan,
+} from "../src/lib/notion/image-plan";
 import { mapWithConcurrency } from "../src/lib/notion/pool";
 import {
   renderPosts,
   planSync,
-  protectedImageDirs,
+  prunableImageDirs,
+  pendingOperations,
   type PostFailure,
 } from "../src/lib/notion/sync";
-import { isValidSlug } from "../src/lib/notion/slug";
 
 const ROOT = process.cwd();
 const BLOG_DIR = path.join(ROOT, "content", "blog");
@@ -147,14 +152,24 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Images are reconciled exactly like the MDX files: one plan, computed
+  // before anything is touched, that both `--check` and the writing path use.
+  // Planning MDX alone let `--check` report "in sync" while a real run went on
+  // to rewrite and prune images.
+  const imagePlan = planImages(
+    outcome.images,
+    await readImageFiles(ROOT),
+    prunableImageDirs(outcome, syncPlan),
+  );
+  const pending = pendingOperations(plan, imagePlan);
+
   if (CHECK_ONLY) {
-    const dirty = plan.write.length + plan.delete.length;
     console.log(
-      dirty === 0
+      pending.length === 0
         ? "✓ in sync"
-        : `✗ ${dirty} file(s) would change: ${[...plan.write, ...plan.delete].join(", ")}`,
+        : `✗ ${pending.length} file(s) would change: ${pending.join(", ")}`,
     );
-    process.exit(dirty === 0 ? 0 : 1);
+    process.exit(pending.length === 0 ? 0 : 1);
   }
 
   await fs.mkdir(BLOG_DIR, { recursive: true });
@@ -163,50 +178,13 @@ async function main(): Promise<void> {
   }
   for (const file of plan.delete) {
     await fs.rm(path.join(ROOT, file), { force: true });
-    // Only a real slug may reach a recursive delete: path.basename turns
-    // "..mdx" into "." and "...mdx" into "..", which would resolve to
-    // public/images/blog or public/images and remove every site image.
-    const slug = path.basename(file, ".mdx");
-    if (!isValidSlug(slug)) continue;
-    await fs.rm(path.join(ROOT, imageDir(slug)), {
-      recursive: true,
-      force: true,
-    });
   }
-
-  // Write images, then prune any that no post references any more. Only posts
-  // that rendered are pruned, and never a directory this run could not observe:
-  // a preserved post's images are still referenced by the file left on disk, a
-  // skipped post's directory may be a half-written earlier attempt, and a
-  // deferred file may belong to a live post whose slug moved.
-  const protectedDirs = new Set(protectedImageDirs(syncPlan));
-  for (const [file, bytes] of outcome.images) {
-    await fs.mkdir(path.join(ROOT, path.dirname(file)), { recursive: true });
-    await fs.writeFile(path.join(ROOT, file), bytes);
-  }
-  for (const post of outcome.rendered) {
-    const dir = imageDir(post.slug);
-    if (protectedDirs.has(dir)) continue;
-    const kept = new Set(
-      [...outcome.images.keys()]
-        .filter((file) => file.startsWith(dir))
-        .map((file) => path.basename(file)),
-    );
-    let present: string[] = [];
-    try {
-      present = await fs.readdir(path.join(ROOT, dir));
-    } catch {
-      continue;
-    }
-    for (const name of present) {
-      if (!kept.has(name)) {
-        await fs.rm(path.join(ROOT, dir, name), { force: true });
-      }
-    }
-  }
+  await applyImagePlan(ROOT, imagePlan, outcome.images);
 
   console.log(
-    `✓ ${plan.unchanged.length} unchanged, ${plan.write.length} written, ${plan.delete.length} removed`,
+    `✓ ${plan.unchanged.length} unchanged, ${plan.write.length} written, ` +
+      `${plan.delete.length} removed, ${imagePlan.write.length} image(s) written, ` +
+      `${imagePlan.delete.length} pruned`,
   );
 }
 

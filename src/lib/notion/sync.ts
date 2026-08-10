@@ -1,5 +1,7 @@
 import { blocksToMarkdown } from "./blocks-to-md";
 import { imageDir, imageFileName } from "./images";
+import type { ImagePlan } from "./image-plan";
+import { isValidSlug } from "./slug";
 import { planReconcile, type ReconcilePlan } from "./reconcile";
 import { desiredFiles, postPath, postSlug, type RenderedPost } from "./plan";
 import type { MdBlock, PostSource } from "./types";
@@ -183,4 +185,40 @@ export function protectedImageDirs(plan: SyncPlan): string[] {
     ...plan.deferred.map(postSlug),
   ];
   return [...new Set(slugs)].sort().map(imageDir);
+}
+
+// The image directories this run is entitled to prune: the posts it rendered
+// (it downloaded every image they reference, so anything else there is stale)
+// and the posts it removed. Everything protected above is excluded, and a
+// slug is only honored if it is a real slug — path.basename turns "..mdx" into
+// ".", which as a directory resolves to public/images/blog itself.
+export function prunableImageDirs(
+  outcome: RenderOutcome,
+  plan: SyncPlan,
+): string[] {
+  const slugs = [
+    ...outcome.rendered.map((post) => post.slug),
+    ...plan.plan.delete.map(postSlug),
+  ].filter(isValidSlug);
+
+  const off = new Set(protectedImageDirs(plan));
+  return [...new Set(slugs)]
+    .sort()
+    .map(imageDir)
+    .filter((dir) => !off.has(dir));
+}
+
+// Every path a normal run would create, rewrite, or remove — across both MDX
+// and images. `--check` exits nonzero on exactly this list, so it cannot pass a
+// run that would change something.
+export function pendingOperations(
+  plan: ReconcilePlan,
+  images: ImagePlan,
+): string[] {
+  return [
+    ...plan.write,
+    ...plan.delete,
+    ...images.write,
+    ...images.delete,
+  ].sort();
 }

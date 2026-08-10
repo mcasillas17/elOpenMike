@@ -33,8 +33,10 @@ export function imageFileName(bytes: Uint8Array, contentType: string): string {
   return `${hash}.${EXTENSIONS[mime] ?? "bin"}`;
 }
 
+export const BLOG_IMAGE_ROOT = "public/images/blog";
+
 export function imageDir(slug: string): string {
-  return `public/images/blog/${slug}`;
+  return `${BLOG_IMAGE_ROOT}/${slug}`;
 }
 
 export type DownloadImageOptions = {
