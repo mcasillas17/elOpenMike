@@ -1,4 +1,5 @@
 import type { RichText } from "./types";
+import { inlineCodeSpan } from "./code-span";
 
 // MDX/JSX only treat `<`, `{`, and `}` as parser delimiters here; `>` stays literal unless the opener is escaped.
 const MDX_ESCAPES = {
@@ -22,7 +23,10 @@ function renderRun(run: RichText): string {
   }
 
   // Inline code must preserve raw text so snippets like `<T>` render literally instead of being MDX-escaped.
-  const content = run.annotations.code ? `\`${run.plain_text}\`` : escapeMdx(run.plain_text);
+  // The delimiter outgrows any backtick run inside, or the span would close on the first one.
+  const content = run.annotations.code
+    ? inlineCodeSpan(run.plain_text)
+    : escapeMdx(run.plain_text);
   const strike = run.annotations.strikethrough ? `~~${content}~~` : content;
   const italic = run.annotations.italic ? `*${strike}*` : strike;
   const bold = run.annotations.bold ? `**${italic}**` : italic;

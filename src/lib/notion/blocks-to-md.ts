@@ -1,4 +1,5 @@
 import { richTextToMarkdown } from "./rich-text";
+import { codeFence } from "./code-span";
 import type { MdBlock, RichText } from "./types";
 
 export type BlocksToMarkdownContext = {
@@ -164,7 +165,9 @@ function renderCode(data: Record<string, unknown>): string {
   const code = readPlainText(data.rich_text);
   // Rehype Pretty Code/Shiki falls back by fence language, so unknown Notion languages become text.
   // Fenced code uses raw plain_text so MDX-like snippets such as <T>{} are not escaped.
-  return `\`\`\`${language}\n${code}\n\`\`\``;
+  // The fence outgrows any backtick run inside, or a code block quoting Markdown would close itself early.
+  const fence = codeFence(code);
+  return `${fence}${language}\n${code}\n${fence}`;
 }
 
 function renderImage(block: MdBlock, data: Record<string, unknown>, context: BlocksToMarkdownContext): string {
