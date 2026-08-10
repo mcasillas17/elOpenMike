@@ -136,6 +136,16 @@ pnpm sync:notion --check  # exit 1 if a sync would change anything
 that no longer references an image it used to, counts as out of date even when
 the `.mdx` file itself is byte-identical.
 
+It also fails when the run **could not read** a post — an expired image link, a
+page that changed mid-run, a host it refuses — even if nothing on disk would
+change. A failed post's file is deliberately kept exactly as it is (see below),
+which is indistinguishable from "nothing to do"; reporting that as "in sync"
+would have CI vouch for content the run never actually saw. The failures are
+listed by slug, and the exit code is 1.
+
+A normal `pnpm sync:notion` is unaffected: it still isolates the failure, still
+writes the posts that did sync, and still exits 0 so they are committed.
+
 Requires `NOTION_TOKEN` and `NOTION_DATABASE_ID` in your environment.
 `NOTION_DATA_SOURCE_ID` is optional and only needed if the database ever grows a
 second data source — see "Which data source" below.
@@ -165,7 +175,8 @@ the blog syncs normally and the failure is reported per post:
 - if the post has **never synced**, it is skipped and nothing is published.
 
 Fix the image in Notion and the next run picks the post up. The run itself
-still exits 0 so the posts that did sync are committed.
+still exits 0 so the posts that did sync are committed — but `--check` exits 1,
+because a post it could not read is a post it cannot vouch for.
 
 While any post is failing the sync also **stops removing files**. Nothing on
 disk records which Notion page wrote which file, so a post whose slug changed

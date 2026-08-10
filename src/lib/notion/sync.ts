@@ -227,3 +227,53 @@ export function pendingOperations(
     ...images.delete,
   ].sort();
 }
+
+export type CheckVerdict = {
+  ok: boolean;
+  exitCode: 0 | 1;
+  lines: string[];
+};
+
+// `--check` asks "is what is on disk what Notion says?", and CI reads the
+// answer off the exit code.
+//
+// A failed post is deliberately survivable in a normal run: the file already on
+// disk is kept, the rest of the blog syncs, and the job commits it. But the way
+// that file is kept is by copying it into the *desired* set verbatim (see
+// planSync), and a desired set that matches disk is precisely what "nothing to
+// do" looks like. So a run that could not read half the blog — an expired
+// token, a Notion outage, a rate limit, an image host refusing every fetch —
+// produced an empty pending list and reported "✓ in sync".
+//
+// A check that could not look is not a check that passed. Anything that lost a
+// post — a page that failed revalidation, a body that would not render, an
+// image that would not download — makes the verdict fail, whether or not a file
+// would have changed, because the run has nothing to say about those posts and
+// saying "in sync" about them is a lie CI acts on.
+//
+// This is only the *verification* verdict. A normal run's behaviour is
+// unchanged: failures are reported, the posts that synced are still written,
+// and the run still exits 0 so they are committed.
+export function checkVerdict(
+  pending: readonly string[],
+  failures: readonly PostFailure[],
+): CheckVerdict {
+  const lines: string[] = [];
+
+  if (failures.length > 0) {
+    const slugs = failures.map((failure) => failure.slug).sort();
+    lines.push(
+      `\u2717 ${failures.length} post(s) could not be read from Notion, so ` +
+        `nothing on disk could be verified against them: ${slugs.join(", ")}`,
+    );
+  }
+
+  if (pending.length > 0) {
+    lines.push(
+      `\u2717 ${pending.length} file(s) would change: ${pending.join(", ")}`,
+    );
+  }
+
+  if (lines.length === 0) return { ok: true, exitCode: 0, lines: ["\u2713 in sync"] };
+  return { ok: false, exitCode: 1, lines };
+}

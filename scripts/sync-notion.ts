@@ -22,6 +22,7 @@ import {
   planSync,
   prunableImageDirs,
   pendingOperations,
+  checkVerdict,
   type PostFailure,
 } from "../src/lib/notion/sync";
 
@@ -172,12 +173,15 @@ async function main(): Promise<void> {
   const pending = pendingOperations(plan, imagePlan);
 
   if (CHECK_ONLY) {
-    console.log(
-      pending.length === 0
-        ? "✓ in sync"
-        : `✗ ${pending.length} file(s) would change: ${pending.join(", ")}`,
-    );
-    process.exit(pending.length === 0 ? 0 : 1);
+    // A failed post makes this fail whether or not a file would change: the run
+    // could not read that post, so nothing on disk was verified against it, and
+    // "in sync" would be an answer CI acts on. See checkVerdict.
+    const verdict = checkVerdict(pending, outcome.failures);
+    for (const line of verdict.lines) {
+      if (verdict.ok) console.log(line);
+      else console.error(line);
+    }
+    process.exit(verdict.exitCode);
   }
 
   await fs.mkdir(BLOG_DIR, { recursive: true });
