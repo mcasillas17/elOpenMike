@@ -3,10 +3,10 @@ import {
   postPath,
   existingUpdated,
   desiredFiles,
-  planFiles,
   massDeleteError,
   type RenderedPost,
 } from "@/lib/notion/plan";
+import { planSync } from "@/lib/notion/sync";
 import type { PostFrontmatter } from "@/lib/notion/types";
 
 const frontmatter: PostFrontmatter = {
@@ -77,8 +77,15 @@ describe("desiredFiles", () => {
 });
 
 // The wiring the 10-minute cron depends on: a re-run over unchanged Notion
-// content must plan no writes, even though last_edited_time moved.
-describe("planFiles idempotency", () => {
+// content must plan no writes, even though last_edited_time moved. Exercised
+// through planSync, the sync's only planning entry point.
+const planFiles = (posts: RenderedPost[], existing: Map<string, string>) =>
+  planSync(
+    { rendered: posts, images: new Map(), warnings: [], failures: [] },
+    existing,
+  );
+
+describe("planSync idempotency", () => {
   it("returns the desired contents it planned from", () => {
     const { desired, plan } = planFiles([post()], new Map());
     expect(plan.write).toEqual([postPath("grounding-agents")]);

@@ -1,6 +1,6 @@
 import type { PostFrontmatter } from "./types";
 import { serializePost, contentProjection, resolveUpdated } from "./serialize";
-import { planReconcile, type ReconcilePlan } from "./reconcile";
+import type { ReconcilePlan } from "./reconcile";
 
 export type RenderedPost = {
   slug: string;
@@ -49,16 +49,6 @@ export function desiredFiles(
   }
 
   return desired;
-}
-
-// Returns the desired file set alongside its reconcile plan so callers write
-// exactly the contents the plan was computed from.
-export function planFiles(
-  posts: RenderedPost[],
-  existing: Map<string, string>,
-): { desired: Map<string, string>; plan: ReconcilePlan } {
-  const desired = desiredFiles(posts, existing);
-  return { desired, plan: planReconcile(desired, existing) };
 }
 
 // A run that removes most of the blog is far likelier to be a Notion schema or
