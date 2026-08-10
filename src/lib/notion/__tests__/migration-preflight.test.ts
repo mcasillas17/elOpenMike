@@ -205,6 +205,98 @@ describe("tags the blog could not build a url from", () => {
   });
 });
 
+describe("raw frontmatter tags", () => {
+  const fromTags = (tagsLine?: string) =>
+    toLocalPost(
+      "raw-tags.mdx",
+      [
+        "---",
+        'title: "Raw tags"',
+        "date: 2026-05-20",
+        'excerpt: "Tag validation."',
+        ...(tagsLine === undefined ? [] : [`tags: ${tagsLine}`]),
+        "---",
+        "",
+        "Body.",
+      ].join("\n"),
+    );
+
+  async function rejectsRaw(tagsLine?: string): Promise<string> {
+    const notion = new FakeNotion();
+    const prepared = await prepare(notion, [fromTags(tagsLine)]);
+
+    expect(prepared.writes).toEqual([]);
+    expect(notion.mutations).toEqual([]);
+    return prepared.errors.join("\n");
+  }
+
+  it.each([
+    ["a missing value", undefined],
+    ["a scalar string", '"AI"'],
+    ["a scalar number", "42"],
+    ["a mapping", "{ AI: true }"],
+  ])("rejects %s instead of treating it as no tags", async (_name, source) => {
+    expect(await rejectsRaw(source)).toMatch(/tags?.*array|array.*tags?/i);
+  });
+
+  it.each([
+    ["a number", '["AI", 42]'],
+    ["a boolean", '["AI", true]'],
+    ["null", '["AI", null]'],
+  ])("rejects %s inside the array instead of coercing it", async (_name, source) => {
+    const post = fromTags(source);
+
+    expect(post.tags).not.toContain(String(JSON.parse(source)[1]));
+    expect(await rejectsRaw(source)).toMatch(/tag.*string|string.*tag/i);
+  });
+
+  it("rejects an empty or whitespace-only option", async () => {
+    expect(await rejectsRaw('["AI", "", "   "]')).toMatch(/blank|empty/i);
+  });
+
+  it("rejects duplicate options in one post", async () => {
+    expect(await rejectsRaw('["AI", "AI"]')).toMatch(/duplicate.*AI|AI.*duplicate/i);
+  });
+
+  it("rejects two options whose slugs collide", async () => {
+    const errors = await rejectsRaw('["C++", "C#"]');
+
+    expect(errors).toMatch(/tag slug/i);
+    expect(errors).toMatch(/C\+\+/);
+    expect(errors).toMatch(/C#/);
+  });
+
+  it("accepts exactly 100 options and rejects the 101st", async () => {
+    const hundred = Array.from({ length: 100 }, (_, index) => `tag-${index}`);
+    const notion = new FakeNotion();
+    const accepted = await prepare(notion, [fromTags(JSON.stringify(hundred))]);
+
+    expect(accepted.errors).toEqual([]);
+    expect(
+      (
+        accepted.writes[0].page.properties.Tags as {
+          multi_select: Array<{ name: string }>;
+        }
+      ).multi_select,
+    ).toEqual(hundred.map((name) => ({ name })));
+
+    const errors = await rejectsRaw(JSON.stringify([...hundred, "tag-100"]));
+    expect(errors).toMatch(/101/);
+    expect(errors).toMatch(/100/);
+  });
+
+  it("preserves authored strings exactly in the request shape", async () => {
+    const tags = ["AI", "Distributed Systems", "C++"];
+    const notion = new FakeNotion();
+    const prepared = await prepare(notion, [fromTags(JSON.stringify(tags))]);
+
+    expect(prepared.errors).toEqual([]);
+    expect(prepared.writes[0].page.properties.Tags).toEqual({
+      multi_select: tags.map((name) => ({ name })),
+    });
+  });
+});
+
 describe("slugs", () => {
   it("refuses a file with no url-safe characters to build a slug from", async () => {
     const errors = await refuses([local("", { file: "!!!.mdx" })]);

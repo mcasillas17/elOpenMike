@@ -112,6 +112,21 @@ describe("validatePosts tags", () => {
     expect(errors[0]).toMatch(/C\+\+|C#/);
   });
 
+  it("rejects duplicate tags within one post", () => {
+    const errors = validatePosts([withFm({ tags: ["AI", "AI"] })]);
+
+    expect(errors.join("\n")).toMatch(/duplicate.*AI|AI.*duplicate/i);
+  });
+
+  it("accepts 100 tags and rejects 101", () => {
+    const hundred = Array.from({ length: 100 }, (_, index) => `tag-${index}`);
+
+    expect(validatePosts([withFm({ tags: hundred })])).toEqual([]);
+    expect(
+      validatePosts([withFm({ tags: [...hundred, "tag-100"] })]).join("\n"),
+    ).toMatch(/101.*100|100.*101/);
+  });
+
   it("does not flag the same tag reused across posts", () => {
     expect(
       validatePosts([

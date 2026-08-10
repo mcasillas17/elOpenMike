@@ -134,9 +134,10 @@ drift apart:
   has no column for it (the sync derives it from the page's last-edited time),
   but an unreadable one would reach the sitemap as `<lastmod>` and the article
   JSON-LD as `dateModified`, and then be preserved forever;
-- **tags** that Notion can store under that name (no commas, which it uses to
-  separate options) and that the blog can build a `/blog/tag/…` url from — so no
-  tag that slugifies to nothing, and no two tags that collapse onto one page;
+- **tags** authored as an array of at most 100 unique, non-empty strings. Values
+  are never coerced; commas are refused because Notion uses them to separate
+  options, as are tags with no usable `/blog/tag/…` slug and distinct names that
+  collapse onto the same slug;
 - a **body**, since a page with nothing in it is a page the sync refuses to
   publish;
 - and the **database schema** itself: a title property, `Slug`, `Excerpt`,

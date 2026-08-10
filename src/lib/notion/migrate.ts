@@ -76,6 +76,10 @@ export type LocalPost = {
   date: string;
   excerpt: string;
   tags: string[];
+  // The scalar/sequence exactly as YAML parsed it. Present only on posts read
+  // from disk, so preflight can reject malformed authored tags without ever
+  // coercing them into strings that could reach a Notion request.
+  rawTags?: { value: unknown };
   // Only what the file itself carries. Notion has no column for it — the sync
   // derives a post's `updated` from the page's last_edited_time — so this is
   // never written; it is read so a file claiming an unreadable one is caught
@@ -202,17 +206,30 @@ export function toLocalPost(file: string, raw: string): LocalPost {
   const stem = file.replace(/\.mdx$/, "");
   const { data, content } = matter(raw, FRONTMATTER_OPTIONS);
   const updated = frontmatterDate(data.updated);
+  const rawTags: unknown = data.tags;
+  const tags =
+    Array.isArray(rawTags) &&
+    rawTags.every((tag): tag is string => typeof tag === "string")
+      ? rawTags
+      : [];
 
-  return {
+  const post: LocalPost = {
     file,
     slug: slugify(stem),
     title: String(data.title ?? stem),
     date: frontmatterDate(data.date),
     excerpt: String(data.excerpt ?? ""),
-    tags: (Array.isArray(data.tags) ? data.tags : []).map(String),
+    tags,
     ...(data.updated === undefined ? {} : { updated }),
     content,
   };
+  // Validation-only provenance must not become part of a request or change the
+  // enumerable LocalPost shape consumed by the rest of the migration.
+  Object.defineProperty(post, "rawTags", {
+    value: { value: rawTags },
+    enumerable: false,
+  });
+  return post;
 }
 
 // Dates and timestamps reach this function as the scalar text the author wrote.

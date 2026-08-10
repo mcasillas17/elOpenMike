@@ -12,6 +12,7 @@ export const MAX_EXCERPT = 200;
 // option from the next, so a name carrying one cannot be stored at all, and a
 // very long name is refused outright.
 export const MAX_TAG_NAME = 100;
+export const MAX_TAG_OPTIONS = 100;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -33,7 +34,7 @@ export type PostMetadata = {
   title: string;
   date: string;
   excerpt: string;
-  tags: readonly string[];
+  tags: unknown;
   updated?: string;
 };
 
@@ -86,10 +87,30 @@ export function metadataProblems(meta: PostMetadata): string[] {
 
 // Tag names become both /blog/tag/<slug> urls and Notion multi-select options,
 // so they have to survive both.
-function tagProblems(tags: readonly string[]): string[] {
+function tagProblems(tags: unknown): string[] {
   const problems: string[] = [];
+  if (!Array.isArray(tags)) {
+    return ["tags must be an array of strings"];
+  }
+  if (tags.length > MAX_TAG_OPTIONS) {
+    problems.push(
+      `tags has ${tags.length} options (max ${MAX_TAG_OPTIONS} per Notion multi-select request)`,
+    );
+  }
 
-  for (const tag of tags) {
+  const seen = new Set<string>();
+
+  for (const [index, tag] of tags.entries()) {
+    if (typeof tag !== "string") {
+      problems.push(`tag #${index + 1} must be a string`);
+      continue;
+    }
+    if (seen.has(tag)) {
+      problems.push(`duplicate tag ${JSON.stringify(tag)}`);
+      continue;
+    }
+    seen.add(tag);
+
     if (tag.trim() === "") {
       problems.push("a tag is blank");
       continue;
@@ -120,12 +141,14 @@ function tagProblems(tags: readonly string[]): string[] {
 // would silently merge two tags onto a single page under one of the names.
 // Only meaningful across a whole set of posts, so it is a pass of its own.
 export function tagSlugCollisions(
-  tagLists: readonly (readonly string[])[],
+  tagLists: readonly unknown[],
 ): string[] {
   const namesBySlug = new Map<string, Set<string>>();
 
   for (const tags of tagLists) {
+    if (!Array.isArray(tags)) continue;
     for (const tag of tags) {
+      if (typeof tag !== "string") continue;
       const slug = slugify(tag);
       if (slug === "") continue;
       const names = namesBySlug.get(slug) ?? new Set<string>();
@@ -177,7 +200,15 @@ export function validatePosts(posts: ValidatablePost[]): string[] {
 
 // A post as it is read off disk on the way *into* Notion. Structural rather
 // than imported from migrate.ts, which imports this module.
-export type MigratablePost = PostMetadata & { file: string; content: string };
+export type MigratablePost = PostMetadata & {
+  file: string;
+  content: string;
+  rawTags?: { value: unknown };
+};
+
+function localTagInput(post: MigratablePost): unknown {
+  return post.rawTags === undefined ? post.tags : post.rawTags.value;
+}
 
 // The same invariants, keyed by the file they came from rather than by a slug.
 // Slug validity and two files claiming one slug are left to planMigration,
@@ -188,11 +219,13 @@ export function validateLocalPosts(posts: readonly MigratablePost[]): string[] {
 
   for (const post of posts) {
     const at = (message: string) => `${post.file}: ${message}`;
-    errors.push(...metadataProblems(post).map(at));
+    errors.push(
+      ...metadataProblems({ ...post, tags: localTagInput(post) }).map(at),
+    );
     if (post.content.trim() === "") errors.push(at("body is empty"));
   }
 
-  errors.push(...tagSlugCollisions(posts.map((post) => post.tags)));
+  errors.push(...tagSlugCollisions(posts.map(localTagInput)));
 
   return errors;
 }
