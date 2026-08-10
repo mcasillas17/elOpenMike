@@ -83,10 +83,15 @@ describe("backslash escapes", () => {
   });
 
   it("keeps a backslash that escapes nothing", () => {
-    // CommonMark only lets a backslash escape ASCII punctuation.
+    // CommonMark only lets a backslash escape ASCII punctuation, so a
+    // backslash before anything else — a letter, an em dash, a space — is the
+    // backslash the author typed.
     expect(runs("\\d+ digits")).toEqual([{ text: "\\d+ digits" }]);
     expect(runs("ends with a backslash \\")).toEqual([
       { text: "ends with a backslash \\" },
+    ]);
+    expect(runs("\\— and \\\u00a0 and \\\u2019")).toEqual([
+      { text: "\\— and \\\u00a0 and \\\u2019" },
     ]);
   });
 });
@@ -115,6 +120,14 @@ describe("character references", () => {
     rejects("&nosuchentity;");
     rejects("&#xd800;");
     rejects("&#0;");
+  });
+
+  it("refuses the references markdown would render as U+FFFD", () => {
+    // A reference naming a code point HTML disallows renders as the
+    // replacement character, which nobody typed and nobody wants stored.
+    for (const value of ["&#128;", "&#x1f;", "&#xffff;", "&#xfdd0;", "&#x110000;"]) {
+      rejects(value);
+    }
   });
 });
 
@@ -147,6 +160,9 @@ describe("inline code", () => {
     expect(runs("` a `")).toEqual([{ text: "a", code: true }]);
     expect(runs("`  a  `")).toEqual([{ text: " a ", code: true }]);
     expect(runs("` `")).toEqual([{ text: " ", code: true }]);
+    // Only a span of nothing but spaces keeps them: a tab is content.
+    expect(runs("` \t `")).toEqual([{ text: "\t", code: true }]);
+    expect(runs("`   `")).toEqual([{ text: "   ", code: true }]);
   });
 
   it("refuses a span that never closes", () => {
@@ -216,6 +232,9 @@ describe("emphasis", () => {
     rejects("**bold *and italic***");
     rejects("****four****");
     rejects("~~~three~~~");
+    // Interleaved rather than nested: CommonMark splits the runs across both
+    // pairs, which is not a shape Notion annotations can hold.
+    rejects("*foo **bar* baz**");
   });
 
   // Each opener that turns out not to pair off used to re-scan the rest of the

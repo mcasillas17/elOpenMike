@@ -87,9 +87,10 @@ function parse(
 
     if (char === "\\") {
       const escaped = source[index + 1];
-      // CommonMark: a backslash only escapes ASCII punctuation. Anywhere else
-      // it is the backslash the author typed.
-      if (index + 1 < end && escaped !== undefined && isPunctuation(escaped)) {
+      // CommonMark: a backslash only escapes ASCII punctuation. Before a
+      // letter, an em dash or a non-breaking space it is the backslash the
+      // author typed, and markdown renders it.
+      if (index + 1 < end && escaped !== undefined && isEscapable(escaped)) {
         literal += escaped;
         index += 2;
       } else {
@@ -383,13 +384,15 @@ function scanForCloser(
       }
       if (run.canOpen) {
         // Skip the pair this run opens, so emphasis nested inside is not
-        // mistaken for the closer being looked for.
+        // mistaken for the closer being looked for. What it could not pair off
+        // carries out: in "*foo **bar* baz**" the runs interleave rather than
+        // nest, and CommonMark splits them across both pairs.
         const inner = findCloser(source, index + run.length, end, run, memo);
+        sawMismatch = sawMismatch || inner.sawMismatch;
         if (inner.index !== undefined) {
           index = inner.index + run.length;
           continue;
         }
-        sawMismatch = sawMismatch || inner.sawMismatch;
       }
       index += run.length;
       continue;
@@ -431,14 +434,17 @@ function readCodeSpan(
   return undefined;
 }
 
-// One space is dropped from each side when the span has both and is not all
-// spaces, which is how a span holding a literal backtick is written.
+// One space is dropped from each side when the span has both and is not made of
+// spaces alone, which is how a span holding a literal backtick is written. A
+// tab is content, not padding, so a span of " \t " really does hold the tab and
+// nothing else.
+const NOT_A_SPACE = /[^ ]/;
+
 function stripPadding(content: string): string {
   const padded =
-    content.length > 1 &&
     content.startsWith(" ") &&
     content.endsWith(" ") &&
-    content.trim() !== "";
+    NOT_A_SPACE.test(content);
   return padded ? content.slice(1, -1) : content;
 }
 
@@ -537,7 +543,7 @@ function readDestination(
 
     if (char === "\\") {
       const escaped = source[index + 1];
-      if (escaped !== undefined && isPunctuation(escaped)) {
+      if (escaped !== undefined && isEscapable(escaped)) {
         url += escaped;
         index += 2;
         continue;
@@ -637,9 +643,9 @@ function readReference(
   }
 
   const code = Number.parseInt(decimal ?? hexadecimal, decimal ? 10 : 16);
-  if (code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) {
+  if (namesNoCharacter(code)) {
     throw new UnsupportedInlineMarkdownError(
-      `the character reference "${text}", which names no character`,
+      `the character reference "${text}", which markdown renders as the replacement character`,
       source,
       index,
     );
@@ -647,18 +653,41 @@ function readReference(
   return { value: String.fromCodePoint(code), length: text.length };
 }
 
+// The code points markdown refuses to produce, replacing each with U+FFFD:
+// control characters, surrogates, the noncharacters, and anything past the last
+// plane. Storing a replacement character nobody typed is the silent loss this
+// converter exists to prevent, so the reference is refused instead. Mirrors
+// micromark-util-decode-numeric-character-reference.
+function namesNoCharacter(code: number): boolean {
+  return (
+    code < 9 ||
+    code === 11 ||
+    (code > 13 && code < 32) ||
+    (code > 126 && code < 160) ||
+    (code > 0xd7ff && code < 0xe000) ||
+    (code > 0xfdcf && code < 0xfdf0) ||
+    (code & 0xffff) === 0xfffe ||
+    (code & 0xffff) === 0xffff ||
+    code > 0x10ffff
+  );
+}
+
 function isDelimiter(char: string): boolean {
   return char === "*" || char === "_" || char === "~";
 }
 
-// CommonMark counts every Unicode punctuation and symbol as punctuation, both
-// for flanking and for what a backslash may escape — bar the non-ASCII half of
-// the latter, which stays literal.
+// CommonMark counts every Unicode punctuation and symbol as punctuation for
+// flanking, but only ASCII punctuation may be backslash-escaped.
 const PUNCTUATION = /[\p{P}\p{S}]/u;
+const ASCII_PUNCTUATION = /[!-/:-@[-`{-~]/;
 const WHITESPACE = /\s/u;
 
 function isPunctuation(char: string): boolean {
   return PUNCTUATION.test(char);
+}
+
+function isEscapable(char: string): boolean {
+  return ASCII_PUNCTUATION.test(char);
 }
 
 function isWhitespace(char: string): boolean {
