@@ -46,15 +46,22 @@ export function isPublished(page: PageObject): boolean {
   return value === "Published";
 }
 
+// The slug a page publishes under, from its Slug property or, failing that, its
+// title. Derived from page metadata alone so a whole query's slugs can be
+// checked for collisions before any block is fetched.
+export function pageSlug(page: PageObject): string {
+  const properties = page.properties as Record<string, Property>;
+  const explicit = plain(properties.Slug);
+  return slugify(explicit === "" ? plain(titleProperty(properties)) : explicit);
+}
+
 // Maps a Notion page's properties onto post frontmatter. `updated` comes from
 // the page's last_edited_time; no Notion property is needed for it.
 export function toPostSource(page: PageObject, blocks: MdBlock[]): PostSource {
   const properties = page.properties as Record<string, Property>;
-  const title = plain(titleProperty(properties));
-  const explicitSlug = plain(properties.Slug);
 
   const frontmatter: PostFrontmatter = {
-    title,
+    title: plain(titleProperty(properties)),
     date: dateStart(properties.Published),
     excerpt: plain(properties.Excerpt),
     tags: multiSelect(properties.Tags),
@@ -63,7 +70,7 @@ export function toPostSource(page: PageObject, blocks: MdBlock[]): PostSource {
 
   return {
     pageId: page.id,
-    slug: explicitSlug === "" ? slugify(title) : slugify(explicitSlug),
+    slug: pageSlug(page),
     frontmatter,
     blocks,
   };

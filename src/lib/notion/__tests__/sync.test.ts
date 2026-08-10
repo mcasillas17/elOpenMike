@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { renderPosts, planSync, preservedImageDirs } from "@/lib/notion/sync";
+import { renderPosts, planSync, protectedImageDirs } from "@/lib/notion/sync";
 import { serializePost } from "@/lib/notion/serialize";
-import { postPath } from "@/lib/notion/plan";
+import { postPath, massDeleteError } from "@/lib/notion/plan";
 import type { MdBlock, PostSource } from "@/lib/notion/types";
 import { block, rt } from "./fixtures/blocks";
 
@@ -200,6 +200,7 @@ describe("planSync", () => {
     const result = planSync(outcome, existing);
 
     expect(result.plan.delete).toEqual([postPath("gone")]);
+    expect(result.deferred).toEqual([]);
   });
 
   it("prefers a rendered post over a same-slug failure", async () => {
@@ -225,6 +226,102 @@ describe("planSync", () => {
       new Map([[postPath("broken"), fileFor(broken, "Old.\n")]]),
     );
 
-    expect(preservedImageDirs(result)).toEqual(["public/images/blog/broken"]);
+    expect(protectedImageDirs(result)).toEqual(["public/images/blog/broken"]);
+  });
+
+  it("protects the image directories of skipped and deferred posts too", async () => {
+    const { download } = downloader();
+    const outcome = await renderPosts(
+      [
+        source("kept", [imageBlock("https://img/fail-kept.png")]),
+        source("never-synced", [imageBlock("https://img/fail-new.png")]),
+      ],
+      download,
+    );
+
+    const result = planSync(
+      outcome,
+      new Map([
+        [postPath("kept"), fileFor(source("kept"), "Old.\n")],
+        [postPath("renamed-away"), fileFor(source("renamed-away"), "Old.\n")],
+      ]),
+    );
+
+    expect(protectedImageDirs(result)).toEqual([
+      "public/images/blog/kept",
+      "public/images/blog/never-synced",
+      "public/images/blog/renamed-away",
+    ]);
+  });
+});
+
+// A post is identified on disk by its slug alone — nothing records which Notion
+// page wrote which file. So when a page whose slug changed fails to render, the
+// file under its *old* slug looks exactly like a post that was unpublished, and
+// deleting it would destroy content that is still published. Any failure at all
+// therefore freezes deletion for the whole run: an incomplete view of the blog
+// is never a mandate to remove anything.
+describe("planSync deletion suppression", () => {
+  it("keeps the old file when a failing post's slug changed", async () => {
+    const { download } = downloader();
+    const outcome = await renderPosts(
+      [
+        source("fine"),
+        source("new-name", [imageBlock("https://img/fail.png")]),
+      ],
+      download,
+    );
+
+    const orphan = fileFor(source("old-name"), "Old body.\n");
+    const result = planSync(outcome, new Map([[postPath("old-name"), orphan]]));
+
+    expect(result.plan.delete).toEqual([]);
+    expect(result.desired.get(postPath("old-name"))).toBe(orphan);
+    expect(result.deferred).toEqual([postPath("old-name")]);
+    // The post that did render is still published.
+    expect(result.plan.write).toEqual([postPath("fine")]);
+    expect(result.skipped).toEqual(["new-name"]);
+  });
+
+  it("defers every orphan deletion while any post fails", async () => {
+    const { download } = downloader();
+    const outcome = await renderPosts(
+      [source("fine"), source("broken", [imageBlock("https://img/fail.png")])],
+      download,
+    );
+
+    const existing = new Map([
+      [postPath("broken"), fileFor(source("broken"), "Old.\n")],
+      [postPath("orphan-a"), "---\ntitle: \"A\"\n---\n\nA.\n"],
+      [postPath("orphan-b"), "---\ntitle: \"B\"\n---\n\nB.\n"],
+    ]);
+    const result = planSync(outcome, existing);
+
+    expect(result.plan.delete).toEqual([]);
+    expect(result.deferred).toEqual([
+      postPath("orphan-a"),
+      postPath("orphan-b"),
+    ]);
+    // Deferring is not preserving: the failed post keeps its own bookkeeping.
+    expect(result.preserved).toEqual(["broken"]);
+  });
+
+  it("leaves the mass-delete guard nothing to refuse when posts fail", async () => {
+    const { download } = downloader();
+    const outcome = await renderPosts(
+      [source("broken", [imageBlock("https://img/fail.png")])],
+      download,
+    );
+
+    const existing = new Map(
+      ["broken", "a", "b", "c"].map((slug) => [
+        postPath(slug),
+        fileFor(source(slug), "Old.\n"),
+      ]),
+    );
+    const result = planSync(outcome, existing);
+
+    expect(result.plan.delete).toEqual([]);
+    expect(massDeleteError(result.plan, existing.size)).toBeUndefined();
   });
 });

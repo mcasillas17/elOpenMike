@@ -88,3 +88,33 @@ export function validatePosts(posts: ValidatablePost[]): string[] {
 
   return errors;
 }
+
+export type PublishedSource = { pageId: string; slug: string };
+
+// A post's only identity on disk is its file name, so two Notion pages that
+// claim the same slug are the same post as far as every later stage is
+// concerned. validatePosts() cannot see the collision — it only receives the
+// posts that rendered, so a run where one of the two fails looks perfectly
+// ordinary while the survivor overwrites the other page's file (and, next run,
+// the roles can swap). Run this over the published page metadata *before any
+// block is fetched* so a collision costs nothing and changes nothing.
+//
+// The same page id twice is a query artifact, not a collision: it is one post.
+export function validateSourceSlugs(sources: PublishedSource[]): string[] {
+  const pageIdsBySlug = new Map<string, Set<string>>();
+
+  for (const { pageId, slug } of sources) {
+    const ids = pageIdsBySlug.get(slug) ?? new Set<string>();
+    ids.add(pageId);
+    pageIdsBySlug.set(slug, ids);
+  }
+
+  return [...pageIdsBySlug]
+    .filter(([, ids]) => ids.size > 1)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(
+      ([slug, ids]) =>
+        `slug "${slug}" is claimed by ${ids.size} different Notion pages ` +
+        `(${[...ids].sort().join(", ")}) — give each page its own Slug`,
+    );
+}

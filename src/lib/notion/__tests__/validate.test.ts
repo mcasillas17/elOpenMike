@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { validatePosts, type ValidatablePost } from "@/lib/notion/validate";
+import {
+  validatePosts,
+  validateSourceSlugs,
+  type ValidatablePost,
+} from "@/lib/notion/validate";
 
 const ok: ValidatablePost = {
   slug: "a-good-post",
@@ -115,5 +119,60 @@ describe("validatePosts tags", () => {
         { ...ok, slug: "b", frontmatter: { ...ok.frontmatter, tags: ["AI"] } },
       ]),
     ).toEqual([]);
+  });
+});
+
+// validatePosts only ever sees the posts that *rendered*, so two distinct
+// Notion pages claiming one slug are invisible to it the moment one of them
+// fails: the survivor silently overwrites the other page's file, and the file
+// on disk carries no page id to tell them apart afterwards. The collision is
+// therefore caught on the page metadata, before a single block is fetched.
+describe("validateSourceSlugs", () => {
+  it("accepts pages with distinct slugs", () => {
+    expect(
+      validateSourceSlugs([
+        { pageId: "page-a", slug: "first" },
+        { pageId: "page-b", slug: "second" },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("rejects two distinct pages claiming one slug, naming both", () => {
+    const errors = validateSourceSlugs([
+      { pageId: "page-a", slug: "dup" },
+      { pageId: "page-b", slug: "dup" },
+    ]);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("dup");
+    expect(errors[0]).toContain("page-a");
+    expect(errors[0]).toContain("page-b");
+  });
+
+  it("reports every colliding slug once, sorted", () => {
+    const errors = validateSourceSlugs([
+      { pageId: "page-a", slug: "zeta" },
+      { pageId: "page-b", slug: "zeta" },
+      { pageId: "page-c", slug: "alpha" },
+      { pageId: "page-d", slug: "alpha" },
+      { pageId: "page-e", slug: "alpha" },
+    ]);
+
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toContain("alpha");
+    expect(errors[1]).toContain("zeta");
+  });
+
+  it("tolerates the same page appearing twice in one query", () => {
+    expect(
+      validateSourceSlugs([
+        { pageId: "page-a", slug: "dup" },
+        { pageId: "page-a", slug: "dup" },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("has nothing to say about an empty result set", () => {
+    expect(validateSourceSlugs([])).toEqual([]);
   });
 });

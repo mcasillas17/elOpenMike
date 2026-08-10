@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isPublished, toPostSource } from "@/lib/notion/fetch-post";
+import { isPublished, pageSlug, toPostSource } from "@/lib/notion/fetch-post";
 import { validatePosts } from "@/lib/notion/validate";
 import type { PageObject } from "@/lib/notion/client";
 import type { MdBlock } from "@/lib/notion/types";
@@ -105,6 +105,25 @@ describe("toPostSource title", () => {
       blocks,
     );
     expect(source.frontmatter.title).toBe("Real title");
+  });
+});
+
+// The collision guard checks page metadata before any block is fetched, so it
+// must derive exactly the slug the post is later written under — a guard that
+// checked a different string would wave the collision through.
+describe("pageSlug", () => {
+  it("is the slug toPostSource publishes under", () => {
+    const cases = [
+      complete,
+      { ...complete, Slug: richText("  A Minimal Tool! ") },
+      { ...complete, Slug: undefined },
+      { Name: title("!!!") },
+    ];
+    for (const properties of cases) {
+      expect(pageSlug(page(properties))).toBe(
+        toPostSource(page(properties), blocks).slug,
+      );
+    }
   });
 });
 

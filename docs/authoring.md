@@ -132,6 +132,19 @@ the blog syncs normally and the failure is reported per post:
 Fix the image in Notion and the next run picks the post up. The run itself
 still exits 0 so the posts that did sync are committed.
 
+While any post is failing the sync also **stops removing files**. Nothing on
+disk records which Notion page wrote which file, so a post whose slug changed
+and then failed is indistinguishable from a post you unpublished — and one of
+those two readings deletes live content. Unpublishing therefore takes effect on
+the next run in which every post syncs cleanly.
+
+## If two posts share a slug
+
+Two published pages with the same **Slug** (or, with no Slug, the same title)
+would publish to one url, and the file on disk cannot say which page it came
+from. The run stops with `slug "..." is claimed by 2 different Notion pages`
+and writes nothing. Give one of them its own Slug.
+
 ## If the sync refuses to delete posts
 
 A run that would remove more than half the posts stops with

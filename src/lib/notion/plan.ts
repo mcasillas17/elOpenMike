@@ -10,8 +10,16 @@ export type RenderedPost = {
 
 const UPDATED_PREFIX = 'updated: "';
 
+const POST_FILE = /^content\/blog\/(.*)\.mdx$/;
+
 export function postPath(slug: string): string {
   return `content/blog/${slug}.mdx`;
+}
+
+// The inverse of postPath. A path that is not a post file yields "", which
+// never matches a real slug.
+export function postSlug(file: string): string {
+  return POST_FILE.exec(file)?.[1] ?? "";
 }
 
 // Reads the `updated` value back out of a serialized post.

@@ -6,14 +6,15 @@ import {
   queryPublishedPages,
   fetchBlockTree,
 } from "../src/lib/notion/client";
-import { toPostSource, isPublished } from "../src/lib/notion/fetch-post";
-import { validatePosts } from "../src/lib/notion/validate";
+import { toPostSource, isPublished, pageSlug } from "../src/lib/notion/fetch-post";
+import { validatePosts, validateSourceSlugs } from "../src/lib/notion/validate";
 import { postPath, massDeleteError } from "../src/lib/notion/plan";
 import { downloadImage, imageDir } from "../src/lib/notion/images";
 import { mapWithConcurrency } from "../src/lib/notion/pool";
 import {
   renderPosts,
   planSync,
+  protectedImageDirs,
   type PostFailure,
 } from "../src/lib/notion/sync";
 import { isValidSlug } from "../src/lib/notion/slug";
@@ -57,7 +58,14 @@ function reportFailures(
   failures: PostFailure[],
   preserved: string[],
   skipped: string[],
+  deferred: string[],
 ): void {
+  if (deferred.length > 0) {
+    console.warn(
+      `  ${deferred.length} file(s) left in place until every post syncs: ` +
+        `${deferred.join(", ")}`,
+    );
+  }
   if (failures.length === 0) return;
 
   const annotate = process.env.GITHUB_ACTIONS === "true" ? "::error::" : "";
@@ -82,6 +90,21 @@ async function main(): Promise<void> {
 
   const pages = await queryPublishedPages(client, dataSourceId, isPublished);
   const existing = await readExisting(BLOG_DIR);
+
+  // Two pages claiming one slug are one file on disk, and nothing on disk says
+  // which page wrote it — so a run where one of them fails silently republishes
+  // the other page's content under the same url. Caught here, on metadata
+  // alone, before a single block is fetched.
+  const slugErrors = validateSourceSlugs(
+    pages.map((page) => ({ pageId: page.id, slug: pageSlug(page) })),
+  );
+  if (slugErrors.length > 0) {
+    console.error(
+      `\n✗ ${slugErrors.length} slug collision(s) — nothing written:\n`,
+    );
+    for (const error of slugErrors) console.error(`  ${error}`);
+    process.exit(1);
+  }
 
   // Bounded fan-out: Notion allows ~3 requests/second per integration, so a
   // Promise.all over every page would burst straight into 429s (see pool.ts).
@@ -109,10 +132,11 @@ async function main(): Promise<void> {
 
   for (const warning of outcome.warnings) console.warn(`  warning: ${warning}`);
 
-  const { desired, plan, preserved, skipped } = planSync(outcome, existing);
+  const syncPlan = planSync(outcome, existing);
+  const { desired, plan, preserved, skipped, deferred } = syncPlan;
   // Reported before the early exits so a failure is visible even when the run
   // stops at the mass-delete guard or in --check mode.
-  reportFailures(outcome.failures, preserved, skipped);
+  reportFailures(outcome.failures, preserved, skipped, deferred);
 
   // Fail closed on a run that would remove most of the blog — see plan.ts.
   const massDelete = ALLOW_MASS_DELETE
@@ -151,27 +175,33 @@ async function main(): Promise<void> {
   }
 
   // Write images, then prune any that no post references any more. Only posts
-  // that rendered are pruned: a preserved post's images are still referenced by
-  // the file left on disk, but this run never downloaded them.
+  // that rendered are pruned, and never a directory this run could not observe:
+  // a preserved post's images are still referenced by the file left on disk, a
+  // skipped post's directory may be a half-written earlier attempt, and a
+  // deferred file may belong to a live post whose slug moved.
+  const protectedDirs = new Set(protectedImageDirs(syncPlan));
   for (const [file, bytes] of outcome.images) {
     await fs.mkdir(path.join(ROOT, path.dirname(file)), { recursive: true });
     await fs.writeFile(path.join(ROOT, file), bytes);
   }
   for (const post of outcome.rendered) {
-    const dir = path.join(ROOT, imageDir(post.slug));
+    const dir = imageDir(post.slug);
+    if (protectedDirs.has(dir)) continue;
     const kept = new Set(
       [...outcome.images.keys()]
-        .filter((file) => file.startsWith(imageDir(post.slug)))
+        .filter((file) => file.startsWith(dir))
         .map((file) => path.basename(file)),
     );
     let present: string[] = [];
     try {
-      present = await fs.readdir(dir);
+      present = await fs.readdir(path.join(ROOT, dir));
     } catch {
       continue;
     }
     for (const name of present) {
-      if (!kept.has(name)) await fs.rm(path.join(dir, name), { force: true });
+      if (!kept.has(name)) {
+        await fs.rm(path.join(ROOT, dir, name), { force: true });
+      }
     }
   }
 
