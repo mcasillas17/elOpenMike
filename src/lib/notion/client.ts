@@ -1,5 +1,6 @@
 import { Client } from "@notionhq/client";
 import { withRetry } from "./retry";
+import type { DataSourceSchema } from "./properties";
 import type { MdBlock } from "./types";
 
 // Pinned explicitly: `archived` became `in_trash` in this version, and database
@@ -18,6 +19,35 @@ export type PageObject = {
 
 export function createNotionClient(token: string): Client {
   return new Client({ auth: token, notionVersion: NOTION_VERSION });
+}
+
+export async function retrieveDataSourceSchema(
+  client: Client,
+  dataSourceId: string,
+): Promise<DataSourceSchema> {
+  const result = await withRetry(() =>
+    client.request<{ properties?: unknown }>({
+      path: `data_sources/${dataSourceId}`,
+      method: "get",
+    }),
+  );
+  const properties = result.properties;
+  if (
+    typeof properties !== "object" ||
+    properties === null ||
+    Array.isArray(properties) ||
+    Object.values(properties).some(
+      (property) =>
+        typeof property !== "object" ||
+        property === null ||
+        typeof (property as { type?: unknown }).type !== "string",
+    )
+  ) {
+    throw new Error(
+      `data source ${dataSourceId} returned no readable property schema`,
+    );
+  }
+  return properties as DataSourceSchema;
 }
 
 // A database is a container; its schema and rows live in a data source, and

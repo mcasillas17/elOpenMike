@@ -222,6 +222,32 @@ describe("the environment both scripts read", () => {
   });
 });
 
+describe("retrieving the selected data source schema", () => {
+  it("gets the schema from the resolved data source id", async () => {
+    const calls: Array<{ path: string; method: string }> = [];
+    const client = {
+      request: async (request: { path: string; method: string }) => {
+        calls.push(request);
+        return { properties: { Tags: { type: "multi_select" } } };
+      },
+    } as unknown as Client;
+    const clientModule = await import("@/lib/notion/client");
+    const retrieve = (
+      clientModule as unknown as Record<string, unknown>
+    ).retrieveDataSourceSchema;
+
+    expect(typeof retrieve).toBe("function");
+    if (typeof retrieve !== "function") return;
+
+    await expect(
+      retrieve(client, "ds-selected"),
+    ).resolves.toEqual({ Tags: { type: "multi_select" } });
+    expect(calls).toEqual([
+      { path: "data_sources/ds-selected", method: "get" },
+    ]);
+  });
+});
+
 // The resolver only helps if the scripts that talk to Notion actually go
 // through it. Both do, and neither reads a data source id of its own.
 describe("what the production scripts are wired to", () => {
@@ -253,8 +279,40 @@ describe("what the production scripts are wired to", () => {
     expect(
       migration.match(/const dataSourceId = await resolveConfiguredDataSourceId/g),
     ).toHaveLength(1);
-    expect(migration).toMatch(/data_sources\/\$\{dataSourceId\}/);
+    expect(migration).toMatch(
+      /retrieveDataSourceSchema\(\s*client,\s*dataSourceId\s*\)/,
+    );
     expect(migration).toMatch(/queryPages\(client, dataSourceId\)/);
     expect(migration).toMatch(/createMigrationExecutor\(\s*client,\s*dataSourceId/);
+  });
+
+  it.each(scripts)("%s retrieves the resolved data source schema", (file) => {
+    const source = read(file);
+
+    expect(source).toMatch(/retrieveDataSourceSchema\(\s*client,\s*dataSourceId\s*\)/);
+  });
+
+  it("validates the sync schema before pages or local files are read", () => {
+    const sync = read("sync-notion.ts");
+    const resolved = sync.indexOf(
+      "const dataSourceId = await resolveConfiguredDataSourceId",
+    );
+    const retrieved = sync.indexOf(
+      "const schema = await retrieveDataSourceSchema",
+    );
+    const validated = sync.indexOf("const schemaErrors = schemaProblems(schema)");
+    const pages = sync.indexOf("const pages = await queryPublishedPages");
+    const files = sync.indexOf("const existing = await readExisting");
+    const planning = sync.indexOf("const syncPlan = planSync");
+    const writing = sync.indexOf("await fs.mkdir");
+
+    expect([resolved, retrieved, validated, pages, files, planning, writing]).not
+      .toContain(-1);
+    expect(resolved).toBeLessThan(retrieved);
+    expect(retrieved).toBeLessThan(validated);
+    expect(validated).toBeLessThan(pages);
+    expect(validated).toBeLessThan(files);
+    expect(validated).toBeLessThan(planning);
+    expect(validated).toBeLessThan(writing);
   });
 });

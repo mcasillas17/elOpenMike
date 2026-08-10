@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   titlePropertyName,
   buildStatusProperty,
+  schemaProblems,
   type DataSourceSchema,
 } from "@/lib/notion/properties";
 
@@ -119,6 +120,75 @@ describe("the options the migration writes by name", () => {
   it("checks only the shape when the schema lists no options", () => {
     expect(buildStatusProperty(schema({ Status: "status" }), "Draft")).toEqual({
       status: { name: "Draft" },
+    });
+  });
+
+  describe("the schema shared by sync and migration", () => {
+    const complete: DataSourceSchema = {
+      Name: { type: "title" },
+      Slug: { type: "rich_text" },
+      Excerpt: { type: "rich_text" },
+      Tags: { type: "multi_select" },
+      Status: {
+        type: "status",
+        status: { options: [{ name: "Draft" }, { name: "Published" }] },
+      },
+      Published: { type: "date" },
+    };
+
+    const without = (name: string): DataSourceSchema => {
+      const copy = { ...complete };
+      delete copy[name];
+      return copy;
+    };
+
+    it.each(["Name", "Slug", "Excerpt", "Tags", "Status", "Published"])(
+      "rejects a schema missing required property %s",
+      (name) => {
+        const problems = schemaProblems(without(name)).join("\n");
+        expect(problems).toMatch(
+          name === "Name" ? /title property/i : new RegExp(name),
+        );
+      },
+    );
+
+    it.each([
+      ["Name", "rich_text"],
+      ["Slug", "number"],
+      ["Excerpt", "number"],
+      ["Tags", "rich_text"],
+      ["Status", "rich_text"],
+      ["Published", "rich_text"],
+    ])("rejects required property %s with type %s", (name, type) => {
+      const problems = schemaProblems({
+        ...complete,
+        [name]: { type },
+      }).join("\n");
+
+      expect(problems).toMatch(name === "Name" ? /title property/i : new RegExp(name));
+      if (name !== "Name") expect(problems).toMatch(new RegExp(type));
+    });
+
+    it.each(["Draft", "Published"])(
+      "rejects Status without required option %s",
+      (missing) => {
+        const offered = missing === "Draft" ? "Published" : "Draft";
+        const problems = schemaProblems({
+          ...complete,
+          Status: {
+            type: "status",
+            status: { options: [{ name: offered }] },
+          },
+        }).join("\n");
+
+        expect(problems).toMatch(new RegExp(missing));
+      },
+    );
+
+    it("rejects a Status schema that does not expose its options", () => {
+      expect(
+        schemaProblems({ ...complete, Status: { type: "status" } }).join("\n"),
+      ).toMatch(/options/i);
     });
   });
 });

@@ -65,6 +65,7 @@ function optionNames(property: DataSourceProperty): string[] | undefined {
 export function buildStatusProperty(
   schema: DataSourceSchema,
   option = PUBLISHED_STATUS,
+  requireOptions = false,
 ): StatusPropertyValue {
   const expected = `the migration needs a Status or Select property named "${STATUS_PROPERTY}" with a "${option}" option`;
   const property = schema[STATUS_PROPERTY];
@@ -79,6 +80,12 @@ export function buildStatusProperty(
   }
 
   const names = optionNames(property);
+  if (!names && requireOptions) {
+    throw new Error(
+      `"${STATUS_PROPERTY}" does not expose its options — the schema must list ` +
+        `"${DRAFT_STATUS}" and "${PUBLISHED_STATUS}" so they can be validated before the run`,
+    );
+  }
   if (names && !names.includes(option)) {
     throw new Error(
       `"${STATUS_PROPERTY}" has no "${option}" option (it offers ` +
@@ -149,9 +156,10 @@ export function schemaProblems(schema: DataSourceSchema): string[] {
   // it actually writes.
   for (const option of [DRAFT_STATUS, PUBLISHED_STATUS]) {
     try {
-      buildStatusProperty(schema, option);
+      buildStatusProperty(schema, option, true);
     } catch (error: unknown) {
-      problems.push(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      if (!problems.includes(message)) problems.push(message);
     }
   }
 

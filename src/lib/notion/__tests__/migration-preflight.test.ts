@@ -516,10 +516,12 @@ describe("schemaProblems", () => {
     ).toEqual([]);
   });
 
-  it("says nothing about options a schema does not list", () => {
+  it("refuses a schema that does not expose the options it must validate", () => {
     expect(
-      schemaProblems({ ...completeSchema, Status: { type: "status" } }),
-    ).toEqual([]);
+      schemaProblems({ ...completeSchema, Status: { type: "status" } }).join(
+        "\n",
+      ),
+    ).toMatch(/options/i);
   });
 });
 

@@ -5,9 +5,11 @@ import {
   queryPublishedPages,
   fetchBlockTree,
   retrievePage,
+  retrieveDataSourceSchema,
 } from "../src/lib/notion/client";
 import { resolveConfiguredDataSourceId } from "../src/lib/notion/data-source";
 import { isPublished, pageSlug } from "../src/lib/notion/fetch-post";
+import { schemaProblems } from "../src/lib/notion/properties";
 import { validatePosts, validateSourceSlugs } from "../src/lib/notion/validate";
 import { postPath, massDeleteError } from "../src/lib/notion/plan";
 import { downloadImage } from "../src/lib/notion/images";
@@ -94,6 +96,19 @@ async function main(): Promise<void> {
   // and write the same rows: NOTION_DATA_SOURCE_ID when it is set and proved to
   // belong to the database, and otherwise the database's single data source.
   const dataSourceId = await resolveConfiguredDataSourceId(client);
+
+  // A renamed or retyped property otherwise reads as empty metadata and can
+  // turn every row into an invalid post. Check the selected source itself before
+  // querying a page or looking at the filesystem, using the migration's same
+  // schema contract so the two directions cannot drift.
+  const schema = await retrieveDataSourceSchema(client, dataSourceId);
+  const schemaErrors = schemaProblems(schema);
+  if (schemaErrors.length > 0) {
+    throw new Error(
+      `data source schema has ${schemaErrors.length} problem(s); nothing was read:\n` +
+        schemaErrors.map((problem) => `  ${problem}`).join("\n"),
+    );
+  }
 
   const pages = await queryPublishedPages(client, dataSourceId, isPublished);
   const existing = await readExisting(BLOG_DIR);

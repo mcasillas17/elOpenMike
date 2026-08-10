@@ -28,11 +28,10 @@ import {
   createNotionClient,
   fetchBlockTree,
   queryPages,
+  retrieveDataSourceSchema,
 } from "../src/lib/notion/client";
 import { resolveConfiguredDataSourceId } from "../src/lib/notion/data-source";
 import { pageSlug, pageStatus, pageTitle } from "../src/lib/notion/fetch-post";
-import { withRetry } from "../src/lib/notion/retry";
-import type { DataSourceSchema } from "../src/lib/notion/properties";
 import {
   toLocalPost,
   prepareMigration,
@@ -69,12 +68,7 @@ async function main(): Promise<void> {
   // Both the title property's name and the Status property's write shape and
   // options depend on how the database was set up, so read the schema before
   // writing anything.
-  const dataSource = await withRetry(() =>
-    client.request<{ properties: DataSourceSchema }>({
-      path: `data_sources/${dataSourceId}`,
-      method: "get",
-    }),
-  );
+  const schema = await retrieveDataSourceSchema(client, dataSourceId);
 
   // Every page's slug, title and status: what a re-run needs to tell a post it
   // already finished from a draft it left behind from somebody else's page.
@@ -96,7 +90,7 @@ async function main(): Promise<void> {
   const prepared = await prepareMigration(
     await readLocalPosts(BLOG_DIR),
     existing,
-    { dataSourceId, schema: dataSource.properties },
+    { dataSourceId, schema },
     (pageId) => fetchBlockTree(client, pageId),
   );
 
@@ -125,7 +119,7 @@ async function main(): Promise<void> {
   const executor = createMigrationExecutor(
     client,
     dataSourceId,
-    dataSource.properties,
+    schema,
   );
 
   const written = await runMigration(
