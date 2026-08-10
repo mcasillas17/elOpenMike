@@ -1061,6 +1061,10 @@ async function writePages(
       }
 
       await agreeOnMetadata(write, executor, pageId, held);
+      // The page is whole and is still this post's draft. The one thing the
+      // page itself cannot say is whether somebody else has come to claim its
+      // slug since the run last asked the database.
+      await proveSoleClaimant(write, executor, pageId);
     } catch (error: unknown) {
       throw unfinished(write, pageId, resumed, error, NEVER_ASKED);
     }
@@ -1138,6 +1142,50 @@ async function proveStillOnlyClaimant(
   return pageId;
 }
 
+// Every *other* live page publishing under this post's slug, as the database
+// answers right now.
+//
+// Only the others are counted. A query is an index rather than a read of the
+// page, and a page this run created a moment ago can be missing from it; that
+// is the index catching up, not evidence of another claimant, and the page
+// itself is read in full by every other check here. A page that is genuinely
+// somebody else's shows up as an extra.
+async function otherClaimants(
+  executor: MigrationExecutor,
+  slug: string,
+  pageId: string,
+): Promise<Array<{ pageId: string; status: string }>> {
+  const claimants = await executor.claimants(slug);
+  return claimants.filter((page) => page.pageId !== pageId);
+}
+
+// The last read before the promotion, and the one thing reading the page itself
+// cannot answer: whether some *other* live page has come to claim this post's
+// slug since the run last asked.
+//
+// Two live pages under one slug is the state the sync refuses to publish from
+// at all — one duplicate stops the whole blog — and the claim was last checked
+// before this page was created or first appended to, which is minutes and a
+// whole post ago. The window between this read and the promotion it justifies
+// is one request wide, like every other window here, and the check after the
+// promotion is what closes it.
+async function proveSoleClaimant(
+  write: MigrationWrite,
+  executor: MigrationExecutor,
+  pageId: string,
+): Promise<void> {
+  const others = await otherClaimants(executor, write.slug, pageId);
+  if (others.length === 0) return;
+
+  throw new Error(
+    `page ${pageId} is no longer the only page claiming this post's slug ` +
+      `(${describeClaimants(others)} also ` +
+      `${others.length === 1 ? "claims" : "claim"} it) — publishing it would ` +
+      "leave two live pages under one slug, which the sync refuses to publish " +
+      "at all",
+  );
+}
+
 function describeClaimants(
   claimants: readonly { pageId: string; status: string }[],
 ): string {
@@ -1205,9 +1253,10 @@ async function agreeOnMetadata(
 }
 
 // The page is visible to the site from here on, so what it holds is read back
-// in full one last time. A page that is not exactly this post goes straight
-// back to Draft, which is the one write that takes it off the site again, and
-// the run fails saying so.
+// in full one last time, and the database is asked once more whether anything
+// else claims this post's slug. A page that is not exactly this post — or that
+// is now one of two claimants — goes straight back to Draft, which is the one
+// write that takes it off the site again, and the run fails saying so.
 //
 // `known` is the state a caller has already read — the recheck after a lost
 // promotion has just read exactly this — so the proof is the same one either
@@ -1226,24 +1275,51 @@ async function provePublished(
   } catch (error: unknown) {
     problem = `it could not be read back at all (${reasonFor(error)})`;
   }
-  if (problem === undefined) return;
+
+  if (problem === undefined) {
+    // The page is this post, and it is Published — which is exactly what makes
+    // the demotion below this run's to make if the answer is bad.
+    let others: Array<{ pageId: string; status: string }>;
+    try {
+      others = await otherClaimants(executor, write.slug, pageId);
+    } catch (error: unknown) {
+      // Nothing was established. A query that never answered is not evidence of
+      // a duplicate, and demoting a page just proved to be this post on the
+      // strength of one would take a finished post off the site for a dropped
+      // connection.
+      throw new Error(
+        `${write.file}: page ${pageId} was published and proved to be this ` +
+          "post, but the database could not then be asked whether another " +
+          `live page claims this post's slug (${reasonFor(error)}) — the page ` +
+          `is left "${PUBLISHED_STATUS}"; check the database by hand, because ` +
+          "the sync refuses to publish at all while two live pages share one " +
+          "slug",
+      );
+    }
+    if (others.length === 0) return;
+
+    problem =
+      "is one of two live pages claiming this post's slug " +
+      `(${describeClaimants(others)}), which the sync refuses to publish at all`;
+  } else {
+    problem = `is not this post (${problem})`;
+  }
 
   try {
     await executor.demoteToDraft(pageId);
   } catch (error: unknown) {
     throw new Error(
-      `${write.file}: page ${pageId} was published and is not this post ` +
-        `(${problem}), and it could not be demoted back to "${DRAFT_STATUS}" ` +
-        `either (${reasonFor(error)}) — it is still Published on the site; set ` +
-        "its Status back by hand before anything else",
+      `${write.file}: page ${pageId} was published and ${problem}, and it ` +
+        `could not be demoted back to "${DRAFT_STATUS}" either ` +
+        `(${reasonFor(error)}) — it is still Published on the site; set its ` +
+        "Status back by hand before anything else",
     );
   }
 
   throw new Error(
-    `${write.file}: page ${pageId} was published and is not this post ` +
-      `(${problem}) — it has been demoted back to "${DRAFT_STATUS}", so nothing ` +
-      "this run wrote is published; check the page by hand and run the " +
-      "migration again",
+    `${write.file}: page ${pageId} was published and ${problem} — it has been ` +
+      `demoted back to "${DRAFT_STATUS}", so nothing this run wrote is ` +
+      "published; check the page by hand and run the migration again",
   );
 }
 

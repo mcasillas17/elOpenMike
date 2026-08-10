@@ -189,11 +189,22 @@ refuse anything that has moved:
   whole page is then read again before the promotion. Its **title** and **slug**
   are not: those are what say the page is this post at all, so a page carrying
   somebody else's is refused rather than overwritten;
-- **after the promotion**, everything is read once more. A page that is not
-  exactly this post — wrong status, wrong metadata, a block somebody added — is
-  **demoted straight back to Draft**, which takes it off the site again, and the
-  run fails saying so. If even the demotion fails, the message says the page is
-  still Published and has to be put back by hand;
+- **immediately before the promotion**, the database is also asked once more
+  who claims this post's slug. The page itself cannot answer that, and the
+  claim was last checked a whole post ago: a duplicate that appeared in between
+  would be published into a collision, and the sync refuses to publish *at all*
+  while two live pages share one slug. Another claimant leaves the page a Draft
+  and stops the run;
+- **after the promotion**, everything is read once more, and the slug is asked
+  about again — the promotion has its own one-request window, and a duplicate
+  that lands inside it is caught here. A page that is not exactly this post —
+  wrong status, wrong metadata, a block somebody added — or that is now one of
+  two claimants is **demoted straight back to Draft**, which takes it off the
+  site again, and the run fails saying so. If even the demotion fails, the
+  message says the page is still Published and has to be put back by hand. If
+  the *query* is what failed, nothing is demoted: an unanswered question is not
+  evidence of a duplicate, so the run says what it could not check and leaves
+  the proved page published;
 - **when the promotion itself fails**, nothing is assumed. `pages.update` has no
   idempotency key, so a `502`, a `504` or a dropped connection leaves two
   possibilities that look identical from here: the request never landed, or it
