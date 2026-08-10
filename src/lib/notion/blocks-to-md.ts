@@ -1,5 +1,5 @@
 import { richTextToMarkdown } from "./rich-text";
-import { escapeMarkdown } from "./escape";
+import { defuseEsmKeyword, escapeMarkdown } from "./escape";
 import { codeFence } from "./code-span";
 import type { MdBlock, RichText } from "./types";
 
@@ -232,14 +232,22 @@ function renderLinkBlock(data: Record<string, unknown>): string {
 }
 
 function renderToggle(data: Record<string, unknown>, children: MdBlock[], context: BlocksToMarkdownContext): string {
-  const summary = renderRichText(data.rich_text);
+  const summary = renderFlowText(data.rich_text);
   const renderedChildren = renderSequence(children, context, "", "\n\n");
   return [summary, renderedChildren].filter(Boolean).join("\n\n");
 }
 
 function renderTextBlock(value: unknown): string {
-  const text = renderRichText(value);
+  const text = renderFlowText(value);
   return isBlank(text) ? "" : text;
+}
+
+// Rich text that opens a block of its own, so its first character is also the
+// file's first character on that line. Every other block writes a marker in
+// front of its text — `## `, `- `, `> `, `| ` — which is enough to put the
+// line out of MDX's reach; these two do not. See escape.ts.
+function renderFlowText(value: unknown): string {
+  return defuseEsmKeyword(renderRichText(value));
 }
 
 function renderRichText(value: unknown, atLineStart = true): string {

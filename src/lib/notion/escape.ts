@@ -16,6 +16,10 @@
 //     line position is tracked and those are escaped only where they could
 //     actually open a block.
 //
+// MDX adds a third: a line that opens with `import ` or `export ` is a module
+// declaration rather than a paragraph. That one is not an escape at all —
+// see defuseEsmKeyword below.
+//
 // Everything the converters generate themselves — the `##` of a heading, the
 // `-` of a list item, the `**` around a bold run, the `[...](...)` of a link —
 // is written outside this function and is never escaped, so a wrapper is never
@@ -45,6 +49,39 @@ const ALPHANUMERIC = /[\p{L}\p{N}]/u;
 // Leading spaces do not stop a block marker from opening, so they leave the
 // "still at the start of the line" state alone.
 const INDENT = /[ \t]/;
+
+// MDX, unlike Markdown, reads a line that begins `import ` or `export ` as an
+// ESM statement and hands it straight to acorn. Prose is not JavaScript, so a
+// paragraph opening "import the data first" either fails to parse — taking the
+// whole post down with it — or, when it happens to be valid ("export const
+// config = 1"), is evaluated as a declaration and disappears from the page
+// without a trace.
+//
+// No escape defuses it: a backslash before a letter is a literal backslash, and
+// there is no character to escape anyway. A numeric character reference is the
+// way out — micromark decides this is ESM from the raw bytes of the line,
+// before any reference is resolved, so `&#105;mport …` is read as a paragraph
+// and still renders the word "import".
+//
+// The trigger is narrow, and matching it exactly is what keeps "important" and
+// "exporting" out of it: the keyword must be the whole word, it must be
+// followed by a space (a tab does not arm it), and it must sit in column one —
+// indentation, a list marker or a blockquote marker all put the line out of
+// reach. See micromark-extension-mdxjs-esm.
+const ESM_KEYWORDS = { import: "&#105;mport", export: "&#101;xport" };
+
+// The rewritten line, or the line unchanged when MDX would not read ESM in it.
+// Takes the assembled line rather than one run because Notion splits text at
+// arbitrary points: "imp" and "ort the data" are two runs of one word, and each
+// on its own looks harmless.
+export function defuseEsmKeyword(line: string): string {
+  for (const [keyword, replacement] of Object.entries(ESM_KEYWORDS)) {
+    if (line.startsWith(`${keyword} `)) {
+      return `${replacement}${line.slice(keyword.length)}`;
+    }
+  }
+  return line;
+}
 
 type BlockMarker = { text: string; length: number };
 

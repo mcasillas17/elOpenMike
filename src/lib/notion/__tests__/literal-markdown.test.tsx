@@ -32,6 +32,8 @@ const paragraph = (...runs: Parameters<typeof rt>[]) =>
   );
 
 const text = (value: string) => paragraph([value]).trimEnd();
+const paragraphText = (...runs: Parameters<typeof rt>[]) =>
+  paragraph(...runs).trimEnd();
 
 describe("escapeMarkdown", () => {
   it("keeps the MDX and JSX delimiters escaped as entities", () => {
@@ -114,6 +116,65 @@ describe("literal text that looks like a block marker", () => {
   it("leaves a pipe that cannot build a table alone", () => {
     expect(text("stdout | grep -c error")).toBe("stdout | grep -c error");
     expect(text("a | b\nc | d")).toBe("a | b\nc | d");
+  });
+});
+
+// MDX reads a line that begins `import ` or `export ` as an ESM statement, not
+// as prose. The paragraph is handed to acorn: either it fails to parse and the
+// whole post fails to compile, or — worse — it parses, and the paragraph is
+// evaluated as a module declaration and vanishes from the page.
+describe("literal text that looks like MDX ESM", () => {
+  it("defuses the keyword only where MDX would read one", () => {
+    expect(text("import the data first")).toBe(
+      "&#105;mport the data first",
+    );
+    expect(text("export const config = 1")).toBe(
+      "&#101;xport const config = 1",
+    );
+  });
+
+  it("leaves prose that merely starts with those letters alone", () => {
+    for (const value of [
+      "important context here",
+      "exporting the data is easy",
+      "imports are hoisted",
+      // The keyword only opens ESM when a space follows it.
+      "import",
+      "export\tlater",
+      "import.meta is an expression",
+    ]) {
+      expect(text(value)).toBe(value);
+    }
+  });
+
+  it("leaves the keyword alone where it cannot open a block", () => {
+    // A continuation line, a heading and a table cell are all past the one
+    // position MDX looks at.
+    expect(text("prose\nimport the data")).toBe("prose\nimport the data");
+    expect(
+      blocksToMarkdown(
+        [block("heading_1", { rich_text: [rt("import the data")] })],
+        ctx,
+      ),
+    ).toBe("## import the data\n");
+  });
+
+  it("leaves indented text alone, which MDX already reads as prose", () => {
+    expect(text("  import the data")).toBe("  import the data");
+    expect(text("\timport the data")).toBe("\timport the data");
+  });
+
+  it("defuses a keyword split across runs", () => {
+    expect(paragraphText(["imp"], ["ort the data"])).toBe("&#105;mport the data");
+    // The space that arms the keyword can come from a run of its own.
+    expect(paragraphText(["export"], [" "], ["everything", { bold: true }])).toBe(
+      "&#101;xport **everything**",
+    );
+  });
+
+  it("leaves an annotated run alone, which opens with its own delimiter", () => {
+    expect(paragraphText(["import x", { code: true }])).toBe("`import x`");
+    expect(paragraphText(["import x", { bold: true }])).toBe("**import x**");
   });
 });
 
@@ -329,5 +390,81 @@ describe("compiled through the post page's MDX pipeline", () => {
     );
     expect(container.querySelectorAll("li")).toHaveLength(1);
     expect(container.querySelector("li")?.textContent).toBe("- literal dash");
+  });
+
+  it("renders a paragraph that opens with import or export as prose", async () => {
+    for (const value of [
+      "import the data first",
+      "export the results weekly",
+      "import './styles.css' is a line of code",
+      "export const config = 1",
+    ]) {
+      const container = await renderMdx(paragraph([value]));
+      expect(container.querySelector("p")?.textContent).toBe(value);
+    }
+  });
+
+  it("renders prose that only starts with those letters untouched", async () => {
+    for (const value of [
+      "important context here",
+      "exporting the data is easy",
+      "import",
+      "import.meta is an expression",
+    ]) {
+      const source = paragraph([value]);
+      expect(source).toBe(`${value}\n`);
+      const container = await renderMdx(source);
+      expect(container.querySelector("p")?.textContent).toBe(value);
+    }
+  });
+
+  it("renders an indented keyword as the prose MDX already reads", async () => {
+    for (const value of ["  import the data", "\timport the data"]) {
+      const container = await renderMdx(paragraph([value]));
+      expect(container.querySelector("p")?.textContent).toBe(
+        "import the data",
+      );
+    }
+  });
+
+  it("renders a keyword split across runs as prose", async () => {
+    const container = await renderMdx(paragraph(["imp"], ["ort the data"]));
+    expect(container.querySelector("p")?.textContent).toBe("import the data");
+  });
+
+  it("keeps the keyword out of the way inside a list item and a quote", async () => {
+    const container = await renderMdx(
+      blocksToMarkdown(
+        [
+          block("bulleted_list_item", { rich_text: [rt("import the data")] }),
+          block("quote", { rich_text: [rt("export the results")] }),
+        ],
+        ctx,
+      ),
+    );
+    expect(container.querySelector("li")?.textContent).toBe("import the data");
+    expect(container.querySelector("blockquote p")?.textContent).toBe(
+      "export the results",
+    );
+  });
+
+  it("leaves generated code untouched, where a keyword is just code", async () => {
+    const source = blocksToMarkdown(
+      [
+        block("code", {
+          rich_text: [rt('import React from "react";')],
+          language: "typescript",
+        }),
+        block("paragraph", {
+          rich_text: [rt("import x", { code: true })],
+        }),
+      ],
+      ctx,
+    );
+    expect(source).toContain('import React from "react";');
+    const container = await renderMdx(source);
+    const [fenced, span] = [...container.querySelectorAll("code")];
+    expect(fenced.textContent).toContain('import React from "react";');
+    expect(span.textContent).toBe("import x");
   });
 });
