@@ -10,6 +10,7 @@ import { toPostSource, isPublished } from "../src/lib/notion/fetch-post";
 import { validatePosts } from "../src/lib/notion/validate";
 import { postPath, massDeleteError } from "../src/lib/notion/plan";
 import { downloadImage, imageDir } from "../src/lib/notion/images";
+import { mapWithConcurrency } from "../src/lib/notion/pool";
 import {
   renderPosts,
   planSync,
@@ -82,12 +83,12 @@ async function main(): Promise<void> {
   const pages = await queryPublishedPages(client, dataSourceId, isPublished);
   const existing = await readExisting(BLOG_DIR);
 
+  // Bounded fan-out: Notion allows ~3 requests/second per integration, so a
+  // Promise.all over every page would burst straight into 429s (see pool.ts).
   // Stable ordering keeps logs and any downstream diff deterministic.
   const sources = (
-    await Promise.all(
-      pages.map(async (page) =>
-        toPostSource(page, await fetchBlockTree(client, page.id)),
-      ),
+    await mapWithConcurrency(pages, async (page) =>
+      toPostSource(page, await fetchBlockTree(client, page.id)),
     )
   ).sort((a, b) =>
     a.frontmatter.date === b.frontmatter.date
