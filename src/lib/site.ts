@@ -59,6 +59,7 @@ export const site = {
     { label: "Experience", href: "/#experience" },
     { label: "Skills", href: "/#skills" },
     { label: "Projects", href: "/#projects" },
+    { label: "Writing", href: "/#writing" },
     { label: "About", href: "/#about" },
     { label: "Comedy", href: "/#comedy" },
     { label: "Blog", href: routes.blog },
