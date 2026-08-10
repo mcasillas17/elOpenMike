@@ -7,6 +7,7 @@ import {
   pendingOperations,
   prunableImageDirs,
   renderPosts,
+  type ImageDownloader,
 } from "@/lib/notion/sync";
 import { planImages } from "@/lib/notion/image-plan";
 import { postPath } from "@/lib/notion/plan";
@@ -101,7 +102,7 @@ function check(
   sources: PostSource[],
   existing: Map<string, string>,
   onDisk: Map<string, Uint8Array>,
-  download: (url: string) => Promise<{ bytes: Uint8Array; contentType: string }>,
+  download: ImageDownloader,
 ) {
   return renderPosts(sources, download).then((rendered) => {
     const syncPlan = planSync(rendered, existing);
@@ -139,7 +140,7 @@ function source(slug: string, blocks: MdBlock[] = []): PostSource {
 
 const downloader = async (url: string) => {
   if (url.includes("fail")) throw new Error(`image download failed: 403 ${url}`);
-  return { bytes: bytes(url), contentType: "image/png" };
+  return { bytes: bytes(url), contentType: "image/png", format: "png" as const };
 };
 
 // What the post's file looks like on disk once it has synced cleanly.

@@ -4,6 +4,14 @@ import {
   ImageUrlValidationError,
   type AddressResolver,
 } from "./image-url";
+import {
+  extensionForFormat,
+  formatFromContentType,
+  ImageFormatError,
+  IMAGE_FORMAT_MIME,
+  verifyImageFormat,
+  type ImageFormat,
+} from "./image-format";
 
 // Notion's free tier caps uploads at 5 MB; this leaves headroom while still
 // refusing anything that would bloat the repo.
@@ -37,27 +45,24 @@ class ImageDownloadError extends Error {
 
 export function safeImageErrorMessage(error: unknown): string {
   return error instanceof ImageUrlValidationError ||
-    error instanceof ImageDownloadError
+    error instanceof ImageDownloadError ||
+    error instanceof ImageFormatError
     ? error.message
     : "image download failed: unexpected failure";
 }
 
-const EXTENSIONS: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "image/svg+xml": "svg",
-  "image/avif": "avif",
-};
-
 // Content-addressed: identical bytes always produce the same filename, so an
 // unchanged image yields no diff and the 10-minute cron stays quiet (spec §6).
-export function imageFileName(bytes: Uint8Array, contentType: string): string {
+//
+// The extension comes from the format downloadImage *proved* the bytes to be,
+// never from a declared content type: the extension is what the host serves the
+// file's Content-Type from, so it is what decides whether a browser draws the
+// file or executes it. A format outside the allowlist has no name here at all —
+// see image-format.ts.
+export function imageFileName(bytes: Uint8Array, format: ImageFormat): string {
+  const extension = extensionForFormat(format);
   const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
-  const mime = contentType.split(";")[0].trim().toLowerCase();
-  return `${hash}.${EXTENSIONS[mime] ?? "bin"}`;
+  return `${hash}.${extension}`;
 }
 
 export const BLOG_IMAGE_ROOT = "public/images/blog";
@@ -172,12 +177,25 @@ async function readCapped(
   return bytes;
 }
 
+export type DownloadedImage = {
+  bytes: Uint8Array;
+  // The canonical type of the format the bytes were proved to be, not the
+  // header the server sent.
+  contentType: string;
+  format: ImageFormat;
+};
+
 // Notion's file URLs are signed and expire one hour after they are issued, so
 // this must run while the URL from the current fetch is still fresh.
+//
+// Nothing is returned that has not been proved to be one of the raster formats
+// the site publishes: the declared type is checked before the body is read at
+// all, and the bytes are checked against it once they are in hand. An SVG never
+// gets as far as being a value a caller could write.
 export async function downloadImage(
   url: string,
   options: DownloadImageOptions = {},
-): Promise<{ bytes: Uint8Array; contentType: string }> {
+): Promise<DownloadedImage> {
   try {
     const controller = new AbortController();
     const response = await fetchValidated(url, options, controller.signal);
@@ -188,15 +206,25 @@ export async function downloadImage(
         `server returned status ${response.status}`,
       );
     }
-    return {
-      bytes: await readCapped(response, controller),
-      contentType:
-        response.headers.get("content-type") ?? "application/octet-stream",
-    };
+
+    // Refused before a byte of the body is read: an SVG is an SVG whatever it
+    // weighs, and there is no reason to spend the transfer on one.
+    const declared = response.headers.get("content-type") ?? "";
+    if (!formatFromContentType(declared)) {
+      await response.body?.cancel();
+      controller.abort();
+      throw new ImageFormatError("unsupported-content-type");
+    }
+
+    const bytes = await readCapped(response, controller);
+    const format = verifyImageFormat(declared, bytes);
+
+    return { bytes, contentType: IMAGE_FORMAT_MIME[format], format };
   } catch (error: unknown) {
     if (
       error instanceof ImageUrlValidationError ||
-      error instanceof ImageDownloadError
+      error instanceof ImageDownloadError ||
+      error instanceof ImageFormatError
     ) {
       throw error;
     }

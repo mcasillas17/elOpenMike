@@ -7,8 +7,33 @@ import {
   MAX_IMAGE_REDIRECTS,
 } from "@/lib/notion/images";
 import type { AddressResolver } from "@/lib/notion/image-url";
+import { ImageFormatError } from "@/lib/notion/image-format";
+import {
+  concatBytes,
+  AVIF_BYTES,
+  GIF89_BYTES,
+  HTML_BYTES,
+  JPEG_BYTES,
+  PNG_BYTES,
+  SCRIPT_SVG_BYTES,
+  WEBP_BYTES,
+  XML_BYTES,
+} from "./fixtures/images";
 
 const bytes = (s: string) => new TextEncoder().encode(s);
+
+// Real PNG bytes with a recognizable tail, so a test can assert both that the
+// body arrived intact and that it passed the format check the sync makes.
+const pngBody = (tail: string) => concatBytes(PNG_BYTES, bytes(tail));
+const tailOf = (body: Uint8Array) =>
+  new TextDecoder().decode(body.slice(PNG_BYTES.byteLength));
+
+// A body of `size` bytes that really is a PNG.
+function pngOfSize(size: number): Uint8Array<ArrayBuffer> {
+  const body = new Uint8Array(size);
+  body.set(PNG_BYTES.slice(0, Math.min(PNG_BYTES.byteLength, size)));
+  return body;
+}
 
 // No test here touches DNS or the network: the resolver is injected and always
 // answers with a routable public address unless the case is about resolution.
@@ -19,37 +44,41 @@ const SIGNED_URL =
 
 describe("imageFileName", () => {
   it("is deterministic for identical bytes", () => {
-    expect(imageFileName(bytes("abc"), "image/png")).toBe(
-      imageFileName(bytes("abc"), "image/png"),
+    expect(imageFileName(bytes("abc"), "png")).toBe(
+      imageFileName(bytes("abc"), "png"),
     );
   });
 
   it("differs for different bytes", () => {
-    expect(imageFileName(bytes("abc"), "image/png")).not.toBe(
-      imageFileName(bytes("xyz"), "image/png"),
+    expect(imageFileName(bytes("abc"), "png")).not.toBe(
+      imageFileName(bytes("xyz"), "png"),
     );
   });
 
-  it("uses a 12-character hash and the mapped extension", () => {
-    expect(imageFileName(bytes("abc"), "image/png")).toMatch(
-      /^[0-9a-f]{12}\.png$/,
-    );
-    expect(imageFileName(bytes("abc"), "image/webp")).toMatch(/\.webp$/);
-    expect(imageFileName(bytes("abc"), "image/jpeg")).toMatch(/\.jpg$/);
-    expect(imageFileName(bytes("abc"), "image/gif")).toMatch(/\.gif$/);
-    expect(imageFileName(bytes("abc"), "image/svg+xml")).toMatch(/\.svg$/);
+  it("uses a 12-character hash and the extension of the verified format", () => {
+    expect(imageFileName(bytes("abc"), "png")).toMatch(/^[0-9a-f]{12}\.png$/);
+    expect(imageFileName(bytes("abc"), "webp")).toMatch(/\.webp$/);
+    expect(imageFileName(bytes("abc"), "jpeg")).toMatch(/\.jpg$/);
+    expect(imageFileName(bytes("abc"), "gif")).toMatch(/\.gif$/);
+    expect(imageFileName(bytes("abc"), "avif")).toMatch(/\.avif$/);
   });
 
-  it("ignores content-type parameters", () => {
-    expect(imageFileName(bytes("abc"), "image/png; charset=binary")).toMatch(
-      /\.png$/,
-    );
+  // The extension is what decides the Content-Type the site serves the file
+  // with, so it may only ever come from a format the bytes were proved to be.
+  it("names no extension a browser would run as a document", () => {
+    for (const format of ["png", "jpeg", "gif", "webp", "avif"] as const) {
+      expect(imageFileName(bytes("abc"), format)).not.toMatch(
+        /\.(svg|xml|html|bin)$/,
+      );
+    }
   });
 
-  it("falls back to .bin for unknown types", () => {
-    expect(imageFileName(bytes("abc"), "application/octet-stream")).toMatch(
-      /\.bin$/,
-    );
+  it("refuses a format outside the raster allowlist", () => {
+    for (const format of ["svg", "svg+xml", "bin", "", "application/octet-stream"]) {
+      expect(() =>
+        imageFileName(bytes("abc"), format as unknown as "png"),
+      ).toThrow(ImageFormatError);
+    }
   });
 });
 
@@ -62,15 +91,16 @@ describe("imageDir", () => {
 describe("downloadImage", () => {
   it("returns bytes and content type", async () => {
     const fake = async () =>
-      new Response(bytes("png-data"), {
+      new Response(pngBody("png-data"), {
         headers: { "content-type": "image/png" },
       });
     const result = await downloadImage(SIGNED_URL, {
       fetchImpl: fake as typeof fetch,
       resolve: publicResolver,
     });
-    expect(new TextDecoder().decode(result.bytes)).toBe("png-data");
+    expect(tailOf(result.bytes)).toBe("png-data");
     expect(result.contentType).toBe("image/png");
+    expect(result.format).toBe("png");
   });
 
   it("throws on a non-OK response", async () => {
@@ -159,7 +189,7 @@ describe("downloadImage error redaction", () => {
 // re-checked against the same policy as the first request.
 describe("downloadImage redirect handling", () => {
   const png = () =>
-    new Response(bytes("png-data"), {
+    new Response(pngBody("png-data"), {
       headers: { "content-type": "image/png" },
     });
 
@@ -193,7 +223,7 @@ describe("downloadImage redirect handling", () => {
       resolve: publicResolver,
     });
 
-    expect(new TextDecoder().decode(result.bytes)).toBe("png-data");
+    expect(tailOf(result.bytes)).toBe("png-data");
     expect(seen).toEqual([
       "https://file.notion.so/f/f/a/photo.png",
       "https://prod-files-secure.s3.us-west-2.amazonaws.com/final.png",
@@ -382,7 +412,7 @@ describe("downloadImage url policy", () => {
 });
 
 function png(): Response {
-  return new Response(bytes("png-data"), {
+  return new Response(pngBody("png-data"), {
     headers: { "content-type": "image/png" },
   });
 }
@@ -404,7 +434,9 @@ describe("downloadImage size cap", () => {
           return;
         }
         state.pulled += 1;
-        controller.enqueue(new Uint8Array(CHUNK));
+        controller.enqueue(
+          state.pulled === 1 ? pngOfSize(CHUNK) : new Uint8Array(CHUNK),
+        );
       },
       cancel() {
         state.cancelled = true;
@@ -474,7 +506,7 @@ describe("downloadImage size cap", () => {
   });
 
   it("accepts a body of exactly the cap and rejects one byte more", async () => {
-    const exact = new Uint8Array(MAX_IMAGE_BYTES);
+    const exact = pngOfSize(MAX_IMAGE_BYTES);
     const okResult = await downloadImage(SIGNED_URL, {
       fetchImpl: (async () =>
         new Response(exact, {
@@ -502,7 +534,7 @@ describe("downloadImage size cap", () => {
   it("reassembles multi-chunk bodies in order", async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(bytes("png-"));
+        controller.enqueue(concatBytes(PNG_BYTES, bytes("png-")));
         controller.enqueue(bytes("data"));
         controller.close();
       },
@@ -514,6 +546,146 @@ describe("downloadImage size cap", () => {
         })) as unknown as typeof fetch,
       resolve: publicResolver,
     });
-    expect(new TextDecoder().decode(result.bytes)).toBe("png-data");
+    expect(tailOf(result.bytes)).toBe("png-data");
+  });
+});
+
+// A committed image is served from the site's own origin, and an SVG is a
+// document a browser runs rather than a picture it draws: one under
+// public/images/blog/ is stored XSS on the site, reachable by following the
+// link the post itself carries. Nothing about the response can be taken on
+// trust — a Notion image block's `external` URL is whatever an author (or
+// whoever can edit the page) pasted, and the extension the sync writes is what
+// decides the Content-Type the file is later served with.
+describe("downloadImage format policy", () => {
+  const served = (body: Uint8Array<ArrayBuffer>, contentType: string) =>
+    (async () =>
+      new Response(body, { headers: { "content-type": contentType } })) as
+      unknown as typeof fetch;
+
+  const download = (body: Uint8Array<ArrayBuffer>, contentType: string) =>
+    downloadImage(SIGNED_URL, {
+      fetchImpl: served(body, contentType),
+      resolve: publicResolver,
+    });
+
+  it("refuses an SVG that declares itself one", async () => {
+    await expect(download(SCRIPT_SVG_BYTES, "image/svg+xml")).rejects.toThrow(
+      ImageFormatError,
+    );
+  });
+
+  it("refuses an SVG dressed as every raster type in turn", async () => {
+    for (const contentType of [
+      "image/png",
+      "image/jpeg",
+      "image/gif",
+      "image/webp",
+      "image/avif",
+    ]) {
+      await expect(download(SCRIPT_SVG_BYTES, contentType)).rejects.toThrow(
+        ImageFormatError,
+      );
+    }
+  });
+
+  it("refuses an SVG whose extension and type are both a lie", async () => {
+    await expect(
+      downloadImage(
+        "https://prod-files-secure.s3.us-west-2.amazonaws.com/a/logo.png?X-Amz-Signature=x",
+        {
+          fetchImpl: served(SCRIPT_SVG_BYTES, "image/png"),
+          resolve: publicResolver,
+        },
+      ),
+    ).rejects.toThrow(ImageFormatError);
+  });
+
+  it("refuses XML and HTML bodies", async () => {
+    await expect(download(XML_BYTES, "image/png")).rejects.toThrow(
+      ImageFormatError,
+    );
+    await expect(download(HTML_BYTES, "image/png")).rejects.toThrow(
+      ImageFormatError,
+    );
+  });
+
+  it("refuses a body no allowed format claims", async () => {
+    await expect(download(bytes("not an image at all"), "image/png")).rejects.toThrow(
+      ImageFormatError,
+    );
+  });
+
+  it("refuses a type outside the raster allowlist even with matching bytes", async () => {
+    await expect(download(PNG_BYTES, "application/octet-stream")).rejects.toThrow(
+      ImageFormatError,
+    );
+    await expect(download(PNG_BYTES, "")).rejects.toThrow(ImageFormatError);
+  });
+
+  it("refuses a response that declares no type at all", async () => {
+    await expect(
+      downloadImage(SIGNED_URL, {
+        fetchImpl: (async () => new Response(PNG_BYTES)) as unknown as typeof fetch,
+        resolve: publicResolver,
+      }),
+    ).rejects.toThrow(ImageFormatError);
+  });
+
+  it("refuses a raster mislabelled as another raster", async () => {
+    await expect(download(GIF89_BYTES, "image/png")).rejects.toThrow(
+      ImageFormatError,
+    );
+  });
+
+  it.each([
+    ["png", PNG_BYTES, "image/png", "image/png"],
+    ["jpeg", JPEG_BYTES, "image/jpeg", "image/jpeg"],
+    ["jpeg", JPEG_BYTES, "image/jpg", "image/jpeg"],
+    ["gif", GIF89_BYTES, "image/gif", "image/gif"],
+    ["webp", WEBP_BYTES, "image/webp", "image/webp"],
+    ["avif", AVIF_BYTES, "image/avif", "image/avif"],
+  ])(
+    "accepts a real %s and reports the type it proved",
+    async (format, body, contentType, canonical) => {
+      const result = await download(body, contentType);
+      expect(result.format).toBe(format);
+      expect(result.contentType).toBe(canonical);
+      expect(imageFileName(result.bytes, result.format)).not.toMatch(/\.svg$/);
+    },
+  );
+
+  // The file name is the only thing that decides what the site serves the bytes
+  // as, so it has to come from the format that was proved rather than from the
+  // header that was read.
+  it("names the file from the proved format, not the declared one", async () => {
+    const result = await download(JPEG_BYTES, "image/jpg");
+    expect(imageFileName(result.bytes, result.format)).toMatch(/\.jpg$/);
+  });
+
+  it("keeps the signed URL out of a refusal", async () => {
+    const signed =
+      "https://s3.us-west-2.amazonaws.com/secure.notion-static.com/logo.png" +
+      "?X-Amz-Signature=deadbeef&X-Amz-Security-Token=tok";
+
+    await expect(
+      downloadImage(signed, {
+        fetchImpl: served(SCRIPT_SVG_BYTES, "image/svg+xml"),
+        resolve: publicResolver,
+      }),
+    ).rejects.toSatisfy((error: unknown) => {
+      const message = (error as Error).message;
+      for (const secret of [
+        "deadbeef",
+        "X-Amz-Signature",
+        "secure.notion-static.com",
+        "/logo.png",
+        "alert",
+        "document.domain",
+      ]) {
+        expect(message).not.toContain(secret);
+      }
+      return /image/i.test(message);
+    });
   });
 });

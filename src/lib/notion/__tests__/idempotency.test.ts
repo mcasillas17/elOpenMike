@@ -33,9 +33,7 @@ describe("sync idempotency (spec §7)", () => {
 
   it("hashes the same image bytes to the same filename", () => {
     const bytes = new TextEncoder().encode("image-payload");
-    expect(imageFileName(bytes, "image/png")).toBe(
-      imageFileName(bytes, "image/png"),
-    );
+    expect(imageFileName(bytes, "png")).toBe(imageFileName(bytes, "png"));
   });
 
   it("plans no writes when a re-run produces the same content", () => {

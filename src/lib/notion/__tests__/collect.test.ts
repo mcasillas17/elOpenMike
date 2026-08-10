@@ -270,7 +270,11 @@ describe("a stale page through the rest of the sync", () => {
     const collected = await collectSources(pages, client);
     const outcome = await renderPosts(
       collected.sources,
-      async () => ({ bytes: new Uint8Array(), contentType: "image/png" }),
+      async () => ({
+        bytes: new Uint8Array(),
+        contentType: "image/png",
+        format: "png" as const,
+      }),
       collected.failures,
     );
 

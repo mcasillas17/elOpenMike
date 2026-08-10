@@ -9,6 +9,8 @@ import {
 import { serializePost } from "@/lib/notion/serialize";
 import { postPath, massDeleteError } from "@/lib/notion/plan";
 import { validateSourceSlugs } from "@/lib/notion/validate";
+import { planImages } from "@/lib/notion/image-plan";
+import { ImageFormatError } from "@/lib/notion/image-format";
 import type { MdBlock, PostSource } from "@/lib/notion/types";
 import { block, rt } from "./fixtures/blocks";
 
@@ -44,7 +46,7 @@ function downloader() {
       if (url.includes("fail")) {
         throw new Error(`image download failed: 403 ${url.split("?")[0]}`);
       }
-      return { bytes: bytes(url), contentType: "image/png" };
+      return { bytes: bytes(url), contentType: "image/png", format: "png" as const };
     },
   };
 }
@@ -502,5 +504,72 @@ describe("pendingOperations", () => {
       "content/blog/b.mdx",
       "public/images/blog/b/new.png",
     ]);
+  });
+});
+
+// The last line of the SVG defence: whatever the download does, a post whose
+// image is refused must leave nothing behind to write. A rejected image is a
+// failed post, and a failed post is neither rendered nor does it contribute a
+// single file to the image plan — so nothing is committed, nothing is served,
+// and `--check` says the run could not read the blog.
+describe("an image the format policy refuses", () => {
+  const svgPost = source("with-svg", [
+    imageBlock("https://file.notion.so/f/f/a/logo.png?sig=1"),
+  ]);
+
+  const refuseSvg = async () => {
+    throw new ImageFormatError("markup-content");
+  };
+
+  it("renders no post, plans no image, and writes no file", async () => {
+    const outcome = await renderPosts([source("plain"), svgPost], refuseSvg);
+
+    expect(outcome.rendered.map((post) => post.slug)).toEqual(["plain"]);
+    expect(outcome.images.size).toBe(0);
+    expect(outcome.failures.map((failure) => failure.slug)).toEqual(["with-svg"]);
+
+    const plan = planSync(outcome, new Map());
+    const images = planImages(
+      outcome.images,
+      new Map(),
+      prunableImageDirs(outcome, plan),
+    );
+
+    expect(images.write).toEqual([]);
+    expect(images.delete).toEqual([]);
+    expect(pendingOperations(plan.plan, images)).toEqual([
+      postPath("plain"),
+    ]);
+    expect(plan.desired.has(postPath("with-svg"))).toBe(false);
+  });
+
+  it("reports a category rather than the response it refused", async () => {
+    const outcome = await renderPosts([svgPost], async () => {
+      throw new ImageFormatError("markup-content");
+    });
+
+    const message = outcome.failures[0].message;
+    expect(message).toMatch(/image/i);
+    expect(message).not.toContain("file.notion.so");
+    expect(message).not.toContain("sig=1");
+  });
+
+  it("keeps a post's other images out of the plan too", async () => {
+    const post = source("two-images", [
+      imageBlock("https://file.notion.so/f/f/a/ok.png"),
+      imageBlock("https://file.notion.so/f/f/b/bad.png"),
+    ]);
+
+    const outcome = await renderPosts([post], async (url) => {
+      if (url.includes("bad")) throw new ImageFormatError("markup-content");
+      return {
+        bytes: bytes(url),
+        contentType: "image/png",
+        format: "png" as const,
+      };
+    });
+
+    expect(outcome.images.size).toBe(0);
+    expect(outcome.rendered).toEqual([]);
   });
 });

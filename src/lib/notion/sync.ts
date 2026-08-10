@@ -1,5 +1,10 @@
 import { blocksToMarkdown } from "./blocks-to-md";
-import { imageDir, imageFileName, safeImageErrorMessage } from "./images";
+import {
+  imageDir,
+  imageFileName,
+  safeImageErrorMessage,
+  type DownloadedImage,
+} from "./images";
 import type { ImagePlan } from "./image-plan";
 import { isValidSlug } from "./slug";
 import { planReconcile, type ReconcilePlan } from "./reconcile";
@@ -11,9 +16,7 @@ import type { MdBlock, PostFailure, PostSource } from "./types";
 // image meant nothing at all synced. Rendering is therefore per-post: a failure
 // is recorded against that post and the rest of the run continues.
 
-export type ImageDownloader = (
-  url: string,
-) => Promise<{ bytes: Uint8Array; contentType: string }>;
+export type ImageDownloader = (url: string) => Promise<DownloadedImage>;
 
 export type { PostFailure };
 
@@ -56,8 +59,8 @@ async function capturePostImages(
           } catch (error: unknown) {
             throw new Error(safeImageErrorMessage(error));
           }
-          const { bytes, contentType } = image;
-          const name = imageFileName(bytes, contentType);
+          const { bytes, format } = image;
+          const name = imageFileName(bytes, format);
           files.set(`${imageDir(post.slug)}/${name}`, bytes);
           paths.set(block.id, `/images/blog/${post.slug}/${name}`);
         }

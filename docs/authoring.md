@@ -112,6 +112,18 @@ disk and the run reports the failure. Image failures name only a generic reason:
 the public log never repeats a hostname, IP or DNS result, credentials, path,
 query, or fragment from the rejected URL or one of its redirects.
 
+Only five formats are published: PNG, JPEG, GIF, WebP and AVIF. The type the
+server declares has to be one of them *and* the bytes have to actually be that
+format, so a GIF served as `image/png` is refused rather than renamed, and the
+extension written to disk comes from the format that was proved rather than
+from the header that was read.
+
+**SVG is refused outright**, however it is labelled. A committed image is served
+from the site's own origin, and an SVG is not a picture to a browser — it is a
+document that runs script, so a stored one is same-origin XSS reachable by
+following the very link the post carries. If you need a diagram, export it as a
+PNG before uploading it.
+
 ## Known rough edge
 
 Code blocks are painful to author on a phone — touch keyboards fight braces and
