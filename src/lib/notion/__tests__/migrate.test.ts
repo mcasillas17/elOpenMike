@@ -84,6 +84,20 @@ describe("toLocalPost", () => {
       "a-post",
     );
   });
+
+  // YAML turns an unquoted 2026-05-20 into a Date, whose default string form
+  // Notion rejects — and which local time has already moved back a day.
+  it("keeps an unquoted frontmatter date on the day it was written", () => {
+    expect(
+      toLocalPost("a-post.mdx", "---\ndate: 2026-05-20\n---\n\nBody.\n").date,
+    ).toBe("2026-05-20");
+    expect(
+      toLocalPost("a-post.mdx", '---\ndate: "2026-05-20"\n---\n\nBody.\n').date,
+    ).toBe("2026-05-20");
+    expect(toLocalPost("a-post.mdx", "---\ntitle: X\n---\n\nBody.\n").date).toBe(
+      "",
+    );
+  });
 });
 
 describe("planMigration", () => {
@@ -168,6 +182,21 @@ describe("planMigration", () => {
       expect(plan.create.map((p) => p.slug)).toEqual(["one"]);
       expect(plan.archived.map((a) => a.slug)).toEqual(["one"]);
     }
+  });
+
+  // A blank row is one Enter press away in any Notion database view, and its
+  // slug normalizes to nothing. Two of them are not a collision with anything.
+  it("ignores database rows with no usable slug", () => {
+    const plan = planMigration(
+      [local("one")],
+      [
+        { pageId: "page-blank-1", slug: "" },
+        { pageId: "page-blank-2", slug: "" },
+      ],
+    );
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.create.map((p) => p.slug)).toEqual(["one"]);
   });
 
   it("does not count a trashed page as a duplicate of a live one", () => {

@@ -74,11 +74,24 @@ export function toLocalPost(file: string, raw: string): LocalPost {
     file,
     slug: slugify(stem),
     title: String(data.title ?? stem),
-    date: String(data.date ?? ""),
+    date: frontmatterDate(data.date),
     excerpt: String(data.excerpt ?? ""),
     tags: (Array.isArray(data.tags) ? data.tags : []).map(String),
     content,
   };
+}
+
+// YAML parses an unquoted 2026-05-20 into a Date, and String()ing that yields
+// "Tue May 19 2026 17:00:00 GMT-0700" — a value Notion rejects, and one that has
+// already slipped a day into the local timezone. The parsed date is UTC
+// midnight, so the ISO day is the day that was written.
+function frontmatterDate(value: unknown): string {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? ""
+      : value.toISOString().slice(0, 10);
+  }
+  return String(value ?? "").trim();
 }
 
 function isTrashed(page: RemotePage): boolean {
@@ -94,6 +107,10 @@ export function planMigration(
   const live = pages.filter((page) => !isTrashed(page));
   const bySlug = new Map<string, RemotePage[]>();
   for (const page of live) {
+    // A blank database row — one Enter press away in any Notion view — has no
+    // usable slug, cannot collide with a local post, and must not be read as
+    // colliding with the next blank row either.
+    if (!isValidSlug(page.slug)) continue;
     bySlug.set(page.slug, [...(bySlug.get(page.slug) ?? []), page]);
   }
 
