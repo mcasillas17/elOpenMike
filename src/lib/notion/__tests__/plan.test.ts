@@ -74,6 +74,38 @@ describe("desiredFiles", () => {
       'updated: "2099-12-31"',
     );
   });
+
+  // A body line reading `updated: "..."` was stripped by the projection along
+  // with the frontmatter key, so editing that line in Notion looked like no
+  // change at all and the post kept the stale timestamp it had on disk.
+  it("adopts the new updated when only an updated-shaped body line changed", () => {
+    const onDisk = desiredFiles(
+      [post({ body: 'Prose.\nupdated: "old content"\n' })],
+      new Map(),
+    );
+    const rerun = desiredFiles(
+      [
+        touched(
+          post({ body: 'Prose.\nupdated: "new content"\n' }),
+          "2099-12-31",
+        ),
+      ],
+      onDisk,
+    );
+
+    const file = rerun.get(postPath("grounding-agents"))!;
+    expect(file).toContain('updated: "2099-12-31"');
+    expect(file).toContain('updated: "new content"');
+  });
+
+  it("keeps the on-disk updated when an updated-shaped body line did not change", () => {
+    const body = 'Prose.\nupdated: "new content"\n';
+    const onDisk = desiredFiles([post({ body })], new Map());
+    const rerun = desiredFiles([touched(post({ body }), "2099-12-31")], onDisk);
+    expect(rerun.get(postPath("grounding-agents"))).toContain(
+      'updated: "2026-05-20"',
+    );
+  });
 });
 
 // The wiring the 10-minute cron depends on: a re-run over unchanged Notion
@@ -144,5 +176,28 @@ describe("massDeleteError", () => {
 
   it("has nothing to guard when the blog is empty", () => {
     expect(massDeleteError(plan(0), 0)).toBeUndefined();
+  });
+});
+
+// existingUpdated() read the first `updated: "` line anywhere in the file, so a
+// post whose body carried one — and whose frontmatter did not — reported a
+// timestamp lifted out of its own prose.
+describe("existingUpdated outside the frontmatter", () => {
+  it("ignores a body line that looks like the key", () => {
+    expect(
+      existingUpdated('---\ntitle: "x"\n---\n\nupdated: "1999-01-01"\n'),
+    ).toBeUndefined();
+  });
+
+  it("still reads the real key when the body has one too", () => {
+    expect(
+      existingUpdated(
+        '---\ntitle: "x"\nupdated: "2026-05-20"\n---\n\nupdated: "1999-01-01"\n',
+      ),
+    ).toBe("2026-05-20");
+  });
+
+  it("ignores a file with no frontmatter at all", () => {
+    expect(existingUpdated('updated: "1999-01-01"\n')).toBeUndefined();
   });
 });

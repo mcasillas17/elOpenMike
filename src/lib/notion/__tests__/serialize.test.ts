@@ -167,3 +167,37 @@ describe("contentProjection with hostile values", () => {
     expect(contentProjection(a)).not.toBe(contentProjection(b));
   });
 });
+
+// The projection dropped every line in the file that began `updated: `, body
+// included — so a post could rewrite that line and still project identically to
+// the version on disk. `updated` is a frontmatter key; only the frontmatter
+// block may be read for it, and the body has to survive byte for byte.
+describe("contentProjection outside the frontmatter", () => {
+  it("sees a body line that only looks like frontmatter", () => {
+    const a = serializePost(fm, 'Prose.\nupdated: "new content"\n');
+    const b = serializePost(fm, "Prose.\n");
+    expect(contentProjection(a)).not.toBe(contentProjection(b));
+  });
+
+  it("keeps the body byte for byte", () => {
+    const body = 'updated: "new content"\nupdated: "and more"\n';
+    expect(contentProjection(serializePost(fm, body))).toContain(body);
+  });
+
+  it("still ignores the real updated line", () => {
+    const body = 'updated: "new content"\n';
+    expect(contentProjection(serializePost(fm, body))).toBe(
+      contentProjection(serializePost({ ...fm, updated: "2099-01-01" }, body)),
+    );
+  });
+
+  it("leaves a file with no frontmatter alone", () => {
+    const raw = 'updated: "hand written"\nBody.\n';
+    expect(contentProjection(raw)).toBe(raw);
+  });
+
+  it("leaves an unterminated frontmatter block alone", () => {
+    const raw = '---\ntitle: "x"\nupdated: "2026-01-01"\n';
+    expect(contentProjection(raw)).toBe(raw);
+  });
+});

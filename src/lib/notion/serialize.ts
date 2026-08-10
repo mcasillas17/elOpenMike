@@ -34,14 +34,57 @@ export function serializePost(fm: PostFrontmatter, body: string): string {
   return `---\n${lines.join("\n")}\n---\n\n${normalizedBody}\n`;
 }
 
+const UPDATED_LINE = "updated: ";
+
+// The span of the opening frontmatter block's contents, between the two `---`
+// delimiter lines. Returns undefined when the file does not open with a
+// frontmatter block or never closes one, so an unrecognized file is left alone
+// rather than partially rewritten.
+function frontmatterRange(
+  mdx: string,
+): { start: number; end: number } | undefined {
+  const lines = mdx.split("\n");
+  const delimiter = (line: string) => line.replace(/\r$/, "") === "---";
+  if (lines.length === 0 || !delimiter(lines[0])) return undefined;
+
+  let offset = lines[0].length + 1;
+  const start = offset;
+  for (let i = 1; i < lines.length; i++) {
+    if (delimiter(lines[i])) return { start, end: offset };
+    offset += lines[i].length + 1;
+  }
+  return undefined;
+}
+
+// The lines of the opening frontmatter block, or an empty list when there is
+// no such block. Reading a frontmatter key anywhere else means reading the
+// post's own prose.
+export function frontmatterLines(mdx: string): string[] {
+  const range = frontmatterRange(mdx);
+  if (!range) return [];
+  return mdx.slice(range.start, range.end).split("\n");
+}
+
 // The content-relevant view of a file: everything except `updated`. Two files
 // with the same projection represent the same post, even if Notion's
 // last_edited_time moved because the page was merely opened.
+//
+// `updated` is a frontmatter key, so only the frontmatter block is stripped:
+// dropping every line in the file that began `updated: ` also dropped them from
+// the body, and two posts whose bodies differed only in such a line projected
+// identically — the sync then read a real edit as "nothing changed" and kept
+// the stale timestamp. The body is copied through byte for byte.
 export function contentProjection(mdx: string): string {
-  return mdx
+  const range = frontmatterRange(mdx);
+  if (!range) return mdx;
+
+  const kept = mdx
+    .slice(range.start, range.end)
     .split("\n")
-    .filter((line) => !line.startsWith("updated: "))
+    .filter((line) => !line.startsWith(UPDATED_LINE))
     .join("\n");
+
+  return mdx.slice(0, range.start) + kept + mdx.slice(range.end);
 }
 
 // Preserve the on-disk `updated` when nothing about the content changed;

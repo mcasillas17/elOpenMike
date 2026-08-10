@@ -1,5 +1,10 @@
 import type { PostFrontmatter } from "./types";
-import { serializePost, contentProjection, resolveUpdated } from "./serialize";
+import {
+  serializePost,
+  contentProjection,
+  frontmatterLines,
+  resolveUpdated,
+} from "./serialize";
 import type { ReconcilePlan } from "./reconcile";
 
 export type RenderedPost = {
@@ -22,11 +27,12 @@ export function postSlug(file: string): string {
   return POST_FILE.exec(file)?.[1] ?? "";
 }
 
-// Reads the `updated` value back out of a serialized post.
+// Reads the `updated` value back out of a serialized post's frontmatter. A
+// line in the body that happens to share the shape is prose, not metadata.
 export function existingUpdated(mdx: string | undefined): string | undefined {
-  const line = mdx
-    ?.split("\n")
-    .find((candidate) => candidate.startsWith(UPDATED_PREFIX));
+  const line = frontmatterLines(mdx ?? "").find((candidate) =>
+    candidate.startsWith(UPDATED_PREFIX),
+  );
   return line?.slice(UPDATED_PREFIX.length, -1);
 }
 
