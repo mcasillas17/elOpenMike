@@ -19,17 +19,35 @@ test("a tag chip navigates to its tag page", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(label);
 });
 
-test("heading anchors deep-link into a post", async ({ page }) => {
+test("a heading anchor deep-links into the section it labels", async ({
+  page,
+}) => {
   await page.goto("/blog");
   await page.locator("article h2 a").first().click();
   await expect(page).toHaveURL(/\/blog\/[^/]+$/);
+  const postUrl = page.url();
 
+  // The anchor rehype-autolink-headings appends: a child of the slugged
+  // heading itself, not the card link that got us here.
   const heading = page.locator("h2[id]").first();
-  await expect(heading).toBeVisible();
+  const anchor = heading.locator("> a.heading-anchor");
+  await expect(anchor).toHaveCount(1);
 
   const id = await heading.getAttribute("id");
-  await page.goto(`${page.url().split("#")[0]}#${id}`);
-  await expect(page.locator(`h2#${id}`)).toBeInViewport();
+  expect(id).toBeTruthy();
+  await expect(anchor).toHaveAttribute("href", `#${id}`);
+  await expect(anchor).toHaveAccessibleName("Link to this section");
+
+  // Hidden until the heading is hovered or the link is focused, but always
+  // reachable — a keyboard user tabs to it and it becomes visible.
+  await anchor.focus();
+  await expect(anchor).toBeFocused();
+
+  await anchor.click();
+
+  // The hash comes from following the anchor, not from building a URL here.
+  await expect(page).toHaveURL(`${postUrl}#${id}`);
+  await expect(heading).toBeInViewport();
 });
 
 test("the homepage links to the blog from the writing section", async ({
