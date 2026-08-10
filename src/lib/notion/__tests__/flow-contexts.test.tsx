@@ -254,6 +254,28 @@ describe("a heading carrying a line ending", () => {
     expect(container.textContent).toContain("export const c = 1");
     expect(container.textContent).toContain("Nested.");
   });
+
+  // A heading holding nothing but a line ending is an empty heading, and an
+  // empty heading is not written at all.
+  it("is dropped when it holds nothing but line endings", async () => {
+    const markdown = blocksToMarkdown(
+      [block("heading_1", { rich_text: [rt("\n\n")] })],
+      ctx,
+    );
+
+    expect(markdown).toBe("");
+  });
+
+  it("still publishes what is nested under an empty one", async () => {
+    const container = await renderBlocks([
+      block("heading_1", { rich_text: [rt("\n")] }, [
+        block("paragraph", { rich_text: [rt("Nested.")] }),
+      ]),
+    ]);
+
+    expect(container.querySelector("h2")).toBeNull();
+    expect(container.textContent).toContain("Nested.");
+  });
 });
 
 // A list item's continuation belongs to the item, so it is written at the

@@ -201,10 +201,14 @@ function renderHeading(
   // The closing sequence is defused after that, on the one line the heading now
   // has: a run of hashes ending it is markup wherever the author's line breaks
   // used to be.
-  const text = defuseHeadingClosingSequence(
-    referenceLineEndings(renderRichText(value, false, context)),
-  );
-  const own = isBlank(text) ? "" : `${marker} ${text}`;
+  //
+  // Whether the heading is blank is decided on the text as Notion holds it,
+  // before the references are written: a heading carrying nothing but line
+  // endings is an empty heading, and `## &#10;` would publish an empty one
+  // rather than dropping it.
+  const rendered = renderRichText(value, false, context);
+  const text = defuseHeadingClosingSequence(referenceLineEndings(rendered));
+  const own = isBlank(rendered) ? "" : `${marker} ${text}`;
   return withChildren(own, children, context);
 }
 
