@@ -1,10 +1,10 @@
 import type { BlockObjectRequest } from "@notionhq/client";
+import { inlineToRichText, type RichTextInput } from "./md-to-rich-text";
 
 // Derived from the SDK rather than restated, so `pnpm exec tsc` fails if a
 // language below is not one Notion actually accepts.
 type CodeBlockRequest = Extract<BlockObjectRequest, { code: unknown }>;
 export type NotionLanguage = CodeBlockRequest["code"]["language"];
-type RichTextInput = CodeBlockRequest["code"]["rich_text"];
 
 // Every value Notion's API accepts for a code block's language, bar the legacy
 // composite "java/c/c++/c#" that no fence produces. Notion refuses the entire
@@ -85,14 +85,17 @@ export function notionCodeLanguage(label: string): NotionLanguage {
   return lookup(cleaned) ?? lookup(token) ?? FALLBACK;
 }
 
-// One unstyled run. Notion accepts a property value and a block's body in the
-// same shape, so both sides of the migration build them here.
+// One unstyled run, for the text that carries no formatting to lose: a
+// property value, and the body of a code block, where a backtick or an asterisk
+// is part of the snippet rather than markup.
 export const plainRichText = (content: string): RichTextInput => [
   { type: "text", text: { content } },
 ];
 
 // Handles exactly the constructs the two existing posts use. Anything else
-// throws rather than silently dropping content.
+// throws rather than silently dropping content — including the inline markdown
+// inside a line, which md-to-rich-text turns into the annotated runs Notion
+// stores rather than leaving as the characters that spell them.
 //
 // Heading levels shift back by one: blocks-to-md renders Notion's H1/H2/H3 as
 // `##`/`###`/`####` (the post title is already the page's h1), so migrating in
@@ -123,7 +126,7 @@ export function markdownToBlocks(markdown: string): BlockObjectRequest[] {
       blocks.push({
         object: "block",
         type: "heading_2",
-        heading_2: { rich_text: plainRichText(line.slice(4)) },
+        heading_2: { rich_text: inlineToRichText(line.slice(4)) },
       });
       continue;
     }
@@ -131,7 +134,7 @@ export function markdownToBlocks(markdown: string): BlockObjectRequest[] {
       blocks.push({
         object: "block",
         type: "heading_1",
-        heading_1: { rich_text: plainRichText(line.slice(3)) },
+        heading_1: { rich_text: inlineToRichText(line.slice(3)) },
       });
       continue;
     }
@@ -139,7 +142,7 @@ export function markdownToBlocks(markdown: string): BlockObjectRequest[] {
       blocks.push({
         object: "block",
         type: "bulleted_list_item",
-        bulleted_list_item: { rich_text: plainRichText(line.slice(2)) },
+        bulleted_list_item: { rich_text: inlineToRichText(line.slice(2)) },
       });
       continue;
     }
@@ -152,7 +155,7 @@ export function markdownToBlocks(markdown: string): BlockObjectRequest[] {
     blocks.push({
       object: "block",
       type: "paragraph",
-      paragraph: { rich_text: plainRichText(line) },
+      paragraph: { rich_text: inlineToRichText(line) },
     });
   }
 

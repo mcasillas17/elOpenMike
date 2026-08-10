@@ -18,6 +18,16 @@ const codeBlocks = (markdown: string): CodeBlock[] =>
     (block): block is CodeBlock => "code" in block,
   );
 
+// The one block a line becomes, read back as the runs the migration will send.
+const richText = (line: string) => {
+  const [block] = markdownToBlocks(line);
+  const payload = Object.values(block).find(
+    (value): value is { rich_text: unknown } =>
+      typeof value === "object" && value !== null && "rich_text" in value,
+  );
+  return payload?.rich_text;
+};
+
 // Notion rejects a create-page request whose code block carries a language it
 // does not know — the whole page is refused, so a single `​```ts` fence stops
 // the migration dead. Markdown and Shiki spell most languages differently from
@@ -173,6 +183,67 @@ describe("markdownToBlocks", () => {
   it("refuses markdown it would silently drop", () => {
     for (const line of ["# Title", "> Quote", "| a | b |"]) {
       expect(() => markdownToBlocks(line)).toThrow(/unsupported markdown/);
+    }
+  });
+
+  it("keeps the inline formatting a line carries", () => {
+    expect(richText("Call `searchDocs` first")).toEqual([
+      { type: "text", text: { content: "Call " } },
+      {
+        type: "text",
+        text: { content: "searchDocs" },
+        annotations: { code: true },
+      },
+      { type: "text", text: { content: " first" } },
+    ]);
+  });
+
+  it("keeps it in headings and list items too", () => {
+    expect(richText("## A **bold** section")).toEqual([
+      { type: "text", text: { content: "A " } },
+      { type: "text", text: { content: "bold" }, annotations: { bold: true } },
+      { type: "text", text: { content: " section" } },
+    ]);
+    expect(richText("### An *italic* sub")).toEqual([
+      { type: "text", text: { content: "An " } },
+      {
+        type: "text",
+        text: { content: "italic" },
+        annotations: { italic: true },
+      },
+      { type: "text", text: { content: " sub" } },
+    ]);
+    expect(richText("- Read the [docs](https://example.com)")).toEqual([
+      { type: "text", text: { content: "Read the " } },
+      {
+        type: "text",
+        text: { content: "docs", link: { url: "https://example.com" } },
+      },
+    ]);
+  });
+
+  it("gives back the literal text the escaper defused", () => {
+    expect(richText("\\*not emphasis\\* and Array&lt;T>")).toEqual([
+      { type: "text", text: { content: "*not emphasis* and Array<T>" } },
+    ]);
+  });
+
+  it("leaves a code block's body alone, backticks and all", () => {
+    expect(codeBlocks("```md\nA **bold** `span`\n```\n")[0].code.rich_text).toEqual([
+      { type: "text", text: { content: "A **bold** `span`" } },
+    ]);
+  });
+
+  it("refuses inline markdown it cannot represent before anything is created", () => {
+    for (const line of [
+      "an ![image](https://example.com/a.png) inline",
+      "a [reference][link]",
+      "an <span>element</span>",
+      "an unclosed `code span",
+    ]) {
+      expect(() => markdownToBlocks(line)).toThrow(
+        /unsupported inline markdown/,
+      );
     }
   });
 

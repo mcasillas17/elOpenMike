@@ -68,6 +68,12 @@ two database pages, or if two local files map to the same slug. A page in the
 Notion trash does not hold its slug, so trashing a page and re-running is how a
 single post is redone.
 
+Inline formatting travels with the text: code spans, bold, italic,
+strikethrough and links become the annotations a Notion page stores rather than
+the characters that spell them. Inline markdown that has no equivalent in a
+Notion run — an image, a reference link, a link title, raw HTML — stops the run
+before the first page is created, naming the line and the offset it choked on.
+
 ## Deploy (Fly.io)
 
 Runs as a Next.js standalone server in a container (`Dockerfile` + `fly.toml`;
