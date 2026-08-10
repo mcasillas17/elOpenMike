@@ -67,14 +67,51 @@ Required GitHub secrets:
 ## One-time migration into Notion
 
 `pnpm migrate:to-notion` pushes the hand-written `content/blog/*.mdx` posts into
-the Notion database. It needs `NOTION_TOKEN` and `NOTION_DATA_SOURCE_ID`.
+the Notion database. It needs `NOTION_TOKEN` and `NOTION_DATA_SOURCE_ID`, and a
+`Status` property (Status or Select) offering both a **Draft** and a
+**Published** option — it checks for both before writing anything, because
+Notion refuses a status value that is not already an option and the API cannot
+add one.
 
-It is safe to re-run: it reads the slugs already in the database and creates
-only the posts that are missing, so a run interrupted partway is finished by
-running it again. It refuses to create anything if a slug is already claimed by
-two database pages, or if two local files map to the same slug. A page in the
-Notion trash does not hold its slug, so trashing a page and re-running is how a
-single post is redone.
+It is safe to re-run, and safe to kill. Every page is created as a **Draft**,
+which the sync never publishes, and is promoted to **Published** in a single
+request only once every one of its blocks has landed. Published therefore means
+finished: nothing half-migrated is ever visible on the site, however the run
+ended — including a process killed outright, where no rollback code could have
+run at all.
+
+A re-run reads the whole database first and then finishes what it finds:
+
+- a **Published** page under a post's slug is that post, already done, and is
+  skipped;
+- a **Draft** page under the same slug *and* the same title is a page a previous
+  run left unfinished. Its blocks are read back and measured against the post,
+  and it is resumed only if what is already there is an exact prefix of what the
+  post says — same blocks, same order, nested children and all. The missing
+  blocks are then appended and the page promoted. That prefix, with the slug,
+  the title and the draft status, is the safety gate: the database schema is the
+  one you author in, so there is no column to mark a page as the migration's
+  own;
+- anything else claiming the slug stops the run with a message naming it, and
+  **nothing at all is written** — not even for the posts that were fine. That
+  covers a draft whose content has diverged, a draft under another title, a page
+  in some other status, a slug claimed by two pages, and two local files mapping
+  to one slug. Nothing it refuses is modified.
+
+All of that reading happens before the first write, so a run either has a clean
+plan for every post or changes nothing.
+
+A page in the Notion trash holds no slug, so trashing a page and re-running is
+how a single post is redone from scratch.
+
+**Pause the sync workflow first.** `sync-content.yml` runs every ten minutes and
+removes the `content/blog/*.mdx` of any post Notion has not published — which is
+the correct behaviour for unpublishing a post, and exactly the wrong one
+mid-migration: it deletes the very file a killed run needs in order to finish
+its draft. Disable the workflow (or run the migration and let it finish) before
+starting. If a file does go missing, restore it from git and run the migration
+again; every draft it finds that no local file claims is listed at the end of
+the run, by slug.
 
 Inline formatting travels with the text: code spans, bold, italic, underline,
 strikethrough and links become the annotations a Notion page stores rather than
@@ -92,16 +129,9 @@ Notion's size limits are measured before anything is sent. A post longer than
 one request creates the page with its first 100 blocks and appends the rest in
 batches of 100, in order; a run of text longer than 2000 characters is split
 into as many runs as it needs, each keeping the same annotations and link. If
-appending fails after the page exists, the new page is moved to the Notion
-trash — it then holds no slug, so re-running the migration is the recovery. If
-even that fails, the message names the page to delete by hand.
-
-One window this cannot close by itself: a post that takes several requests has
-a moment where its page exists and holds its slug while the post is
-incomplete. Every failure the script can see is rolled back, but a process
-killed outright sees nothing, and the half-written page it leaves is one a
-re-run skips as "already there". If a run is killed, check the last slug it
-logged, trash that page in Notion, and run again.
+anything fails once the page exists, the page is left exactly as it is — an
+unpublished draft the site never shows — because the blocks that did land are
+what the next run resumes from. Run the migration again to finish it.
 
 Anything with no equivalent in a Notion block or run — an image, a reference
 link, a link title, arbitrary HTML, a `#` heading, an indented code block, a

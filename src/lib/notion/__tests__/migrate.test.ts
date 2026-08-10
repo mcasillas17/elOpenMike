@@ -15,6 +15,12 @@ import type { DataSourceSchema } from "@/lib/notion/properties";
 // already landed. Two Notion pages then claim one slug, which the sync refuses
 // outright, so the blog stops updating until someone cleans the database by
 // hand.
+//
+// A page is now created as a Draft and promoted to Published only once every
+// one of its blocks has landed, so Published means finished: a published page
+// is skipped, a draft under the same slug and title is a page this migration
+// left unfinished and is resumed, and anything else claiming the slug is
+// somebody's writing and stops the run. See migration-resume.test.ts.
 
 const schema = (properties: Record<string, string>): DataSourceSchema =>
   Object.fromEntries(
@@ -53,11 +59,18 @@ const local = (slug: string, overrides: Partial<LocalPost> = {}): LocalPost => (
   ...overrides,
 });
 
+// A page a previous run finished: published, so nothing is left to do to it.
 const remote = (slug: string, overrides: Partial<RemotePage> = {}): RemotePage => ({
   pageId: `page-${slug}`,
   slug,
+  title: `Title ${slug}`,
+  status: "Published",
   ...overrides,
 });
+
+// A page a previous run created and never finished.
+const draft = (slug: string, overrides: Partial<RemotePage> = {}): RemotePage =>
+  remote(slug, { status: "Draft", ...overrides });
 
 describe("toLocalPost", () => {
   it("maps a post's frontmatter and body, keying it by a normalized slug", () => {
@@ -139,7 +152,7 @@ describe("planMigration", () => {
   it("refuses to plan anything when two database pages share a slug", () => {
     const plan = planMigration(
       [local("one"), local("two")],
-      [remote("one"), { pageId: "page-one-again", slug: "one" }],
+      [remote("one"), remote("one", { pageId: "page-one-again" })],
     );
 
     expect(plan.create).toEqual([]);
@@ -190,8 +203,8 @@ describe("planMigration", () => {
     const plan = planMigration(
       [local("one")],
       [
-        { pageId: "page-blank-1", slug: "" },
-        { pageId: "page-blank-2", slug: "" },
+        remote("", { pageId: "page-blank-1" }),
+        remote("", { pageId: "page-blank-2" }),
       ],
     );
 
@@ -202,12 +215,108 @@ describe("planMigration", () => {
   it("does not count a trashed page as a duplicate of a live one", () => {
     const plan = planMigration(
       [local("one")],
-      [remote("one"), { pageId: "page-old", slug: "one", in_trash: true }],
+      [remote("one"), { ...draft("one"), pageId: "page-old", in_trash: true }],
     );
 
     expect(plan.errors).toEqual([]);
     expect(plan.create).toEqual([]);
     expect(plan.skip).toEqual([{ slug: "one", pageId: "page-one" }]);
+  });
+
+  // A page a killed run left behind: same slug, same title, still a draft, so
+  // it is this post half written rather than somebody else's page.
+  it("resumes a draft page rather than creating a second one", () => {
+    const plan = planMigration([local("one"), local("two")], [draft("one")]);
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.create.map((post) => post.slug)).toEqual(["two"]);
+    expect(plan.skip).toEqual([]);
+    expect(plan.resume).toEqual([
+      { post: plan.resume[0].post, pageId: "page-one" },
+    ]);
+    expect(plan.resume[0].post.slug).toBe("one");
+  });
+
+  it("refuses a draft claiming the slug under a different title", () => {
+    const plan = planMigration(
+      [local("one")],
+      [draft("one", { title: "Someone else's post" })],
+    );
+
+    expect(plan.create).toEqual([]);
+    expect(plan.resume).toEqual([]);
+    expect(plan.errors).toHaveLength(1);
+    expect(plan.errors[0]).toContain("Someone else's post");
+  });
+
+  // Neither finished nor ours: publishing it would put a stranger's writing on
+  // the site, and appending to it would edit a page nobody asked us to touch.
+  it("refuses a page claiming the slug in some other status", () => {
+    for (const status of ["In progress", "Archived", ""]) {
+      const plan = planMigration([local("one")], [remote("one", { status })]);
+
+      expect(plan.create).toEqual([]);
+      expect(plan.resume).toEqual([]);
+      expect(plan.errors).toHaveLength(1);
+      expect(plan.errors[0]).toContain("page-one");
+    }
+  });
+
+  it("refuses a slug claimed by a draft and a published page at once", () => {
+    const plan = planMigration(
+      [local("one")],
+      [remote("one"), { ...draft("one"), pageId: "page-one-draft" }],
+    );
+
+    expect(plan.create).toEqual([]);
+    expect(plan.resume).toEqual([]);
+    expect(plan.skip).toEqual([]);
+    expect(plan.errors[0]).toContain("page-one-draft");
+  });
+
+  // The content sync removes the .mdx of any post Notion has not published, so
+  // a draft a killed run left behind can outlive its own source file — and then
+  // there is nothing left to migrate it from. Reporting the draft is what turns
+  // that into "restore the file from git and run again".
+  describe("a draft no local file claims", () => {
+    it("is reported so the missing file can be named", () => {
+      const plan = planMigration([local("one")], [draft("gone")]);
+
+      expect(plan.errors).toEqual([]);
+      expect(plan.create.map((post) => post.slug)).toEqual(["one"]);
+      expect(plan.orphanDrafts).toEqual([
+        { slug: "gone", pageId: "page-gone" },
+      ]);
+    });
+
+    it("is reported even when the run is stopping for another reason", () => {
+      const plan = planMigration(
+        [local("one")],
+        [draft("gone"), remote("one"), remote("one", { pageId: "again" })],
+      );
+
+      expect(plan.errors).toHaveLength(1);
+      expect(plan.orphanDrafts.map((entry) => entry.slug)).toEqual(["gone"]);
+    });
+
+    it("does not report a draft a local file is about to resume", () => {
+      expect(planMigration([local("one")], [draft("one")]).orphanDrafts).toEqual(
+        [],
+      );
+    });
+
+    it("does not report a published page, a trashed one, or a blank row", () => {
+      const plan = planMigration(
+        [local("one")],
+        [
+          remote("published-elsewhere"),
+          draft("trashed", { in_trash: true }),
+          remote("", { pageId: "page-blank" }),
+        ],
+      );
+
+      expect(plan.orphanDrafts).toEqual([]);
+    });
   });
 });
 
@@ -244,19 +353,21 @@ describe("migrationRequests", () => {
   });
 
   // buildStatusProperty and notionCodeLanguage are load-bearing: the API
-  // rejects the whole page for the wrong Status shape or an unknown fence.
+  // rejects the whole page for the wrong Status shape or an unknown fence. A
+  // page is created as a Draft — the sync publishes only what reads
+  // "Published", so a page half-written when a run dies is invisible.
   it("keeps writing Status in the shape the database uses", () => {
     const plan = planMigration([local("one")], []);
 
     expect(
       migrationRequests(plan, options)[0].page.properties.Status,
-    ).toEqual({ status: { name: "Published" } });
+    ).toEqual({ status: { name: "Draft" } });
     expect(
       migrationRequests(plan, {
         dataSourceId: "ds-1",
         schema: schema({ Name: "title", Status: "select" }),
       })[0].page.properties.Status,
-    ).toEqual({ select: { name: "Published" } });
+    ).toEqual({ select: { name: "Draft" } });
   });
 
   it("fails loudly, before any page is created, on an unusable Status property", () => {
@@ -309,7 +420,7 @@ describe("migrationRequests", () => {
   it("builds nothing from a plan that reported errors", () => {
     const plan = planMigration(
       [local("one")],
-      [remote("one"), { pageId: "other", slug: "one" }],
+      [remote("one"), remote("one", { pageId: "other" })],
     );
     expect(migrationRequests(plan, options)).toEqual([]);
   });

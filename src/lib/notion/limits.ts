@@ -234,17 +234,26 @@ export type ChildBatches = {
   appends: BlockObjectRequest[][];
 };
 
-export function batchChildren(blocks: BlockObjectRequest[]): ChildBatches {
-  const children = blocks.slice(0, MAX_CHILDREN_PER_REQUEST);
-  const appends: BlockObjectRequest[][] = [];
+// Blocks in the order they were written, cut into whole requests. Used on its
+// own when the page already exists — a resumed migration appends everything it
+// is missing, including the first hundred.
+export function batchBlocks(
+  blocks: BlockObjectRequest[],
+): BlockObjectRequest[][] {
+  const batches: BlockObjectRequest[][] = [];
 
   for (
-    let index = MAX_CHILDREN_PER_REQUEST;
+    let index = 0;
     index < blocks.length;
     index += MAX_CHILDREN_PER_REQUEST
   ) {
-    appends.push(blocks.slice(index, index + MAX_CHILDREN_PER_REQUEST));
+    batches.push(blocks.slice(index, index + MAX_CHILDREN_PER_REQUEST));
   }
 
+  return batches;
+}
+
+export function batchChildren(blocks: BlockObjectRequest[]): ChildBatches {
+  const [children = [], ...appends] = batchBlocks(blocks);
   return { children, appends };
 }

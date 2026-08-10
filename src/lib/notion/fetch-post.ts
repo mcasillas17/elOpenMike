@@ -35,15 +35,29 @@ function titleProperty(
   return Object.values(properties).find((p) => p?.type === "title");
 }
 
-// True when the page's Status (or Select) property reads "Published".
-// Accepts both property types so the database can use either.
-export function isPublished(page: PageObject): boolean {
+// The name the page's Status (or Select) property carries, or "" when it has
+// none. Both property types are read so the database can use either, and the
+// raw name is exposed because the migration distinguishes more than published
+// from not: a page it left as a draft is one it can finish, and a page in any
+// other state belongs to somebody else.
+export function pageStatus(page: PageObject): string {
   const properties = page.properties as Record<string, Property>;
   const property = properties.Status;
-  const value =
+  return (
     (property?.status as { name?: string } | undefined)?.name ??
-    (property?.select as { name?: string } | undefined)?.name;
-  return value === "Published";
+    (property?.select as { name?: string } | undefined)?.name ??
+    ""
+  );
+}
+
+// True when the page's Status (or Select) property reads "Published".
+export function isPublished(page: PageObject): boolean {
+  return pageStatus(page) === "Published";
+}
+
+// The page's title as plain text, whatever the title property is called.
+export function pageTitle(page: PageObject): string {
+  return plain(titleProperty(page.properties as Record<string, Property>));
 }
 
 // The slug a page publishes under, from its Slug property or, failing that, its

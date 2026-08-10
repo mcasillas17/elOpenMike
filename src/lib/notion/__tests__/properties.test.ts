@@ -70,3 +70,55 @@ describe("buildStatusProperty", () => {
     );
   });
 });
+
+// The migration writes two option names by hand: it creates every page as
+// "Draft" and promotes it to "Published" once all of its blocks have landed.
+// A `status` property only accepts options it already defines and the API
+// cannot add one, so a database missing either name has to fail here — before
+// the first page — rather than mid-run, with drafts already created that could
+// then never be promoted.
+describe("the options the migration writes by name", () => {
+  const withOptions = (
+    type: "status" | "select",
+    ...names: string[]
+  ): DataSourceSchema => ({
+    Status: { type, [type]: { options: names.map((name) => ({ name })) } },
+  });
+
+  it("accepts a database offering both of them", () => {
+    for (const type of ["status", "select"] as const) {
+      expect(
+        buildStatusProperty(withOptions(type, "Draft", "Published"), "Draft"),
+      ).toEqual({ [type]: { name: "Draft" } });
+      expect(
+        buildStatusProperty(withOptions(type, "Draft", "Published")),
+      ).toEqual({ [type]: { name: "Published" } });
+    }
+  });
+
+  it("refuses a database with nothing to migrate into", () => {
+    expect(() =>
+      buildStatusProperty(withOptions("status", "Published"), "Draft"),
+    ).toThrow(/no "Draft" option/);
+  });
+
+  it("refuses a database a draft could never be promoted in", () => {
+    expect(() =>
+      buildStatusProperty(withOptions("status", "Draft"), "Published"),
+    ).toThrow(/no "Published" option/);
+  });
+
+  it("lists the options the database does offer", () => {
+    expect(() =>
+      buildStatusProperty(withOptions("select", "Idea", "Live"), "Draft"),
+    ).toThrow(/"Idea", "Live"/);
+  });
+
+  // Only the shape is checked when the schema carries no options at all, which
+  // is what every caller that builds one by hand looks like.
+  it("checks only the shape when the schema lists no options", () => {
+    expect(buildStatusProperty(schema({ Status: "status" }), "Draft")).toEqual({
+      status: { name: "Draft" },
+    });
+  });
+});

@@ -4,11 +4,17 @@ import { slugify, isValidSlug } from "./slug";
 import {
   titlePropertyName,
   buildStatusProperty,
+  DRAFT_STATUS,
+  PUBLISHED_STATUS,
   type DataSourceSchema,
 } from "./properties";
 import { markdownToBlocks, plainRichText as text } from "./md-to-blocks";
 import type { RichTextInput } from "./md-to-rich-text";
+import type { MdBlock } from "./types";
+import { matchBlockPrefix } from "./block-equality";
+import { mapWithConcurrency } from "./pool";
 import {
+  batchBlocks,
   batchChildren,
   blockProblems,
   normalizeBlocks,
@@ -25,22 +31,39 @@ import {
 //
 // So the run is planned against what is already in the database: existing slugs
 // are read first, posts that are already there are skipped, and anything
-// ambiguous stops the run before a single page is created. Re-running is then
-// safe by construction, and a complete re-run does nothing at all.
+// ambiguous stops the run before a single page is created.
+//
+// That leaves the window a try/catch cannot cover. A post longer than one
+// request is a create and then a series of appends, and the process can be
+// killed between any two of them — SIGKILL, a dropped VPN, a closed laptop.
+// Nothing runs at that point: no rollback, no message, no trash call. Whatever
+// recovery the script performs on a *caught* failure is simply not reached.
+//
+// The fix is therefore in what the database holds rather than in what the
+// script does on the way down:
+//
+//   * a page is created as a DRAFT, which the sync never publishes, and is
+//     promoted to Published in one request only after every one of its blocks
+//     has landed. Published means finished, so nothing half-migrated is ever
+//     visible on the site — however the run ended;
+//   * a re-run reads every draft it finds and finishes it. Appending to a page
+//     somebody else may have written is only safe if the blocks already there
+//     are exactly the blocks this migration would have written first, so that
+//     is the gate: same slug, same title, still a draft, and the page's blocks
+//     an exact prefix of the post's (see block-equality.ts). Everything that
+//     passes is appended to and promoted; anything that does not is reported
+//     and left untouched, because a draft that is not ours is somebody's
+//     writing.
+//
+// There is no marker property to lean on — the database schema is the one
+// documented in docs/authoring.md and this script does not get to add columns —
+// so the prefix, the title, the slug and the draft status together are the
+// safety gate, and the cost of them being too strict is a message rather than
+// an overwrite.
 //
 // Trash: a trashed page is invisible to the sync and to a data source query, so
 // it does not hold its slug. Trashing a page and re-running is how one post is
 // redone, and a trashed page never counts as a duplicate of a live one.
-//
-// A post too long for one request takes several (see limits.ts), which opens
-// the one window this design cannot close by itself: between creating the page
-// and appending the last of its blocks, the page exists and holds its slug
-// while the post is incomplete. Every failure the script can observe is rolled
-// back — runMigration trashes the page, so the slug is free again — but a
-// process killed outright observes nothing. That leaves a live, half-written
-// page which a re-run then skips as "already there". It is reported here, in
-// the README, and in the failure message, because the recovery is a human one:
-// trash the page in Notion and run again.
 
 export type LocalPost = {
   file: string;
@@ -55,18 +78,33 @@ export type LocalPost = {
 export type RemotePage = {
   pageId: string;
   slug: string;
+  // Both are load-bearing: a page is only resumed if it is still a draft and
+  // still carries this post's title, so neither may be inferred.
+  title: string;
+  status: string;
   archived?: boolean;
   in_trash?: boolean;
 };
 
 export type MigrationMatch = { slug: string; pageId: string };
 
+// A draft page this run is going to finish rather than create.
+export type MigrationResume = { post: LocalPost; pageId: string };
+
 export type MigrationPlan = {
   // Only ever non-empty when `errors` is empty: a plan that found a problem
   // cannot be half-acted on.
   create: LocalPost[];
+  resume: MigrationResume[];
   skip: MigrationMatch[];
   archived: MigrationMatch[];
+  // Live drafts no local file claims. Not a problem in itself — an author is
+  // free to have drafts — but it is the signature of the one way this recovery
+  // can still be lost: the content sync removes the .mdx of any post Notion has
+  // not published, so a draft a killed run left behind outlives its own source
+  // file if a sync runs before the migration does. Reported so a re-run says
+  // which file to restore rather than silently having nothing to migrate.
+  orphanDrafts: MigrationMatch[];
   errors: string[];
 };
 
@@ -81,13 +119,20 @@ export type CreatePageRequest = {
   children: BlockObjectRequest[];
 };
 
-// One post, as the requests it takes to write it: the create-page request and
-// then the block batches that did not fit in it. See limits.ts.
+// One post, as the requests it takes to write it: the create-page request, the
+// block batches that did not fit in it, and the blocks in full — which is what
+// a resumed page is measured against. See limits.ts.
 export type MigrationWrite = {
   slug: string;
   file: string;
+  title: string;
+  blocks: BlockObjectRequest[];
   page: CreatePageRequest;
   appends: BlockObjectRequest[][];
+  // Set once a same-slug draft has been found and proved to be an unfinished
+  // copy of this post: the page already exists, and `appends` holds only what
+  // is missing from it.
+  resume?: { pageId: string };
 };
 
 // Reads one content/blog/*.mdx file into the shape the migration writes. The
@@ -142,7 +187,9 @@ export function planMigration(
   }
 
   // A slug held by two live pages is the wreckage of an earlier duplicated run.
-  // Matching against either one would bless it, so the run stops instead.
+  // Matching against either one would bless it, so the run stops instead — and
+  // that holds whether they are drafts, published, or one of each, because
+  // nothing here can tell which of them the post is supposed to become.
   for (const [slug, claimants] of [...bySlug].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
@@ -182,29 +229,81 @@ export function planMigration(
 
   const skip: MigrationMatch[] = [];
   const create: LocalPost[] = [];
+  const resume: MigrationResume[] = [];
+
   for (const post of posts) {
-    const existing = bySlug.get(post.slug)?.[0];
-    if (existing) skip.push({ slug: post.slug, pageId: existing.pageId });
-    else create.push(post);
+    const claimants = bySlug.get(post.slug) ?? [];
+    // Already reported above; classifying against one of two pages would pick
+    // a winner nobody asked for.
+    if (claimants.length > 1) continue;
+
+    const existing = claimants[0];
+    if (!existing) {
+      create.push(post);
+      continue;
+    }
+
+    if (existing.status === PUBLISHED_STATUS) {
+      skip.push({ slug: post.slug, pageId: existing.pageId });
+      continue;
+    }
+
+    if (existing.status !== DRAFT_STATUS) {
+      errors.push(
+        `${post.file}: page ${existing.pageId} claims slug "${post.slug}" and ` +
+          `is ${existing.status === "" ? "in no status at all" : `"${existing.status}"`} — ` +
+          `the migration only finishes its own "${DRAFT_STATUS}" pages and only ` +
+          `skips "${PUBLISHED_STATUS}" ones, so this page is left alone; publish ` +
+          "it, change its slug, or move it to the trash and run again",
+      );
+      continue;
+    }
+
+    // A draft under this slug is only this post's if it is also under this
+    // post's title. The blocks are checked separately, once they have been
+    // read (see planResumes).
+    if (existing.title !== post.title) {
+      errors.push(
+        `${post.file}: draft page ${existing.pageId} claims slug "${post.slug}" ` +
+          `under the title "${existing.title}", not "${post.title}" — it is not ` +
+          "an unfinished copy of this post, so it was left alone",
+      );
+      continue;
+    }
+
+    resume.push({ post, pageId: existing.pageId });
   }
 
   const archived = pages
     .filter((page) => isTrashed(page))
     .map((page) => ({ slug: page.slug, pageId: page.pageId }));
 
+  const claimed = new Set(posts.map((post) => post.slug));
+  const orphanDrafts = live
+    .filter(
+      (page) =>
+        page.status === DRAFT_STATUS &&
+        isValidSlug(page.slug) &&
+        !claimed.has(page.slug),
+    )
+    .map((page) => ({ slug: page.slug, pageId: page.pageId }));
+
+  const clean = errors.length === 0;
   return {
-    create: errors.length > 0 ? [] : create,
-    skip: errors.length > 0 ? [] : skip,
+    create: clean ? create : [],
+    resume: clean ? resume : [],
+    skip: clean ? skip : [],
     archived,
+    orphanDrafts,
     errors,
   };
 }
 
-// The requests for exactly the posts the plan wants created, one entry per
-// entry of `plan.create` and in the same order. Pure, so the whole run can be
-// inspected before a single request goes out — including the Status shape,
-// every fence language, and every one of Notion's size limits, all of which the
-// API rejects the entire page for.
+// The requests for exactly the posts the plan wants written — the ones to
+// create and the drafts to finish, creates first and each group in plan order.
+// Pure, so the whole run can be inspected before a single request goes out —
+// including the Status shape, every fence language, and every one of Notion's
+// size limits, all of which the API rejects the entire page for.
 //
 // Every post is measured, and every problem across every post is reported
 // together: a run that stops on the first bad file has already created pages
@@ -213,15 +312,22 @@ export function migrationRequests(
   plan: MigrationPlan,
   { dataSourceId, schema }: MigrationOptions,
 ): MigrationWrite[] {
-  if (plan.create.length === 0) return [];
+  const work: MigrationResume[] = [
+    ...plan.create.map((post) => ({ post, pageId: "" })),
+    ...plan.resume,
+  ];
+  if (work.length === 0) return [];
 
   const titleProperty = titlePropertyName(schema);
-  const status = buildStatusProperty(schema);
+  // Both values are built here, before anything is written: a database missing
+  // the Published option would otherwise strand every draft this run creates.
+  const draft = buildStatusProperty(schema, DRAFT_STATUS);
+  buildStatusProperty(schema, PUBLISHED_STATUS);
 
   const problems: string[] = [];
   const writes: MigrationWrite[] = [];
 
-  for (const post of plan.create) {
+  for (const { post, pageId } of work) {
     let blocks: BlockObjectRequest[];
     try {
       blocks = normalizeBlocks(markdownToBlocks(post.content));
@@ -237,7 +343,7 @@ export function migrationRequests(
       Slug: { rich_text: normalizeRichText(text(post.slug)) },
       Excerpt: { rich_text: normalizeRichText(text(post.excerpt)) },
       Tags: { multi_select: post.tags.map((tag) => ({ name: tag })) },
-      Status: status,
+      Status: draft,
       Published: { date: { start: post.date } },
     };
 
@@ -248,12 +354,19 @@ export function migrationRequests(
     writes.push({
       slug: post.slug,
       file: post.file,
+      title: post.title,
+      blocks,
       page: {
         parent: { type: "data_source_id" as const, data_source_id: dataSourceId },
         properties,
         children,
       },
-      appends,
+      // A page that already exists is assumed to hold nothing until its blocks
+      // have actually been read: planResumes narrows this to whatever turns out
+      // to be missing, and assuming the least in the meantime is the assumption
+      // that cannot lose a block.
+      appends: pageId === "" ? appends : batchBlocks(blocks),
+      ...(pageId === "" ? {} : { resume: { pageId } }),
     });
   }
 
@@ -290,32 +403,125 @@ function propertyProblems(
   return problems;
 }
 
-// What one page takes to write, and what to do when only part of it lands.
+export type ResumePlan = { writes: MigrationWrite[]; errors: string[] };
+
+// Reads every draft the plan wants to finish and works out what is missing from
+// it. A page is only resumable if what it already holds is an exact prefix of
+// the post — same blocks, same order, same nested children — so a run that dies
+// mid-post is finished by appending the rest, and a page somebody else wrote is
+// reported instead.
+//
+// Reads only, and all of them before the first write, so one unresolvable draft
+// stops the whole run rather than half of it. They are independent, so they go
+// through the same bounded pool as the sync's rather than one at a time or all
+// at once.
+export async function planResumes(
+  writes: readonly MigrationWrite[],
+  readBlocks: (pageId: string) => Promise<MdBlock[]>,
+): Promise<ResumePlan> {
+  const resolved = await mapWithConcurrency(writes, async (write) => {
+    if (!write.resume) return { write };
+
+    const remote = await readBlocks(write.resume.pageId);
+    const match = matchBlockPrefix(write.blocks, remote);
+
+    if (match.kind === "diverged") {
+      return {
+        write,
+        error:
+          `${write.file}: draft page ${write.resume.pageId} claims slug ` +
+          `"${write.slug}" but is not an unfinished copy of this post ` +
+          `(${match.reason}) — it was left exactly as it is; publish it, change ` +
+          "its slug, or move it to the trash, then run again",
+      };
+    }
+
+    return {
+      write: { ...write, appends: batchBlocks(write.blocks.slice(match.matched)) },
+    };
+  });
+
+  const errors = resolved
+    .map((entry) => entry.error)
+    .filter((error): error is string => error !== undefined);
+
+  return {
+    writes: errors.length > 0 ? [] : resolved.map((entry) => entry.write),
+    errors,
+  };
+}
+
+export type PreparedMigration = {
+  writes: MigrationWrite[];
+  skip: MigrationMatch[];
+  orphanDrafts: MigrationMatch[];
+  errors: string[];
+};
+
+// Everything that happens before the first write, in the order it has to: the
+// database is read, the posts are planned against it, every request is built
+// and measured, and every draft that would be resumed is read and proved to be
+// an unfinished copy of its post. Nothing here writes, so a run that reports
+// errors has changed nothing at all.
+//
+// Content Notion would reject throws rather than being returned, because it is
+// a problem with the files rather than with the state of the database.
+export async function prepareMigration(
+  posts: LocalPost[],
+  pages: RemotePage[],
+  options: MigrationOptions,
+  readBlocks: (pageId: string) => Promise<MdBlock[]>,
+): Promise<PreparedMigration> {
+  const plan = planMigration(posts, pages);
+  if (plan.errors.length > 0) {
+    return {
+      writes: [],
+      skip: [],
+      orphanDrafts: plan.orphanDrafts,
+      errors: plan.errors,
+    };
+  }
+
+  const resumed = await planResumes(migrationRequests(plan, options), readBlocks);
+  return {
+    writes: resumed.writes,
+    skip: plan.skip,
+    orphanDrafts: plan.orphanDrafts,
+    errors: resumed.errors,
+  };
+}
+
+// What one page takes to write.
 export type MigrationExecutor = {
-  // Creates the page and answers with its id.
+  // Creates the page — as a draft, because that is what the request says — and
+  // answers with its id.
   createPage(page: CreatePageRequest): Promise<string>;
   appendChildren(pageId: string, children: BlockObjectRequest[]): Promise<void>;
-  archivePage(pageId: string): Promise<void>;
+  // Promotes a finished page to Published. The one write that makes a post
+  // visible to the sync, and the last one made for it.
+  publishPage(pageId: string): Promise<void>;
 };
 
 export type MigrationProgress = {
   slug: string;
   pageId: string;
   batches: number;
+  resumed: boolean;
 };
 
 // Writes the planned pages, in order. A post's batches are strictly sequential
 // because they are the order of its blocks, and the posts themselves are too,
 // so the run stays inside the ~3 requests/second Notion allows an integration.
 //
-// A page whose remaining blocks fail to land is the case this exists for. Half
-// a post under a live slug is worse than no post at all: the sync would publish
-// it, and the next migration run would see the slug taken and skip the file
-// forever. So the new page is moved to the trash, where it holds no slug and
-// counts as no duplicate — which makes re-running the migration the recovery,
-// exactly as it is for a run that never started the post. If even the trash
-// call fails, the id is in the message, because the one thing that must not
-// happen is a half-written page nobody knows about.
+// Every page goes through the same three phases — exist, fill, publish — and a
+// resumed page simply starts partway through the second. Nothing is published
+// until it is whole, so a run that stops anywhere leaves drafts: invisible to
+// the site, and finished by running the migration again.
+//
+// There is deliberately no rollback. Trashing a half-written page would throw
+// away the blocks that did land, which the next run would otherwise pick up and
+// carry on from — and it could never run at all for the failure that motivates
+// all of this, a process that is killed rather than one that throws.
 export async function runMigration(
   writes: readonly MigrationWrite[],
   executor: MigrationExecutor,
@@ -324,20 +530,23 @@ export async function runMigration(
   const written: MigrationProgress[] = [];
 
   for (const write of writes) {
-    const pageId = await executor.createPage(write.page);
+    const resumed = write.resume !== undefined;
+    const pageId = write.resume?.pageId ?? (await executor.createPage(write.page));
 
-    for (const [index, batch] of write.appends.entries()) {
-      try {
+    try {
+      for (const batch of write.appends) {
         await executor.appendChildren(pageId, batch);
-      } catch (error: unknown) {
-        throw await rollback(executor, write, pageId, index, error);
       }
+      await executor.publishPage(pageId);
+    } catch (error: unknown) {
+      throw unfinished(write, pageId, resumed, error);
     }
 
     const progress = {
       slug: write.slug,
       pageId,
       batches: write.appends.length,
+      resumed,
     };
     written.push(progress);
     onPage?.(progress);
@@ -350,29 +559,16 @@ function reasonFor(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function rollback(
-  executor: MigrationExecutor,
+function unfinished(
   write: MigrationWrite,
   pageId: string,
-  index: number,
+  resumed: boolean,
   cause: unknown,
-): Promise<Error> {
-  const failed =
-    `${write.file}: the page was created, but block batch ${index + 1} of ` +
-    `${write.appends.length} could not be appended (${reasonFor(cause)})`;
-
-  try {
-    await executor.archivePage(pageId);
-  } catch (error: unknown) {
-    return new Error(
-      `${failed}, and the half-written page ${pageId} could not be moved to ` +
-        `the trash either (${reasonFor(error)}) — delete it in Notion by hand ` +
-        `before re-running, or two pages will claim the slug "${write.slug}"`,
-    );
-  }
-
+): Error {
   return new Error(
-    `${failed} — the half-written page ${pageId} was moved to the Notion ` +
-      "trash, so it holds no slug and re-running the migration is safe",
+    `${write.file}: the ${resumed ? "draft" : "newly created"} page ${pageId} ` +
+      `could not be finished (${reasonFor(cause)}) — it is still a ` +
+      `"${DRAFT_STATUS}", so nothing on the site changed and no published post ` +
+      `claims the slug "${write.slug}"; run the migration again to finish it`,
   );
 }

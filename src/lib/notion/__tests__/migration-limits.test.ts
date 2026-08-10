@@ -24,9 +24,10 @@ import type { DataSourceSchema } from "@/lib/notion/properties";
 //
 // Every post is now measured before the first request goes out. What fits is
 // sent; what cannot be split is refused with the file named, so nothing at all
-// is created for content Notion could not store. And a page whose remaining
-// blocks fail to land is moved to the trash, because a trashed page holds no
-// slug and re-running is how the migration is meant to recover.
+// is created for content Notion could not store. And a page is created as a
+// draft and promoted to Published only once all of its blocks have landed, so
+// a page whose remaining blocks never arrive is left as a draft the site never
+// shows and the next run finishes — see migration-resume.test.ts.
 
 const schema = (properties: Record<string, string>): DataSourceSchema =>
   Object.fromEntries(
@@ -62,7 +63,7 @@ const paragraphs = (count: number) =>
 
 // A fake Notion that records every call and can be told to fail one of them.
 function recorder(
-  fail: { on?: "create" | "append" | "archive"; at?: number } = {},
+  fail: { on?: "create" | "append" | "publish"; at?: number } = {},
 ) {
   const calls: string[] = [];
   let appends = 0;
@@ -82,9 +83,9 @@ function recorder(
         throw new Error("notion said no");
       }
     },
-    async archivePage(pageId) {
-      calls.push(`archive:${pageId}`);
-      if (fail.on === "archive") throw new Error("trash refused");
+    async publishPage(pageId) {
+      calls.push(`publish:${pageId}`);
+      if (fail.on === "publish") throw new Error("notion said no");
     },
   };
 
@@ -271,8 +272,11 @@ describe("sending a run", () => {
       "create:1",
       "append:page-1:100",
       "append:page-1:50",
+      "publish:page-1",
     ]);
-    expect(done).toEqual([{ slug: "one", pageId: "page-1", batches: 2 }]);
+    expect(done).toEqual([
+      { slug: "one", pageId: "page-1", batches: 2, resumed: false },
+    ]);
   });
 
   it("makes no append call at all for a post that fits in one request", async () => {
@@ -280,38 +284,59 @@ describe("sending a run", () => {
 
     await runMigration(writesFor("Body.\n"), executor);
 
-    expect(calls).toEqual(["create:1"]);
+    expect(calls).toEqual(["create:1", "publish:page-1"]);
   });
 
-  it("trashes the half-written page when an append fails", async () => {
+  // The page is not trashed. Trashing it would throw away the blocks that did
+  // land — the ones the next run resumes from — and it could never run at all
+  // for the failure this design exists for, a process that is killed outright.
+  it("leaves a page whose blocks did not all land as an unpublished draft", async () => {
     const writes = writesFor(paragraphs(250));
     const { executor, calls } = recorder({ on: "append", at: 2 });
 
     await expect(runMigration(writes, executor)).rejects.toThrow(
-      /trash|re-?run/i,
+      /draft|re-?run|again/i,
     );
     expect(calls).toEqual([
       "create:1",
       "append:page-1:100",
       "append:page-1:50",
-      "archive:page-1",
     ]);
+    expect(calls).not.toContain("publish:page-1");
   });
 
-  it("says which page to delete by hand when the trash call fails too", async () => {
+  it("names the page and says a re-run finishes it", async () => {
     const writes = writesFor(paragraphs(250));
-    const { executor } = recorder({ on: "archive" });
-    // The archive itself refuses, and the append before it has to fail first.
-    const failing: MigrationExecutor = {
-      ...executor,
-      appendChildren: async () => {
-        throw new Error("notion said no");
-      },
-    };
+    const { executor } = recorder({ on: "append", at: 1 });
 
-    await expect(runMigration(writes, failing)).rejects.toThrow(
-      /delete it|by hand|manually/i,
+    await expect(runMigration(writes, executor)).rejects.toThrow(/page-1/);
+  });
+
+  // The promotion is the only write that makes a post visible, so a failure
+  // there leaves a complete page nobody can see — and one the next run
+  // promotes, having found every block already in place.
+  it("leaves a page whose promotion failed as a draft", async () => {
+    const { executor, calls } = recorder({ on: "publish" });
+
+    await expect(runMigration(writesFor("Body.\n"), executor)).rejects.toThrow(
+      /again/i,
     );
+    expect(calls).toEqual(["create:1", "publish:page-1"]);
+  });
+
+  it("appends into a page a previous run left, rather than creating another", async () => {
+    const [write] = writesFor(paragraphs(250));
+    const { executor, calls } = recorder();
+
+    const done = await runMigration(
+      [{ ...write, appends: [write.blocks.slice(200)], resume: { pageId: "page-9" } }],
+      executor,
+    );
+
+    expect(calls).toEqual(["append:page-9:50", "publish:page-9"]);
+    expect(done).toEqual([
+      { slug: "one", pageId: "page-9", batches: 1, resumed: true },
+    ]);
   });
 
   it("stops at the first post that fails rather than carrying on", async () => {
