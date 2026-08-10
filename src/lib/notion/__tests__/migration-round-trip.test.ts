@@ -119,6 +119,17 @@ describe("a Notion paragraph pushed back into Notion", () => {
     expect(semantic(inlineRoundTrip(original))).toEqual(semantic(original));
   });
 
+  it("keeps annotations that sit beside an astral character", () => {
+    const original = [
+      rt("Wow!", { bold: true }),
+      rt("\u{1F600}tail "),
+      rt("\u{1D11E}word\u{10100}", { strikethrough: true }),
+      rt(" end"),
+    ];
+
+    expect(semantic(inlineRoundTrip(original))).toEqual(semantic(original));
+  });
+
   // The two halves of the escaper meet here: a paragraph opening with a word
   // MDX reads as ESM is written as a character reference, and reading it back
   // has to give the word again rather than the reference.

@@ -184,6 +184,63 @@ describe("a marker the run beside it gets no exemption from", () => {
   });
 });
 
+// micromark reads markdown one UTF-16 code unit at a time, and it classifies a
+// character by matching `\p{P}|\p{S}` against that single unit. Both halves of
+// an astral character are lone surrogates, which match neither that nor `\s`,
+// so every emoji and every astral symbol is "other" to the parser — the same
+// group a letter is in. Classifying whole code points instead read 😀 as
+// punctuation, and `**Wow!**😀` went out believing the closing run flanked when
+// the parser was about to refuse it.
+describe("emoji and other astral characters at a boundary", () => {
+  const ASTRAL = [
+    ["an emoji", "\u{1F600}"],
+    ["astral punctuation", "\u{10100}"],
+    ["an astral symbol", "\u{1D11E}"],
+  ] as const;
+
+  const MARKS = [
+    ["bold", { bold: true }, "**", "strong"],
+    ["italic", { italic: true }, "*", "em"],
+    ["strike", { strikethrough: true }, "~~", "del"],
+  ] as const;
+
+  for (const [astralName, astral] of ASTRAL) {
+    for (const [markName, annotations, delimiter, tag] of MARKS) {
+      it(`neutralises ${astralName} after a ${markName} run ending in punctuation`, () => {
+        expect(source(["Wow!", annotations], [`${astral}tail`])).toBe(
+          `${delimiter}Wow!${delimiter}&#${astral.codePointAt(0)};tail`,
+        );
+      });
+
+      it(`neutralises ${astralName} before a ${markName} run starting in punctuation`, () => {
+        expect(source([`lead${astral}`], ["!bar", annotations])).toBe(
+          `lead&#${astral.codePointAt(0)};${delimiter}!bar${delimiter}`,
+        );
+      });
+
+      it(`asks for no help when the ${markName} run itself edges on ${astralName}`, () => {
+        expect(source(["x"], [`${astral}word${astral}`, annotations], ["y"])).toBe(
+          `x${delimiter}${astral}word${astral}${delimiter}y`,
+        );
+      });
+
+      it(`renders ${markName} beside ${astralName} as the annotation`, async () => {
+        const container = await renderMdx(
+          paragraph(["Wow!", annotations], [`${astral}tail`]),
+        );
+        expect(container.querySelector(tag)?.textContent).toBe("Wow!");
+        expect(container.textContent).toBe(`Wow!${astral}tail`);
+
+        const before = await renderMdx(
+          paragraph([`lead${astral}`], ["!bar", annotations]),
+        );
+        expect(before.querySelector(tag)?.textContent).toBe("!bar");
+        expect(before.textContent).toBe(`lead${astral}!bar`);
+      });
+    }
+  }
+});
+
 describe("code spans keep their own padding rules", () => {
   it("pads only where CommonMark would strip or swallow", () => {
     expect(richTextToMarkdown([rt("useState", { code: true })])).toBe(
@@ -280,6 +337,12 @@ const TEXTS = [
   "*star*",
   "_under_",
   "~tilde~",
+  "\u{1F600}",
+  "wow\u{1F600}",
+  "\u{1F600}!",
+  "!\u{1F600}",
+  "\u{10100}x",
+  "x\u{1D11E}",
 ];
 
 const TAG_OF_MARK = {
@@ -355,6 +418,14 @@ describe("every annotated run beside every neighbour", () => {
       cases.push({
         name: `${leftName} then ${rightName}, no punctuation`,
         runs: [rt("Wow", left), rt("bar", right), rt("z")],
+      });
+      cases.push({
+        name: `${leftName} then ${rightName} across an emoji`,
+        runs: [rt("Wow!", left), rt("\u{1F600}bar", right), rt("z")],
+      });
+      cases.push({
+        name: `${leftName} ending in an emoji then ${rightName}`,
+        runs: [rt("Wow\u{1F600}", left), rt("!bar", right), rt("z")],
       });
     }
   }

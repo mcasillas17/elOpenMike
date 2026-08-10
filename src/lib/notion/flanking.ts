@@ -25,6 +25,23 @@ const WHITESPACE = /\s/u;
 // CommonMark counts every Unicode punctuation *and* symbol as punctuation.
 const PUNCTUATION = /\p{P}|\p{S}/u;
 
+// micromark reads markdown one UTF-16 code unit at a time and classifies each
+// by matching those expressions against that single unit
+// (micromark-util-character's `regexCheck` calls `String.fromCharCode`). Both
+// halves of an astral character are lone surrogates, and a lone surrogate is
+// neither whitespace, punctuation nor a symbol — so every emoji and every
+// astral symbol reaches the flanking rules as "other", the group a letter is
+// in. Classifying the whole code point instead would call 😀 punctuation and
+// leave `**Wow!**😀` written as if its closing run flanked, which the parser
+// then refuses.
+const ASTRAL_START = 0x10000;
+
+export function classifyCharacter(char: string | undefined): CharacterGroup {
+  if (char === undefined || WHITESPACE.test(char)) return "whitespace";
+  if ((char.codePointAt(0) ?? 0) >= ASTRAL_START) return "other";
+  return PUNCTUATION.test(char) ? "punctuation" : "other";
+}
+
 // The characters a `*` or `_` delimiter run may touch whatever sits opposite
 // it, because they are themselves attention markers: `*` and `_` from
 // CommonMark, `~` added by GFM's strikethrough. A wrapper nested inside another
@@ -37,11 +54,6 @@ const PUNCTUATION = /\p{P}|\p{S}/u;
 // so a `~~` run beside a literal `*` is a run beside punctuation and nothing
 // more — which is why `~~\*x\*~~a` used to come out as four literal tildes.
 const ATTENTION_MARKERS = new Set(["*", "_", "~"]);
-
-export function classifyCharacter(char: string | undefined): CharacterGroup {
-  if (char === undefined || WHITESPACE.test(char)) return "whitespace";
-  return PUNCTUATION.test(char) ? "punctuation" : "other";
-}
 
 // True when a delimiter run of `marker` sitting beside this character can only
 // flank if the character on its far side is whitespace or punctuation.
