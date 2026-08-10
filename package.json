@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "sync:notion": "tsx scripts/sync-notion.ts"
+    "sync:notion": "tsx scripts/sync-notion.ts",
+    "migrate:to-notion": "tsx scripts/mdx-to-notion.ts"
   },
   "dependencies": {
     "@notionhq/client": "^5.23.3",
