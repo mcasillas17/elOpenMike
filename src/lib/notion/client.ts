@@ -1,4 +1,5 @@
 import { Client } from "@notionhq/client";
+import { retryAfterMs } from "./retry";
 import type { MdBlock } from "./types";
 
 // Pinned explicitly: `archived` became `in_trash` in this version, and database
@@ -27,10 +28,10 @@ async function withRetry<T>(
     } catch (error: unknown) {
       const status = (error as { status?: number }).status;
       if (status !== 429 || attempt >= attempts) throw error;
-      const header = (error as { headers?: Record<string, string> }).headers?.[
-        "retry-after"
-      ];
-      const waitMs = (Number(header) || attempt) * 1000;
+      const waitMs = retryAfterMs(
+        (error as { headers?: unknown }).headers,
+        attempt,
+      );
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
