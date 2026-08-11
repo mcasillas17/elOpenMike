@@ -238,12 +238,15 @@ refuse anything that has moved:
 Two runs inside one process are serialized against each other by a lock, so
 they cannot interleave their reads and writes.
 
-**Retries are split by what a request does.** A read — a data source query, a
-page retrieve, a block children list, a schema or database read — changes
-nothing, so a transient `500`, `502`, `503` or `504` is retried on the same
-capped `Retry-After` backoff as a `429`; giving up on the first one turns a bad
-minute of Notion's day into "these posts could not be read", which is what
-`--check` reports to CI. A **write** is not retried on any of those: a 5xx on
+**Retries are split by what a request does.** The Notion SDK retries by itself
+by default — a `429` *and* a `529` on every method, `POST` and `PATCH`
+included — so that is turned off at construction and every repeated request is
+one this repo chose to make. A read — a data source query, a page retrieve, a
+block children list, a schema or database read — changes nothing, so a
+transient `500`, `502`, `503`, `504` or `529` is retried on the same capped
+`Retry-After` backoff as a `429`; giving up on the first one turns a bad minute
+of Notion's day into "these posts could not be read", which is what `--check`
+reports to CI. A **write** is not retried on any of those: a 5xx on
 `pages.create` does not say whether the page was created, and repeating it is
 how one post becomes two pages claiming one slug. Only a `429`, which promises
 the request never landed, is waited out. The run stops instead — and re-running

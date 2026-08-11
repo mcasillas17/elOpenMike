@@ -126,9 +126,15 @@ other host: every one of them is a public address the runner would otherwise
 have fetched on behalf of whoever wrote the link.
 
 Images larger than 10 MB are refused too; the post keeps whatever it had on
-disk and the run reports the failure. Image failures name only a generic reason:
-the public log never repeats a hostname, IP or DNS result, credentials, path,
-query, or fragment from the rejected URL or one of its redirects.
+disk and the run reports the failure. Every image also runs under two
+deadlines: a total budget for the whole download, and a shorter idle one that
+is reset by each piece of progress — the address resolving, a redirect
+answering, a chunk of the body arriving. A host that accepts the connection and
+then goes quiet is therefore one failed post rather than a workflow that sits
+on a runner until the job times out with nothing written. Image failures name
+only a generic reason: the public log never repeats a hostname, IP or DNS
+result, credentials, path, query, or fragment from the rejected URL or one of
+its redirects.
 
 Only five formats are published: PNG, JPEG, GIF, WebP and AVIF. The type the
 server declares has to be one of them *and* the bytes have to actually be that
@@ -229,8 +235,11 @@ file does not say. Take the space off the end and run again.
 ## If one post fails to sync
 
 A post whose images can't be downloaded — an expired link, a file over the
-size cap, a host the sync refuses — doesn't stop the run any more. The rest of
-the blog syncs normally and the failure is reported per post:
+size cap, a host the sync refuses, a download that stalled — doesn't stop the
+run any more. A post whose body Notion answered only partly (a block returned
+as an id with no content) is the same kind of failure and is treated the same
+way, because publishing that body would quietly drop the block from the post.
+The rest of the blog syncs normally and the failure is reported per post:
 
 - if the post is **already on disk**, its file and its images are left exactly
   as they are, so the live post keeps working;
@@ -313,6 +322,12 @@ half-read page body would look like a shorter draft to finish. None of that is
 recoverable from here — the answer is incoherent rather than merely partial —
 so the run refuses it. Re-run; it is a transient API fault, not a database
 problem.
+
+A row that is not a page is a different matter. A **wiki** database lists the
+child databases underneath it beside its own rows, and those are skipped: they
+were never posts and never claimed a file on disk. A row that says it *is* a
+page and cannot be read as one stops the run for the same reason a short list
+does — vanishing quietly is what unpublishes a post nobody touched.
 
 ## If the sync refuses to delete posts
 
