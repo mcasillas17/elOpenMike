@@ -8,6 +8,45 @@ import type { MdBlock } from "./types";
 // queries moved to /v1/data_sources/:id/query in 2025-09-03.
 export const NOTION_VERSION = "2026-03-11";
 
+// Everything the constructor takes, derived from the SDK rather than restated,
+// so a rename in the client fails `pnpm exec tsc` here.
+type NotionClientOptions = NonNullable<ConstructorParameters<typeof Client>[0]>;
+
+// The parts of it a caller here may set: the HTTP layer, so a test can count
+// what reaches the wire, and the base URL. Auth, API version and the retry
+// policy are this module's to decide.
+export type NotionClientOverrides = Pick<
+  NotionClientOptions,
+  "fetch" | "baseUrl"
+>;
+
+// The SDK retries on its own. Version 5 ships `retry: { maxRetries: 2 }` and
+// treats a 429 *and a 529* as retryable for every HTTP method — POST and PATCH
+// included (Client.js, `canRetry`). That is the one policy this repo cannot
+// have: a 529 on `pages.create` does not say whether the page was created, so
+// repeating it is how one post becomes two Notion pages claiming one slug — the
+// state the sync refuses to publish at all, and the wreckage the migration's
+// resume protocol exists to avoid making.
+//
+// It also made the repo's own budgets fiction. withReadRetry says four
+// attempts; underneath, each of those was up to three requests, so a bad minute
+// of Notion's day cost twelve, with a back-off nothing here chose.
+//
+// So the SDK is told to send each request exactly once, and every repeat in
+// this repo is one of ours: bounded, capped, and split by whether the call
+// changes anything (see retry.ts).
+export function createNotionClient(
+  token: string,
+  overrides: NotionClientOverrides = {},
+): Client {
+  return new Client({
+    auth: token,
+    notionVersion: NOTION_VERSION,
+    retry: false,
+    ...overrides,
+  });
+}
+
 export type PageObject = {
   id: string;
   last_edited_time: string;
@@ -17,10 +56,6 @@ export type PageObject = {
   in_trash?: boolean;
   properties: Record<string, unknown>;
 };
-
-export function createNotionClient(token: string): Client {
-  return new Client({ auth: token, notionVersion: NOTION_VERSION });
-}
 
 export async function retrieveDataSourceSchema(
   client: Client,

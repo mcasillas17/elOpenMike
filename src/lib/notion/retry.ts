@@ -52,7 +52,21 @@ export const RATE_LIMIT_STATUS = 429;
 // The 5xx statuses that mean "this went wrong here, now": a bad gateway, an
 // overloaded backend, a timed-out upstream. Notably not 501, which is a server
 // saying it will never do that, and not 4xx, which is the request being wrong.
-export const RETRYABLE_SERVER_STATUSES: readonly number[] = [500, 502, 503, 504];
+//
+// 529 is Notion's own: the service is overloaded and is asking to be left alone
+// for a moment. The SDK used to absorb it silently, on every method — including
+// the ones that change something, which is why the SDK's retries are off (see
+// client.ts). It belongs in the same place as the rest of them: repeated on a
+// read, never on a write.
+export const SERVICE_OVERLOADED_STATUS = 529;
+
+export const RETRYABLE_SERVER_STATUSES: readonly number[] = [
+  500,
+  502,
+  503,
+  504,
+  SERVICE_OVERLOADED_STATUS,
+];
 
 // Repeating a read costs nothing but the wait: a query, a page retrieve and a
 // children list all leave the database exactly as they found it, and the run
