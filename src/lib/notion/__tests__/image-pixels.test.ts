@@ -83,6 +83,14 @@ describe("the picture a header is allowed to declare", () => {
     );
   });
 
+  it("costs no more than the byte budget at the pixel budget", () => {
+    expect(BUDGET_WIDTH * BUDGET_HEIGHT * DECODED_BYTES_PER_PIXEL).toBe(
+      MAX_DECODED_IMAGE_BYTES,
+    );
+    expect((BUDGET_WIDTH + 1) * BUDGET_HEIGHT * DECODED_BYTES_PER_PIXEL).
+      toBeGreaterThan(MAX_DECODED_IMAGE_BYTES);
+  });
+
   it.each(DECLARING)("accepts a %s of exactly the budget", (format, build) => {
     expect(isCompleteImage(format, build(BUDGET_WIDTH, BUDGET_HEIGHT))).toBe(true);
   });

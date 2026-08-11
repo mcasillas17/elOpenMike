@@ -70,12 +70,16 @@ function isSaneDimension(value: number): boolean {
 }
 
 // A whole picture: each side inside the per-side cap, and the two of them
-// together inside the decoded budget.
+// together inside the budget — counted in pixels, which is what the file
+// declares, and in the bytes those pixels cost, which is what a decoder
+// actually asks the machine for. The two are one budget said twice on purpose:
+// neither constant can be moved without the other having to agree.
 function isSanePicture(width: number, height: number): boolean {
+  if (!isSaneDimension(width) || !isSaneDimension(height)) return false;
+  const pixels = width * height;
   return (
-    isSaneDimension(width) &&
-    isSaneDimension(height) &&
-    width * height <= MAX_IMAGE_PIXELS
+    pixels <= MAX_IMAGE_PIXELS &&
+    pixels * DECODED_BYTES_PER_PIXEL <= MAX_DECODED_IMAGE_BYTES
   );
 }
 
@@ -107,7 +111,6 @@ class FrameBudget {
     );
   }
 }
-
 
 function u16be(bytes: Uint8Array, offset: number): number {
   return (bytes[offset] << 8) | bytes[offset + 1];

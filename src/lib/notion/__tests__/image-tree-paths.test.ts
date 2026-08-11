@@ -299,6 +299,27 @@ describe("what a run can reach", () => {
     expect(await read(victim)).toBe("OUTSIDE");
   });
 
+  it("refuses to write over a second name for somebody else's file", async () => {
+    // A hard link is not a link any flag can see: `O_NOFOLLOW` does not refuse
+    // one, and `lstat` calls it a regular file. What it is, is a second name
+    // for a file outside the repo — so truncating it writes a post's bytes into
+    // whatever the other name is.
+    const victim = await seedOutside("victim.png", "OUTSIDE");
+    await fs.mkdir(path.join(root, imageDir("a")), { recursive: true });
+    await fs.link(victim, path.join(root, image("a", "one.png")));
+
+    const desired = new Map([[image("a", "one.png"), bytes("INSIDE")]]);
+    await expect(
+      applyImagePlan(
+        root,
+        { write: [image("a", "one.png")], delete: [], unchanged: [] },
+        desired,
+      ),
+    ).rejects.toBeInstanceOf(ImageTreeError);
+
+    expect(await read(victim)).toBe("OUTSIDE");
+  });
+
   it("writes nothing outside the repo, whatever is planted in the tree", async () => {
     const untouched = await seedOutside("untouched.png", "OUTSIDE");
     const planted = path.join(outside, "post");
