@@ -98,7 +98,11 @@ const SHORT = { totalTimeoutMs: 10_000, idleTimeoutMs: 1_000 };
 function trickle(chunks: Uint8Array[]) {
   const state = { pulled: 0, cancelled: false };
   let release: (() => void) | undefined;
+  let controls: ReadableStreamDefaultController<Uint8Array> | undefined;
   const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controls = controller;
+    },
     pull(controller) {
       if (state.pulled >= chunks.length) {
         controller.close();
@@ -123,6 +127,10 @@ function trickle(chunks: Uint8Array[]) {
   return {
     state,
     stream,
+    // What a real body does when its request is aborted.
+    error(reason: unknown): void {
+      controls?.error(reason);
+    },
     // Hands over the next chunk the reader asked for.
     async next(): Promise<void> {
       await flush();
@@ -134,6 +142,24 @@ function trickle(chunks: Uint8Array[]) {
 
 const responseOf = (stream: ReadableStream<Uint8Array>) =>
   new Response(stream, { headers: { "content-type": "image/png" } });
+
+// A body that behaves the way a real one does when the request is aborted: the
+// stream is *errored*, which rejects the read already pending on it — and does
+// so synchronously, so the abort's own rejection reaches the caller ahead of
+// the deadline's. A fixture that merely stops answering lets the deadline win
+// by default and proves nothing about which failure the operator is told about.
+function abortingTrickle(chunks: Uint8Array[]) {
+  const body = trickle(chunks);
+  return {
+    ...body,
+    response(signal: AbortSignal | null | undefined): Response {
+      signal?.addEventListener("abort", () => {
+        body.error(new DOMException("This operation was aborted", "AbortError"));
+      });
+      return responseOf(body.stream);
+    },
+  };
+}
 
 // Splits a real PNG into `count` pieces, so a trickled body is still an image.
 function pieces(count: number): Uint8Array[] {
@@ -208,6 +234,67 @@ describe("the deadlines every image download runs under", () => {
     expect(await settled).toThrow(/timed out/i);
     expect(body.state.cancelled).toBe(true);
     expect(signals[0]?.aborted).toBe(true);
+    expect(clock.pending()).toBe(0);
+  });
+
+  // A real body is *errored* by the abort the deadline makes, and a stream
+  // rejects its pending read synchronously when that happens — so the abort's
+  // own rejection can reach the caller before the deadline's does. What ended
+  // the download is the deadline either way, and that is what has to be
+  // reported: "transfer failed" reads as a connection somebody else dropped.
+  it("still says it timed out when the abort errors the body first", async () => {
+    const clock = testClock();
+    const body = abortingTrickle(pieces(4));
+    const fetchImpl = (async (_url: string | URL, init?: RequestInit) =>
+      body.response(init?.signal)) as unknown as typeof fetch;
+
+    const settled = downloadImage(SIGNED_URL, {
+      fetchImpl,
+      resolve: publicResolver,
+      timers: clock.timers,
+      ...SHORT,
+    }).then(
+      () => () => undefined,
+      (error: unknown) => () => {
+        throw error;
+      },
+    );
+
+    await body.next();
+    await clock.advance(1_000);
+
+    expect(await settled).toThrow(/timed out/i);
+    expect(await settled).not.toThrow(/transfer failed/i);
+    expect(clock.pending()).toBe(0);
+  });
+
+  // The same race one step earlier: a fetch that rejects the moment it is
+  // aborted, which is what every implementation that honours the signal does.
+  it("still says it timed out when the fetch rejects on the abort", async () => {
+    const clock = testClock();
+    const fetchImpl = (async (_url: string | URL, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("This operation was aborted", "AbortError"));
+        });
+      })) as unknown as typeof fetch;
+
+    const settled = downloadImage(SIGNED_URL, {
+      fetchImpl,
+      resolve: publicResolver,
+      timers: clock.timers,
+      ...SHORT,
+    }).then(
+      () => () => undefined,
+      (error: unknown) => () => {
+        throw error;
+      },
+    );
+
+    await clock.advance(1_000);
+
+    expect(await settled).toThrow(/timed out/i);
+    expect(await settled).not.toThrow(/request failed|transfer failed/i);
     expect(clock.pending()).toBe(0);
   });
 

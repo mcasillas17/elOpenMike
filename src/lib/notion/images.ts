@@ -124,6 +124,7 @@ class ImageDeadline {
   private expire: (error: Error) => void = () => {};
   private totalHandle: unknown;
   private idleHandle: unknown;
+  private failure: Error | undefined;
   private done = false;
 
   constructor(
@@ -158,7 +159,17 @@ class ImageDeadline {
   }
 
   guard<T>(work: Promise<T>): Promise<T> {
-    return Promise.race([work, this.expiry]);
+    return Promise.race([work, this.expiry]).catch((error: unknown) => {
+      // Whichever rejection arrives first, the deadline is what ended this.
+      //
+      // Aborting the request errors whatever it was waiting on, and a stream
+      // rejects its pending read *synchronously* when that happens — so the
+      // abort's own AbortError routinely reaches the race ahead of the expiry
+      // it came from. Reported as it arrives, an image the sync gave up on
+      // reads as "transfer failed": a connection somebody else dropped, which
+      // is the one thing it is not.
+      throw this.failure ?? error;
+    });
   }
 
   // Named without a url, a host or a query: this message reaches a terminal and
@@ -166,8 +177,9 @@ class ImageDeadline {
   private fire(detail: string): void {
     if (this.done) return;
     this.clear();
+    this.failure = new ImageDownloadError("timed-out", `timed out — ${detail}`);
     this.controller.abort();
-    this.expire(new ImageDownloadError("timed-out", `timed out — ${detail}`));
+    this.expire(this.failure);
   }
 
   // Always, on every path out of a download: a timer nothing cleared keeps the
