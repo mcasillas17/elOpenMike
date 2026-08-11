@@ -1,0 +1,52 @@
+name: Sync content from Notion
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: # the "Sync now" button
+
+# Never let two syncs race for the same files.
+concurrency: sync-content
+
+jobs:
+  sync:
+    name: Pull published posts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A push made with the default GITHUB_TOKEN does NOT trigger other
+          # workflows, so deploy.yml would never run. Use a fine-grained PAT
+          # scoped to this repo with contents:write.
+          token: ${{ secrets.CONTENT_SYNC_TOKEN }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm sync:notion
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          # Optional, and unset for an ordinary database: a database's rows live
+          # in a data source, and one with a single source is resolved from the
+          # database id alone. Set this secret only if the Blog database ever
+          # exposes more than one — the run says so, and names them, rather than
+          # publishing from whichever one Notion listed first. An unset secret
+          # arrives as an empty string, which reads as "not set".
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+      - name: Commit and push any changes
+        run: |
+          # Scope the dirty check to the paths that are actually staged, so an
+          # unrelated dirty file can't make `git commit` run with nothing to
+          # commit (which fails the step under `set -e`).
+          git add -A -- content/blog public/images/blog
+          if git diff --cached --quiet; then
+            echo "No content changes."
+            exit 0
+          fi
+          git config user.name "elopenmike-content-bot"
+          git config user.email "micasillm@gmail.com"
+          git commit -m "content: sync from Notion"
+          git push

@@ -20,4 +20,9 @@ describe("Home page", () => {
       screen.getByRole("heading", { name: "Stand-up" }),
     ).toBeInTheDocument();
   });
+
+  it("surfaces the writing section", () => {
+    const { container } = render(<Home />);
+    expect(container.querySelector("#writing")).not.toBeNull();
+  });
 });

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { sora, inter } from "@/lib/fonts";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL, site, routes } from "@/lib/site";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { SkipLink } from "@/components/layout/SkipLink";
@@ -17,6 +17,13 @@ export const metadata: Metadata = {
   },
   description:
     "Software Engineer, builder, and stand-up comedian. Experience, projects, and the occasional joke.",
+  alternates: {
+    types: {
+      "application/rss+xml": [
+        { url: routes.feed, title: `${site.name} — Blog` },
+      ],
+    },
+  },
   openGraph: {
     title: "Miguel Casillas — Software Engineer",
     description: "Software Engineer, builder, and stand-up comedian.",

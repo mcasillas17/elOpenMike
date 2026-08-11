@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import sitemap from "@/app/sitemap";
-import { getAllPosts } from "@/lib/blog";
+import { getAllPosts, getAllTags } from "@/lib/blog";
 
 describe("sitemap", () => {
   it("includes the core static routes, projects, and posts", () => {
@@ -23,6 +23,13 @@ describe("sitemap", () => {
       );
       expect(entry).toBeDefined();
       expect(entry?.lastModified).toEqual(new Date(post.date));
+    }
+  });
+
+  it("includes a url for every tag page", () => {
+    const urls = sitemap().map((e) => e.url);
+    for (const tag of getAllTags()) {
+      expect(urls).toContain(`https://elopenmike.com/blog/tag/${tag.slug}`);
     }
   });
 

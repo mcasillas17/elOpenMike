@@ -13,6 +13,8 @@ export const routes = {
   projectDetail: (slug: string) => `/projects/${slug}`,
   blog: "/blog",
   blogPost: (slug: string) => `/blog/${slug}`,
+  blogTag: (slug: string) => `/blog/tag/${slug}`,
+  feed: "/feed.xml",
   comedy: "/comedy",
   resume: "/resume.pdf",
   sitemap: "/sitemap.xml",
@@ -21,6 +23,22 @@ export const routes = {
 // Build an absolute URL from a route path.
 export function absoluteUrl(path: string): string {
   return `${SITE_URL}${path === "/" ? "" : path}`;
+}
+
+// RSS autodiscovery, in the shape Next's `alternates.types` expects.
+//
+// Next merges metadata per top-level key, so a page that exports
+// `alternates: { canonical }` REPLACES the layout's `alternates` and silently
+// drops the feed link. Pages therefore build their alternates through this.
+export function alternatesFor(canonical: string) {
+  return {
+    canonical,
+    types: {
+      "application/rss+xml": [
+        { url: routes.feed, title: `${site.name} — Blog` },
+      ],
+    },
+  };
 }
 
 export const site = {
@@ -41,6 +59,7 @@ export const site = {
     { label: "Experience", href: "/#experience" },
     { label: "Skills", href: "/#skills" },
     { label: "Projects", href: "/#projects" },
+    { label: "Writing", href: "/#writing" },
     { label: "About", href: "/#about" },
     { label: "Comedy", href: "/#comedy" },
     { label: "Blog", href: routes.blog },

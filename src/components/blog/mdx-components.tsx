@@ -14,6 +14,9 @@ export const mdxComponents = {
   h3: (p: ComponentProps<"h3">) => (
     <h3 className="mt-8 mb-2 font-display text-xl font-bold text-ink" {...p} />
   ),
+  h4: (p: ComponentProps<"h4">) => (
+    <h4 className="mt-6 mb-2 font-display text-lg font-bold text-ink" {...p} />
+  ),
   p: (p: ComponentProps<"p">) => (
     <p className="mb-4 leading-relaxed text-muted" {...p} />
   ),

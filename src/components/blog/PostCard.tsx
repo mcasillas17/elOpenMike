@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { PostMeta } from "@/lib/blog";
+import { tagSlug } from "@/lib/blog";
 import { Tag } from "@/components/ui/Tag";
 import { routes } from "@/lib/site";
 
@@ -25,9 +26,15 @@ export function PostCard({ post }: { post: PostMeta }) {
       </h2>
       <p className="mt-1.5 text-sm text-muted">{post.excerpt}</p>
       {post.tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
           {post.tags.map((t) => (
-            <Tag key={t}>{t}</Tag>
+            <Link
+              key={t}
+              href={routes.blogTag(tagSlug(t))}
+              className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+            >
+              <Tag>{t}</Tag>
+            </Link>
           ))}
         </div>
       )}

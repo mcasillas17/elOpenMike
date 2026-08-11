@@ -9,6 +9,7 @@ export type PostMeta = {
   excerpt: string;
   tags: string[];
   readingMinutes: number;
+  updated?: string; // ISO; absent on posts that have never been revised
 };
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
@@ -40,14 +41,68 @@ export function getPost(
     date: String(data.date ?? ""),
     excerpt: String(data.excerpt ?? ""),
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+    updated: data.updated ? String(data.updated) : undefined,
     readingMinutes: readingMinutes(content),
   };
   return { meta, body: content };
 }
 
+// Invalid dates sort last rather than throwing. Synced posts are validated
+// upstream, but the loader must not depend on that.
+function timestamp(date: string): number {
+  const value = new Date(date).getTime();
+  return Number.isNaN(value) ? -Infinity : value;
+}
+
+// Newest first. Posts sharing a date are ordered by slug: the sequence comes
+// from readdir, whose order is filesystem-dependent, so without a tie-breaker
+// two posts published the same day could swap places between machines — and
+// with them the feed, the tag pages, and every prev/next link.
 export function getAllPosts(): PostMeta[] {
   return getPostSlugs()
     .map((slug) => getPost(slug)?.meta)
     .filter((m): m is PostMeta => m !== undefined)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
+    .sort(
+      (a, b) =>
+        timestamp(b.date) - timestamp(a.date) || a.slug.localeCompare(b.slug),
+    );
+}
+
+// URL-safe form of a tag name. Kept here so routes and listings agree.
+export function tagSlug(name: string): string {
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function getAllTags(): { name: string; slug: string; count: number }[] {
+  const seen = new Map<string, { name: string; slug: string; count: number }>();
+  for (const post of getAllPosts()) {
+    for (const name of post.tags) {
+      const slug = tagSlug(name);
+      const existing = seen.get(slug);
+      if (existing) existing.count += 1;
+      else seen.set(slug, { name, slug, count: 1 });
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+export function getPostsByTag(slug: string): PostMeta[] {
+  return getAllPosts().filter((post) => post.tags.map(tagSlug).includes(slug));
+}
+
+// Posts are newest-first, so `prev` is the newer neighbour and `next` the older
+// one — matching "← Previous / Next →" reading order.
+export function getAdjacentPosts(slug: string): {
+  prev?: PostMeta;
+  next?: PostMeta;
+} {
+  const posts = getAllPosts();
+  const index = posts.findIndex((post) => post.slug === slug);
+  if (index === -1) return {};
+  return { prev: posts[index - 1], next: posts[index + 1] };
 }

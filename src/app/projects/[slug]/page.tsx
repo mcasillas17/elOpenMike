@@ -12,7 +12,7 @@ import { Carousel } from "@/components/ui/Carousel";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
 import { getProject, getAllSlugs, projects } from "@/data/projects";
 import { getTint } from "@/lib/projectVisuals";
-import { routes } from "@/lib/site";
+import { routes, alternatesFor } from "@/lib/site";
 
 function accentedTitle(title: string): ReactNode {
   const parts = title.split(" ");
@@ -41,7 +41,7 @@ export async function generateMetadata({
   return {
     title: project.title,
     description: project.summary,
-    alternates: { canonical: routes.projectDetail(slug) },
+    alternates: alternatesFor(routes.projectDetail(slug)),
   };
 }
 

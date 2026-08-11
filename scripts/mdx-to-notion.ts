@@ -1,0 +1,171 @@
+//
+// ONE-TIME migration: pushes the hand-written content/blog/*.mdx posts into the
+// Notion database so they don't need retyping. Run manually, once. Never wired
+// into CI — after migration Notion owns content/blog/ and this script is dead
+// weight kept only for the record.
+//
+// Safe to re-run, and safe to kill: every page is created as a Draft the site
+// never shows and promoted to Published only once all of its blocks have
+// landed, so a run that dies partway leaves drafts rather than half-published
+// posts, and running it again finishes them. See src/lib/notion/migrate.ts.
+//
+// Safe, too, against the page being edited underneath it: every page is read
+// back in full immediately before each append and before the promotion, and
+// once more after it, and anything that is no longer exactly this post stops
+// the run — or, if it was already published, is demoted straight back to Draft.
+// A promotion that fails without saying whether it landed is read back the same
+// way, so the run reports what the database actually holds rather than assuming
+// the write never happened. The one window that cannot be closed is the
+// round-trip between a read and the write it justified; Notion has no
+// conditional write to close it with. See the migration section of README.md.
+//
+// Pause .github/workflows/sync-content.yml first. That sync runs every ten
+// minutes and removes the content/blog/*.mdx of any post Notion has not
+// published — which, mid-migration, means the very file a killed run needs in
+// order to finish its draft. If one does go missing, restore it from git and
+// run this again; the drafts it cannot match to a file are listed at the end.
+//
+// The posts themselves are read through the walk the sync uses rather than by
+// hand: this run *uploads* what it finds under content/blog, so a link at any
+// name on the way down is the difference between migrating a blog and
+// publishing whatever that link points at. See src/lib/notion/content-files.ts.
+import {
+  createNotionClient,
+  fetchBlockTree,
+  queryPages,
+  retrieveDataSourceSchema,
+} from "../src/lib/notion/client";
+import { readLocalPostFiles } from "../src/lib/notion/content-files";
+import { resolveConfiguredDataSourceId } from "../src/lib/notion/data-source";
+import { pageSlug, pageStatus, pageTitle } from "../src/lib/notion/fetch-post";
+import {
+  toLocalPost,
+  prepareMigration,
+  runMigration,
+  type RemotePage,
+} from "../src/lib/notion/migrate";
+import { createMigrationExecutor } from "../src/lib/notion/migrate-executor";
+
+const ROOT = process.cwd();
+
+// Every post the migration is about, read through the walk that proves the tree
+// rather than through a readdir that follows it: this is the run that *uploads*
+// content/blog, so a link at `content`, at `content/blog` or at one post is the
+// difference between migrating a blog and publishing whatever that link points
+// at. See src/lib/notion/content-files.ts.
+async function readLocalPosts(root: string) {
+  const files = await readLocalPostFiles(root);
+  return files.map(({ name, contents }) => toLocalPost(name, contents));
+}
+
+async function main(): Promise<void> {
+  const token = process.env.NOTION_TOKEN;
+  if (!token) {
+    throw new Error("set NOTION_TOKEN and NOTION_DATABASE_ID");
+  }
+
+  const client = createNotionClient(token);
+
+  // The same resolver the sync uses, so this writes into the data source the
+  // sync publishes from. NOTION_DATA_SOURCE_ID is honored when it is set — and
+  // proved to belong to NOTION_DATABASE_ID first — but a database with one data
+  // source, which is every ordinary one, needs only the database id.
+  const dataSourceId = await resolveConfiguredDataSourceId(client);
+
+  // Both the title property's name and the Status property's write shape and
+  // options depend on how the database was set up, so read the schema before
+  // writing anything.
+  const schema = await retrieveDataSourceSchema(client, dataSourceId);
+
+  // Every page's slug, title and status: what a re-run needs to tell a post it
+  // already finished from a draft it left behind from somebody else's page.
+  const existing: RemotePage[] = (
+    await queryPages(client, dataSourceId)
+  ).map((page) => ({
+    pageId: page.id,
+    slug: pageSlug(page),
+    title: pageTitle(page),
+    status: pageStatus(page),
+    archived: page.archived,
+    in_trash: page.in_trash,
+    is_archived: page.is_archived,
+  }));
+
+  // Everything is read and measured before the first write: the database, the
+  // posts, every request Notion would have to accept, and the blocks already on
+  // any draft this run would resume. One unresolvable page stops the whole run
+  // rather than half of it.
+  const prepared = await prepareMigration(
+    await readLocalPosts(ROOT),
+    existing,
+    { dataSourceId, schema },
+    (pageId) => fetchBlockTree(client, pageId),
+  );
+
+  if (prepared.errors.length > 0) {
+    console.error(`\n✗ ${prepared.errors.length} problem(s) — nothing written:\n`);
+    for (const error of prepared.errors) console.error(`  ${error}`);
+    for (const { pageId } of prepared.orphanDrafts) {
+      console.error(
+        `  note: draft page ${pageId} claims a slug no content/blog file does`,
+      );
+    }
+    process.exit(1);
+  }
+
+  for (const { pageId } of prepared.skip) {
+    console.log(`· already published in Notion, skipped page ${pageId}`);
+  }
+
+  // Notion takes 100 children per request, so a long post is one create and
+  // then a series of appends, and one more request to publish it — plus the
+  // reads that earn each of them: every page is read back in full immediately
+  // before each append, before the promotion, and once more after it. That is
+  // the whole protocol, and it lives beside the migration rather than here so
+  // the tests drive the same wiring this script does.
+  const executor = createMigrationExecutor(
+    client,
+    dataSourceId,
+    schema,
+  );
+
+  const written = await runMigration(
+    prepared.writes,
+    executor,
+    ({ slug, batches, resumed, recovered }) =>
+      console.log(
+        `✓ ${resumed ? "finished" : "migrated"} ${slug}` +
+          (batches > 0
+            ? ` (+${batches} block batch${batches === 1 ? "" : "es"})`
+            : "") +
+          (recovered
+            ? " — the promotion's answer was lost, and the page was read back" +
+              " and proved published"
+            : ""),
+      ),
+  );
+
+  const resumed = written.filter((page) => page.resumed).length;
+  console.log(
+    `\n✓ ${written.length - resumed} created, ${resumed} resumed, ` +
+      `${prepared.skip.length} already published`,
+  );
+
+  // A draft nothing on disk claims is how a killed run ends up unfinishable:
+  // the content sync removes the .mdx of any post Notion has not published, so
+  // a draft can outlive its own source file. Saying which file is missing is
+  // the difference between "restore it from git and run again" and a post that
+  // is simply gone.
+  for (const { pageId } of prepared.orphanDrafts) {
+    console.warn(
+      `! draft page ${pageId} claims a slug no content/blog file does — if a ` +
+        "killed run left it, open the page, read its Slug, and restore that " +
+        "content/blog/<slug>.mdx from git before running this again",
+    );
+  }
+}
+
+main().catch((error: unknown) => {
+  console.error(`✗ migration failed: ${(error as Error).message}`);
+  process.exit(1);
+});

@@ -1,4 +1,4 @@
-import { site } from "@/lib/site";
+import { site, routes } from "@/lib/site";
 import { Container } from "@/components/ui/Container";
 import { SpideyTrigger } from "@/components/spidey/SpideyTrigger";
 
@@ -31,6 +31,14 @@ export function Footer() {
               </a>
             </li>
           ))}
+          <li>
+            <a
+              href={routes.feed}
+              className="rounded text-sm text-muted transition-colors hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+            >
+              RSS
+            </a>
+          </li>
         </ul>
         <SpideyTrigger />
       </Container>

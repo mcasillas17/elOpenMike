@@ -6,12 +6,15 @@ import remarkGfm from "remark-gfm";
 import rehypePrettyCode, {
   type Options as PrettyCodeOptions,
 } from "rehype-pretty-code";
+import rehypeSlug from "rehype-slug";
+import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import { Container } from "@/components/ui/Container";
 import { Tag } from "@/components/ui/Tag";
-import { getPost, getPostSlugs } from "@/lib/blog";
+import { getPost, getPostSlugs, tagSlug, getAdjacentPosts } from "@/lib/blog";
 import { mdxComponents } from "@/components/blog/mdx-components";
+import { PostNav } from "@/components/blog/PostNav";
 import { ArticleJsonLd } from "@/components/seo/ArticleJsonLd";
-import { routes } from "@/lib/site";
+import { routes, alternatesFor } from "@/lib/site";
 
 const prettyCodeOptions: PrettyCodeOptions = {
   theme: "github-dark",
@@ -35,7 +38,7 @@ export async function generateMetadata({
   return {
     title: post.meta.title,
     description: post.meta.excerpt,
-    alternates: { canonical: routes.blogPost(slug) },
+    alternates: alternatesFor(routes.blogPost(slug)),
   };
 }
 
@@ -66,7 +69,21 @@ export default async function PostPage({
     options: {
       mdxOptions: {
         remarkPlugins: [remarkGfm],
-        rehypePlugins: [[rehypePrettyCode, prettyCodeOptions]],
+        rehypePlugins: [
+          rehypeSlug,
+          [
+            rehypeAutolinkHeadings,
+            {
+              behavior: "append",
+              properties: {
+                className: "heading-anchor",
+                "aria-label": "Link to this section",
+              },
+              content: { type: "text", value: "#" },
+            },
+          ],
+          [rehypePrettyCode, prettyCodeOptions],
+        ],
       },
     },
   });
@@ -87,6 +104,7 @@ export default async function PostPage({
           description={post.meta.excerpt}
           date={post.meta.date}
           tags={post.meta.tags}
+          updated={post.meta.updated}
         />
         <Link
           href={routes.blog}
@@ -103,11 +121,18 @@ export default async function PostPage({
         {post.meta.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {post.meta.tags.map((t) => (
-              <Tag key={t}>{t}</Tag>
+              <Link
+                key={t}
+                href={routes.blogTag(tagSlug(t))}
+                className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+              >
+                <Tag>{t}</Tag>
+              </Link>
             ))}
           </div>
         )}
         <div className="mt-8">{content}</div>
+        <PostNav {...getAdjacentPosts(slug)} />
       </div>
     </Container>
   );

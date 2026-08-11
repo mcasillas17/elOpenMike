@@ -1,4 +1,5 @@
 import { site, SITE_URL, absoluteUrl, routes } from "@/lib/site";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 // BlogPosting structured data for a blog post (Google rich results).
 export function ArticleJsonLd({
@@ -7,12 +8,14 @@ export function ArticleJsonLd({
   description,
   date,
   tags,
+  updated,
 }: {
   slug: string;
   title: string;
   description: string;
   date: string;
   tags: string[];
+  updated?: string;
 }) {
   const url = absoluteUrl(routes.blogPost(slug));
   const data = {
@@ -21,7 +24,7 @@ export function ArticleJsonLd({
     headline: title,
     description,
     datePublished: date,
-    dateModified: date,
+    dateModified: updated ?? date,
     author: { "@type": "Person", name: site.name, url: SITE_URL },
     keywords: tags.join(", "),
     url,
@@ -30,7 +33,7 @@ export function ArticleJsonLd({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(data) }}
     />
   );
 }
