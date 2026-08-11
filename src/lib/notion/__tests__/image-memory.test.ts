@@ -369,4 +369,21 @@ describe("a file the walk cannot read", () => {
   it("says nothing about a blog that has no images yet", async () => {
     expect(await inspectImageFiles(root)).toEqual(new Map());
   });
+
+  // "No images yet" and "I was not allowed to look" are the same answer only if
+  // nobody asks which one it is. The second one plans every image as missing
+  // and every orphan as absent, and reports it as being in sync.
+  it.skipIf(root0)("does not read a tree it cannot open as an empty one", async () => {
+    await write(image("a", "one.png"), filler(9, 64));
+    const blog = path.join(root, "public/images/blog");
+    await fs.chmod(blog, 0o000);
+
+    try {
+      await expect(inspectImageFiles(root)).rejects.toBeInstanceOf(
+        ImageTreeError,
+      );
+    } finally {
+      await fs.chmod(blog, 0o700).catch(() => undefined);
+    }
+  });
 });

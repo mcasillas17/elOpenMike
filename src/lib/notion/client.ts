@@ -163,6 +163,8 @@ class RequestDeadline {
     });
   }
 
+  // Aborting is not enough on its own — a stalled body ignores it — so the
+  // reason is also handed to whatever is waiting, through the race in guard().
   private fire(): void {
     if (this.done) return;
     this.clear();
@@ -181,24 +183,14 @@ class RequestDeadline {
   }
 }
 
-// The init the request actually goes out with. A caller that brought its own
-// signal keeps it — its abort is forwarded rather than replaced, so both
-// reasons can still end this request.
+// The init the request actually goes out with: everything the SDK asked for —
+// the method, the headers, the body, the agent — plus the signal this deadline
+// enforces itself with. `SupportedRequestInit` has no signal of its own, so
+// nothing is being taken away from anybody; the cast is what says so.
 function underSignal(
   init: Parameters<SupportedFetch>[1],
   deadline: RequestDeadline,
 ): Parameters<SupportedFetch>[1] {
-  const theirs = (init as { signal?: AbortSignal } | undefined)?.signal;
-  if (theirs) {
-    if (theirs.aborted) deadline.controller.abort(theirs.reason);
-    else {
-      theirs.addEventListener(
-        "abort",
-        () => deadline.controller.abort(theirs.reason),
-        { once: true },
-      );
-    }
-  }
   return {
     ...(init ?? {}),
     signal: deadline.controller.signal,

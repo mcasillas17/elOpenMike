@@ -175,8 +175,14 @@ export async function inspectImageFiles(root: string): Promise<ExistingImages> {
   let slugs: string[];
   try {
     slugs = await fs.readdir(path.join(root, BLOG_IMAGE_ROOT));
-  } catch {
-    return files; // no images have ever been written
+  } catch (error: unknown) {
+    // "Nothing has been written here yet" and "I was not allowed to look" are
+    // the same answer only if nobody asks which one it is — and the second one
+    // plans every image as missing, every orphan as absent, and reports a tree
+    // it never saw as being in sync.
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return files;
+    throw refuseUnreadable(BLOG_IMAGE_ROOT, "listed");
   }
 
   // One buffer for the whole walk: this, and nothing per file, is what the run

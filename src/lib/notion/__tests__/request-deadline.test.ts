@@ -266,6 +266,39 @@ describe("the deadline one Notion request runs under", () => {
   });
 });
 
+// The SDK asks for a method, headers, a body and an agent, and has no signal of
+// its own to ask for — `SupportedRequestInit` does not have the field. So the
+// deadline adds one, and takes nothing away: a request that goes out under a
+// clock is still the request the SDK described.
+describe("what the request goes out as", () => {
+  it("keeps everything the SDK asked for and adds the signal", async () => {
+    vi.useFakeTimers();
+    try {
+      const seen: Array<Record<string, unknown>> = [];
+      const client = createNotionClient("secret_t", {
+        fetch: async (_url, init) => {
+          seen.push({ ...(init as Record<string, unknown>) });
+          return streamed(trickle([PAGE], 0));
+        },
+      });
+
+      const outcome = settle(client.pages.retrieve({ page_id: "page-1" }));
+      await vi.advanceTimersByTimeAsync(10);
+      expect((await outcome)()).toMatchObject({ id: "page-1" });
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0].method).toBe("GET");
+      expect(seen[0].headers).toMatchObject({
+        authorization: "Bearer secret_t",
+      });
+      expect(seen[0].signal).toBeInstanceOf(AbortSignal);
+      expect((seen[0].signal as AbortSignal).aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 // A timeout says nothing about whether the request landed. On a read that does
 // not matter — reading twice leaves Notion exactly as it was — and repeating is
 // what keeps one stalled socket from costing a post. On a write it is the whole
