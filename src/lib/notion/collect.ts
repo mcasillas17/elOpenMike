@@ -1,4 +1,5 @@
 import type { PageObject } from "./client";
+import { describeOffSite, offSiteState } from "./archived";
 import { isPartialBlockError } from "./block-shape";
 import { isPublished, pageSlug, toPostSource } from "./fetch-post";
 import { mapWithConcurrency, MAX_CONCURRENT_REQUESTS } from "./pool";
@@ -12,9 +13,11 @@ import type { MdBlock, PostFailure, PostSource } from "./types";
 // has already taken down.
 //
 // So the metadata is read a second time once the blocks are in hand, and the
-// post is only accepted if the page still reads Published, is not in the trash,
-// and reports the same last_edited_time as the snapshot the query returned.
-// Notion moves last_edited_time on any edit, so equality is the version check.
+// post is only accepted if the page still reads Published, is neither trashed
+// nor archived, and reports the same last_edited_time as the snapshot the query
+// returned. Notion moves last_edited_time on any edit, so equality is the
+// version check; the three standing fields are read together, because archiving
+// a page takes it off the site exactly the way trashing it does (archived.ts).
 //
 // Snapshot limitation: Notion exposes no conditional read (no ETag, no
 // if-match), so this narrows the window to the revalidation round-trip rather
@@ -28,12 +31,14 @@ export function revalidatePage(
   before: PageObject,
   after: PageObject,
 ): Revalidation {
-  if (after.archived === true || after.in_trash === true) {
+  const offSite = offSiteState(after);
+  if (offSite !== undefined) {
     return {
       ok: false,
       message:
-        "page was moved to the Notion trash while its blocks were loading — " +
-        "nothing published for it this run",
+        `page is ${describeOffSite(offSite)} — it was taken off the site ` +
+        "while its blocks were loading, so nothing was published for it this " +
+        "run",
     };
   }
 

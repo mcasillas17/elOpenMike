@@ -160,7 +160,12 @@ describe("a draft that moved before the check looked at it", () => {
     [
       "moved to the trash",
       (notion, pageId) => notion.trash(pageId),
-      /moved to the Notion trash/,
+      /in the Notion trash/,
+    ],
+    [
+      "archived",
+      (notion, pageId) => notion.archive(pageId),
+      /archived in Notion/,
     ],
     [
       "written into by hand",

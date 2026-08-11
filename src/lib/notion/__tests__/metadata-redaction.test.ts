@@ -346,7 +346,7 @@ describe("what a live page's divergence says", () => {
   const state = (over: Partial<PageState> = {}): PageState => ({
     metadata: actual,
     status: "Draft",
-    trashed: false,
+    offSite: undefined,
     versionBefore: "2026-05-20T00:00:00.000Z",
     version: "2026-05-20T00:00:00.000Z",
     blocks: [],

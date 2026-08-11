@@ -1,6 +1,7 @@
 import { Client } from "@notionhq/client";
 import { withReadRetry } from "./retry";
 import { assertFullBlock } from "./block-shape";
+import { isOffSite } from "./archived";
 import type { DataSourceSchema } from "./properties";
 import type { MdBlock } from "./types";
 
@@ -50,10 +51,14 @@ export function createNotionClient(
 export type PageObject = {
   id: string;
   last_edited_time: string;
-  // `archived` is the legacy flag and `in_trash` its replacement; both are read
-  // so a trashed page is recognized whichever one the API version returns.
+  // The three fields a page carries about where it stands. `archived` is the
+  // legacy spelling of `in_trash`, and `is_archived` is a state of its own — a
+  // page can be archived without being trashed. All three are read so a page
+  // that is off the site is recognized whichever one says so, and whichever API
+  // version answered. See archived.ts.
   archived?: boolean;
   in_trash?: boolean;
+  is_archived?: boolean;
   properties: Record<string, unknown>;
 };
 
@@ -125,6 +130,8 @@ function asPageObject(result: unknown): PageObject | undefined {
       typeof result.archived === "boolean" ? result.archived : undefined,
     in_trash:
       typeof result.in_trash === "boolean" ? result.in_trash : undefined,
+    is_archived:
+      typeof result.is_archived === "boolean" ? result.is_archived : undefined,
     properties: result.properties,
   };
 }
@@ -246,7 +253,13 @@ function nextCursor(
 }
 
 // Walks every page in the data source. Notion's query does not return trashed
-// pages, so what comes back is the live contents of the database.
+// pages, so what comes back is the live contents of the database — except that
+// "live" is not the same as "on the site". Notion promises nothing about
+// *archived* pages here, and an archived page is one its author has taken down:
+// publishing it puts content back on the blog that somebody removed, and
+// counting it as a claimant stops the page that replaced it being published at
+// all. So every row is checked and an off-site one is dropped before the
+// caller's own filter ever sees it. See archived.ts.
 //
 // `result_type: "page"` asks the API for the pages alone, which is what this
 // repo publishes from — a wiki's rows include the child databases underneath
@@ -291,6 +304,11 @@ export async function queryPages(
             "nothing was read, planned, written or deleted this run",
         );
       }
+      // Trashed or archived: not on the site, not this run's to write to, and
+      // holding no slug. Dropping one loses nothing — it claims no file on
+      // disk — which is what makes archiving a page and re-running a way to
+      // take a post down or redo it.
+      if (isOffSite(page)) continue;
       if (accept(page)) pages.push(page);
     }
     cursor = nextCursor(response, seen, `data source ${dataSourceId}`);

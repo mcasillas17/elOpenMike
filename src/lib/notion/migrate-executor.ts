@@ -16,6 +16,7 @@ import {
   type DataSourceSchema,
 } from "./properties";
 import { appendChildrenBody } from "./limits";
+import { offSiteState } from "./archived";
 import { withMutationRetry } from "./retry";
 import type { MigrationExecutor, PageState } from "./migrate";
 
@@ -51,9 +52,9 @@ export function createMigrationExecutor(
   return {
     // Read against the same data source the plan was read from, and filtered on
     // the slug the sync itself would derive, so what this sees is what the sync
-    // would call a collision. A trashed page is not returned by a query and
-    // holds no slug, which is what makes trashing a page and re-running the way
-    // to redo one post.
+    // would call a collision. A page that is off the site — trashed or archived
+    // — never reaches this list (see queryPages), and so holds no slug, which
+    // is what makes taking a page down and re-running the way to redo one post.
     async claimants(slug) {
       const pages = await queryPages(
         client,
@@ -103,7 +104,7 @@ export function createMigrationExecutor(
           statusType: pageStatusType(after),
         },
         status: pageStatus(after),
-        trashed: after.archived === true || after.in_trash === true,
+        offSite: offSiteState(after),
         versionBefore: before.last_edited_time,
         version: after.last_edited_time,
         blocks,

@@ -33,6 +33,9 @@ export type StoredPage = {
   properties: Record<string, unknown>;
   blocks: StoredBlock[];
   in_trash: boolean;
+  // Notion's third standing field, and a state of its own: a page can be
+  // archived without being trashed. See archived.ts.
+  is_archived: boolean;
   last_edited_time: string;
 };
 
@@ -119,6 +122,7 @@ export type SeedPage = {
   status: string;
   blocks?: BlockObjectRequest[];
   in_trash?: boolean;
+  is_archived?: boolean;
   excerpt?: string;
   tags?: string[];
   date?: string;
@@ -217,6 +221,7 @@ export class FakeNotion {
       properties: properties(page),
       blocks: (page.blocks ?? []).map(store),
       in_trash: page.in_trash === true,
+      is_archived: page.is_archived === true,
       last_edited_time: "2026-05-20T00:00:00.000Z",
     });
     return id;
@@ -272,6 +277,12 @@ export class FakeNotion {
     });
   }
 
+  archive(pageId: string): void {
+    this.edit(pageId, (page) => {
+      page.is_archived = true;
+    });
+  }
+
   // --- the endpoints the migration actually calls ---------------------------
 
   private createPage(body: CreatePageRequest): { id: string } {
@@ -287,6 +298,7 @@ export class FakeNotion {
       properties: storedProperties(body.properties),
       blocks: body.children.map(store),
       in_trash: false,
+      is_archived: false,
       last_edited_time: "2026-05-20T00:00:00.000Z",
     });
     this.stamp(id);
@@ -369,6 +381,8 @@ export class FakeNotion {
             id: page.id,
             last_edited_time: page.last_edited_time,
             in_trash: page.in_trash,
+            archived: page.in_trash,
+            is_archived: page.is_archived,
             properties: { ...page.properties },
           };
           this.read("retrieve", page_id);
@@ -394,6 +408,12 @@ export class FakeNotion {
               object: "page",
               id: page.id,
               last_edited_time: page.last_edited_time,
+              in_trash: page.in_trash,
+              archived: page.in_trash,
+              // Notion's query hides a trashed page. It promises nothing about
+              // an archived one, so this hands them over and the caller is
+              // what has to recognize them.
+              is_archived: page.is_archived,
               properties: page.properties,
             })),
             has_more: false,

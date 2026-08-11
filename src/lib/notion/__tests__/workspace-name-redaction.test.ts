@@ -158,7 +158,7 @@ describe("what a live page's status says while the run is writing", () => {
   const state = (over: Partial<PageState> = {}): PageState => ({
     metadata: desired,
     status: "Draft",
-    trashed: false,
+    offSite: undefined,
     versionBefore: "2026-05-20T00:00:00.000Z",
     version: "2026-05-20T00:00:00.000Z",
     blocks: [],

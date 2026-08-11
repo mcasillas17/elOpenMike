@@ -230,10 +230,10 @@ refuse anything that has moved:
   page is opened. The run never calls a page a Draft it has not read, and never
   writes one it cannot justify;
 - **the demotion is only ever made off a read that has just proved the page is
-  Published and not in the trash.** That is the one state it is the undo for. A
-  page somebody demoted, moved into a status of their own, or trashed inside the
-  promotion's window is not on the site — there is nothing to take off it — so
-  it is reported as what it now reads and left exactly as it is.
+  Published and on the site.** That is the one state it is the undo for. A page
+  somebody demoted, moved into a status of their own, trashed or archived inside
+  the promotion's window is not on the site — there is nothing to take off it —
+  so it is reported as what it now reads and left exactly as it is.
 
 Two runs inside one process are serialized against each other by a lock, so
 they cannot interleave their reads and writes.
@@ -265,8 +265,15 @@ The checking costs requests: every append and the promotion are each preceded by
 a full read of the page. This is a one-shot script, so that trade is made
 without hesitation.
 
-A page in the Notion trash holds no slug, so trashing a page and re-running is
-how a single post is redone from scratch.
+**A page that is off the site holds no slug.** Notion says where a page stands
+in three fields, and they are not two names for one thing: `in_trash` (with
+`archived` as its pre-2026-03-11 spelling) says the page is in the trash, and
+`is_archived` says it is archived — not trashed, not deleted, and not on the
+site either. All three are read together, everywhere: the sync never publishes
+such a page and never revalidates one into a post, and the migration never
+resumes, appends to, repairs, promotes, demotes or counts one as claiming a
+slug. So trashing *or* archiving a page and re-running is how a single post is
+redone from scratch.
 
 **Pause the sync workflow first.** `sync-content.yml` runs every ten minutes and
 removes the `content/blog/*.mdx` of any post Notion has not published — which is

@@ -83,6 +83,7 @@ async function main(): Promise<void> {
     status: pageStatus(page),
     archived: page.archived,
     in_trash: page.in_trash,
+    is_archived: page.is_archived,
   }));
 
   // Everything is read and measured before the first write: the database, the

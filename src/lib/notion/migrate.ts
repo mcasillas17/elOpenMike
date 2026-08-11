@@ -17,6 +17,11 @@ import { markdownToBlocks, plainRichText as text } from "./md-to-blocks";
 import type { RichTextInput } from "./md-to-rich-text";
 import type { MdBlock } from "./types";
 import { matchBlockPrefix } from "./block-equality";
+import {
+  describeOffSite,
+  isOffSite,
+  type OffSite,
+} from "./archived";
 import { mapWithConcurrency } from "./pool";
 import {
   batchBlocks,
@@ -67,9 +72,12 @@ import {
 // safety gate, and the cost of them being too strict is a message rather than
 // an overwrite.
 //
-// Trash: a trashed page is invisible to the sync and to a data source query, so
-// it does not hold its slug. Trashing a page and re-running is how one post is
-// redone, and a trashed page never counts as a duplicate of a live one.
+// Off the site: a page in the trash, and a page its author archived, are both
+// invisible to the blog — and a data source query is filtered to match (see
+// client.ts and archived.ts). Neither holds its slug, neither is ever resumed,
+// appended to, repaired, promoted or demoted, and neither counts as a duplicate
+// of a live page. Taking a page off the site and running again is how one post
+// is redone.
 
 export type LocalPost = {
   file: string;
@@ -102,8 +110,12 @@ export type RemotePage = {
   // still carries this post's title, so neither may be inferred.
   title: string;
   status: string;
+  // Where the page stands. All three are carried because all three are read:
+  // `archived` is the legacy spelling of `in_trash`, and `is_archived` is a
+  // state of its own. See archived.ts.
   archived?: boolean;
   in_trash?: boolean;
+  is_archived?: boolean;
 };
 
 export type MigrationMatch = { slug: string; pageId: string };
@@ -117,6 +129,8 @@ export type MigrationPlan = {
   create: LocalPost[];
   resume: MigrationResume[];
   skip: MigrationMatch[];
+  // Every page that is off the site — trashed or archived. None of them claims
+  // a slug and none of them is written to.
   archived: MigrationMatch[];
   // Live drafts no local file claims. Not a problem in itself — an author is
   // free to have drafts — but it is the signature of the one way this recovery
@@ -184,7 +198,10 @@ export type PageMetadata = {
 export type PageState = {
   metadata: PageMetadata;
   status: string;
-  trashed: boolean;
+  // Set when the page is off the site, and to which of the two it is. A page
+  // that is off the site is never written to: there is nothing on the site to
+  // undo, and a Status written over it is an edit nobody asked for.
+  offSite?: OffSite;
   // last_edited_time as it read *before* the block tree was walked and again
   // after it. Notion cannot serve a page "as of" a version, so the two being
   // equal is the only thing that says the metadata and the blocks below
@@ -369,17 +386,15 @@ function frontmatterDate(value: unknown): string {
   return match && isRealTimeOfDay(match) ? match[1] : value;
 }
 
-function isTrashed(page: RemotePage): boolean {
-  return page.archived === true || page.in_trash === true;
-}
-
 export function planMigration(
   posts: LocalPost[],
   pages: RemotePage[],
 ): MigrationPlan {
   const errors: string[] = [];
 
-  const live = pages.filter((page) => !isTrashed(page));
+  // Trashed or archived: either way the page is not on the blog, does not
+  // hold its slug, and is nothing this run writes to. See archived.ts.
+  const live = pages.filter((page) => !isOffSite(page));
   const bySlug = new Map<string, RemotePage[]>();
   for (const page of live) {
     // A blank database row — one Enter press away in any Notion view — has no
@@ -493,7 +508,7 @@ export function planMigration(
   }
 
   const archived = pages
-    .filter((page) => isTrashed(page))
+    .filter((page) => isOffSite(page))
     .map((page) => ({ slug: page.slug, pageId: page.pageId }));
 
   const claimed = new Set(posts.map((post) => post.slug));
@@ -912,8 +927,8 @@ export function checkDraftState(
   state: PageState,
   expected: number,
 ): StateCheck {
-  if (state.trashed) {
-    return { ok: false, reason: "it has been moved to the Notion trash" };
+  if (state.offSite) {
+    return { ok: false, reason: `it is ${describeOffSite(state.offSite)}` };
   }
   if (state.version !== state.versionBefore) {
     return {
@@ -947,8 +962,8 @@ export function checkPublishedState(
   write: MigrationWrite,
   state: PageState,
 ): StateCheck {
-  if (state.trashed) {
-    return { ok: false, reason: "it has been moved to the Notion trash" };
+  if (state.offSite) {
+    return { ok: false, reason: `it is ${describeOffSite(state.offSite)}` };
   }
   if (state.version !== state.versionBefore) {
     return {
@@ -1278,8 +1293,9 @@ async function agreeOnMetadata(
 // The demotion is only ever made off the back of a read that has just said the
 // page is Published and is not in the trash. That is the one state it is the
 // undo for. A page somebody demoted, moved into a status of their own or
-// trashed inside the promotion's window is not on the site, so there is nothing
-// to take off it, and `Status: Draft` written over it would be an edit nobody
+// trashed or archived inside the promotion's window is not on the site, so
+// there is nothing to take off it, and `Status: Draft` written over it would be
+// an edit nobody
 // asked for; a page that cannot be read at all is a page nothing here knows
 // anything about, and the guess used to be made in exactly the direction it
 // could not be checked. Both are reported as what they are and left alone.
@@ -1309,7 +1325,7 @@ async function provePublished(
 
   // Not on the site, and not this run's to move: whatever it reads now,
   // somebody put it there after the promotion landed.
-  if (state.trashed || state.status !== PUBLISHED_STATUS) {
+  if (state.offSite !== undefined || state.status !== PUBLISHED_STATUS) {
     throw new Error(
       `${write.file}: page ${pageId} was published by this run and is now ` +
         `${describeStanding(state)} — somebody else has moved it, so nothing ` +
@@ -1427,7 +1443,7 @@ async function resolveLostPromotion(
     return provePublished(write, executor, pageId, state);
   }
 
-  if (state.status === DRAFT_STATUS && !state.trashed) {
+  if (state.status === DRAFT_STATUS && state.offSite === undefined) {
     // Read back, so this is a fact rather than an assumption.
     throw unfinished(write, pageId, resumed, cause, READ_BACK_AS_DRAFT);
   }
@@ -1446,7 +1462,7 @@ async function resolveLostPromotion(
 }
 
 function describeStanding(state: PageState): string {
-  if (state.trashed) return "in the Notion trash";
+  if (state.offSite) return describeOffSite(state.offSite);
   return describeStatus(state.status);
 }
 
