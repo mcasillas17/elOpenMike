@@ -166,6 +166,14 @@ every frame's rectangle — GIF's image descriptors, APNG's `fcTL`, WebP's `ANMF
 — has to lie entirely inside the canvas it belongs to, there are at most 1024 of
 them, and together they may not decode to more than 250 megapixels.
 
+**An AVIF has to be a still picture.** `avis` is the brand of an AVIF image
+*sequence* — many pictures and a track that plays them — and none of that is
+walked: over a sequence the check proves the wrapper and says nothing about the
+frames inside, so one declared size would stand for a thousand decodes. A
+sequence is therefore refused rather than half-checked, on any brand it names
+rather than only the major one, and so is a file carrying a movie's boxes
+whatever its brands say. Export the frame you want as a still AVIF, or as a PNG.
+
 **SVG is refused outright**, however it is labelled. A committed image is served
 from the site's own origin, and an SVG is not a picture to a browser — it is a
 document that runs script, so a stored one is same-origin XSS reachable by

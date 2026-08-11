@@ -572,10 +572,41 @@ function vp8xSize(
 
 // ---------------------------------------------------------------------------
 // AVIF: ISO base media boxes. `ftyp` names the brands, `meta` describes the
-// picture, and `mdat` (or `idat`) holds it.
+// picture, and `mdat` (or an `idat` inside the metadata) holds it.
 // ---------------------------------------------------------------------------
 
-const AVIF_BRANDS = new Set(["avif", "avis"]);
+// What this reads is a *still* picture. `avis` is the brand of an AVIF image
+// sequence — many pictures, a track that plays them, sample tables and
+// per-sample offsets — and none of that is walked here: run over a sequence,
+// everything below proves the wrapper and says nothing at all about the frames
+// inside. One `ispe` would then stand for a thousand decodes, under a file
+// extension the site serves as a picture.
+//
+// So a sequence is refused rather than half-checked, and the brands are read
+// the way somebody writing one would spell them: every brand in the box,
+// because a file may introduce itself as `avif` and name `avis` beside it, and
+// anything reading the whole list will play it. `msf1` is the same claim in
+// HEIF's spelling.
+export const AVIF_STILL_BRAND = "avif";
+export const AVIF_SEQUENCE_BRANDS = new Set(["avis", "msf1"]);
+
+// The still brand is matched exactly, as a four-character code is defined; the
+// sequence brands are matched case-insensitively, because `AVIS` names nothing
+// at all and could only ever be an attempt to walk past a list that knows one
+// spelling. The asymmetry is the point: the allow list is exact, the refusal is
+// generous.
+export function brandsNameStaticAvif(brands: readonly string[]): boolean {
+  if (brands.some((brand) => AVIF_SEQUENCE_BRANDS.has(brand.toLowerCase()))) {
+    return false;
+  }
+  return brands.includes(AVIF_STILL_BRAND);
+}
+
+// The boxes a movie is made of. A still image has none of them, and a file
+// carrying one is a sequence whatever its brands say — the same refusal, read
+// off the structure rather than off the label.
+const MOVIE_BOXES = new Set(["moov", "moof", "mfra", "mvex", "trak", "styp"]);
+
 // Enough for any real file's box tree, and a bound on the walk.
 const MAX_BOXES = 512;
 const MAX_BOX_DEPTH = 6;
@@ -632,7 +663,10 @@ function isCompleteAvif(bytes: Uint8Array): boolean {
   if (!boxes || boxes.length === 0) return false;
 
   const [ftyp] = boxes;
-  if (ftyp.type !== "ftyp" || !namesAvif(bytes, ftyp)) return false;
+  if (ftyp.type !== "ftyp" || !namesStaticAvif(bytes, ftyp)) return false;
+  // A still picture has no tracks, so a box only a movie carries is a sequence
+  // however the brands introduced the file.
+  if (boxes.some((box) => MOVIE_BOXES.has(box.type))) return false;
 
   const meta = boxes.find((box) => box.type === "meta");
   // A description with no picture behind it is a truncated file.
@@ -650,15 +684,20 @@ function isCompleteAvif(bytes: Uint8Array): boolean {
   );
 }
 
-// The major brand, or any of the compatible brands after the minor version.
-function namesAvif(bytes: Uint8Array, ftyp: Box): boolean {
-  if (ftyp.body + 8 > ftyp.end) return false;
-  if (AVIF_BRANDS.has(fourcc(bytes, ftyp.body))) return true;
+// Every brand the `ftyp` names, read as a whole: the major brand, and the
+// compatible brands after the minor version. A brand region that is not a whole
+// number of brands is a box no encoder writes, and is refused rather than
+// rounded down to the brands that do fit.
+function namesStaticAvif(bytes: Uint8Array, ftyp: Box): boolean {
+  // The major brand and the minor version, and then whole brands or nothing.
+  const compatible = ftyp.end - (ftyp.body + 8);
+  if (compatible < 0 || compatible % 4 !== 0) return false;
 
+  const brands = [fourcc(bytes, ftyp.body)];
   for (let offset = ftyp.body + 8; offset + 4 <= ftyp.end; offset += 4) {
-    if (AVIF_BRANDS.has(fourcc(bytes, offset))) return true;
+    brands.push(fourcc(bytes, offset));
   }
-  return false;
+  return brandsNameStaticAvif(brands);
 }
 
 // The `ispe` properties inside meta → iprp → ipco, which is where an AVIF says

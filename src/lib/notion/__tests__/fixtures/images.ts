@@ -124,9 +124,61 @@ export const AVIF_BYTES = decode(
     "CggAAAAABn/8FTIXEAGOACCKCtLnPRcb/ogR7z/z/fHq3cA=",
 );
 
-// The same file under the other AVIF major brand. `avis` names an image
-// sequence, and the compatible brands still list `avif`.
-export const AVIS_BYTES = patchBytes(AVIF_BYTES, 8, ...ascii("avis"));
+// Where an ISO base media file writes the brands that say what it is: the major
+// brand, then a four-byte minor version, then the compatible brands. AVIF_BYTES
+// carries two of the latter, `avif` and `mif1`.
+export const AVIF_MAJOR_BRAND_OFFSET = 8;
+export const AVIF_FIRST_COMPATIBLE_BRAND_OFFSET = 16;
+export const AVIF_SECOND_COMPATIBLE_BRAND_OFFSET = 20;
+
+// The same file under the image *sequence* major brand. `avis` is a file of
+// many pictures and a track that plays them — a different format wearing the
+// same extension — and the compatible brands still list `avif`.
+export const AVIS_BYTES = patchBytes(
+  AVIF_BYTES,
+  AVIF_MAJOR_BRAND_OFFSET,
+  ...ascii("avis"),
+);
+
+// A still image's major brand with a sequence named beside it, which is how a
+// sequence rides in on a file that introduces itself as a picture.
+export const AVIF_WITH_AVIS_COMPATIBLE_BYTES = patchBytes(
+  AVIF_BYTES,
+  AVIF_SECOND_COMPATIBLE_BRAND_OFFSET,
+  ...ascii("avis"),
+);
+
+// The same trick with the structural brand a HEIF image sequence carries.
+export const AVIF_WITH_MSF1_COMPATIBLE_BYTES = patchBytes(
+  AVIF_BYTES,
+  AVIF_SECOND_COMPATIBLE_BRAND_OFFSET,
+  ...ascii("msf1"),
+);
+
+// Brands are case-sensitive four-character codes, so `AVIS` names nothing at
+// all — which is exactly why a check that only knows the lowercase spelling
+// would let it past on the strength of the `avif` beside it.
+export const AVIF_WITH_UPPERCASE_AVIS_BYTES = patchBytes(
+  AVIF_BYTES,
+  AVIF_SECOND_COMPATIBLE_BRAND_OFFSET,
+  ...ascii("AVIS"),
+);
+export const AVIS_UPPERCASE_MAJOR_BYTES = patchBytes(
+  AVIF_BYTES,
+  AVIF_MAJOR_BRAND_OFFSET,
+  ...ascii("AvIs"),
+);
+
+// An ftyp whose brand list stops mid-brand: sixteen bytes of header, major
+// brand and minor version, and then two bytes where a fourth brand would be.
+// The box tiles the file exactly, so only the brand walk can refuse it.
+export const AVIF_RAGGED_BRANDS_BYTES = concatBytes(
+  bytes(0, 0, 0, 22),
+  ascii("ftypavif"),
+  bytes(0, 0, 0, 0),
+  ascii("av"),
+  AVIF_BYTES.slice(24),
+);
 
 // Where each format writes the numbers a test needs to make impossible.
 export const PNG_IHDR_LENGTH_OFFSET = 8;

@@ -11,7 +11,6 @@ import {
   asciiBytes as ascii,
   concatBytes as concat,
   AVIF_BYTES,
-  AVIS_BYTES,
   GIF87_BYTES,
   GIF89_BYTES,
   HTML_BYTES,
@@ -94,7 +93,6 @@ describe("sniffImageFormat", () => {
     ["gif", GIF89_BYTES],
     ["webp", WEBP_BYTES],
     ["avif", AVIF_BYTES],
-    ["avif", AVIS_BYTES],
   ])("recognizes %s from its magic bytes", (format, sample) => {
     expect(sniffImageFormat(sample)).toBe(format);
   });

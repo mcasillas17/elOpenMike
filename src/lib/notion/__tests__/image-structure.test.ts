@@ -16,7 +16,6 @@ import {
   AVIF_ISPE_WIDTH_OFFSET,
   AVIF_MDAT_OFFSET,
   AVIF_PREFIX,
-  AVIS_BYTES,
   GIF87_BYTES,
   GIF89_BYTES,
   GIF_FIRST_BLOCK_OFFSET,
@@ -71,7 +70,6 @@ const VALID: Array<[ImageFormat, Uint8Array, string]> = [
   ["webp", WEBP_LOSSLESS_BYTES, "image/webp"],
   ["webp", WEBP_EXTENDED_BYTES, "image/webp"],
   ["avif", AVIF_BYTES, "image/avif"],
-  ["avif", AVIS_BYTES, "image/avif"],
 ];
 
 describe("a whole, well-formed file of each format", () => {

@@ -1,4 +1,5 @@
 import {
+  brandsNameStaticAvif,
   isCompleteImage,
   MAX_IMAGE_DIMENSION,
   MAX_IMAGE_PIXELS,
@@ -158,24 +159,56 @@ function isWebp(bytes: Uint8Array): boolean {
 // major brand at 8 is the usual answer, but an AVIF written by some encoders
 // carries `mif1` there and names `avif` among its compatible brands, so the
 // whole (bounded) brand list is read.
-const AVIF_BRANDS = new Set(["avif", "avis"]);
+//
+// Read, and not only searched: `avis` is an AVIF image *sequence* — many
+// pictures and a track that plays them — and a file may introduce itself as
+// `avif` while naming `avis` beside it, which is enough for anything reading
+// the whole list to play it. What each brand means lives in image-structure.ts,
+// beside the walk that refuses the same file again on the bytes, so the two
+// gates cannot come to disagree about which brands are a still picture.
 const MAX_FTYP_BYTES = 512;
+// Size, type, major brand, minor version: everything before the first
+// compatible brand.
+const FTYP_HEADER_BYTES = 16;
+const BRAND_BYTES = 4;
 
-function isAvif(bytes: Uint8Array): boolean {
-  if (!reads(bytes, 4, "ftyp")) return false;
+const brandAt = (bytes: Uint8Array, offset: number): string =>
+  String.fromCharCode(...bytes.slice(offset, offset + BRAND_BYTES));
+
+// Every brand an ftyp names, or undefined when the box is not one a brand list
+// can be read out of: a size that cannot hold the header, or a brand region
+// that is not a whole number of brands. A ragged list is a file no encoder
+// writes, and guessing which four bytes were meant is not a thing to do with
+// bytes from a stranger.
+function ftypBrands(bytes: Uint8Array): string[] | undefined {
+  if (!reads(bytes, 4, "ftyp")) return undefined;
 
   const declared =
     ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
-  const end = Math.min(bytes.byteLength, MAX_FTYP_BYTES, Math.max(declared, 16));
+  if (declared < FTYP_HEADER_BYTES) return undefined;
+  if ((declared - FTYP_HEADER_BYTES) % BRAND_BYTES !== 0) return undefined;
 
-  for (let offset = 8; offset + 4 <= end; offset += 4) {
-    // Skip the four bytes of minor version that sit between the major brand
-    // and the compatible brands.
-    if (offset === 12) continue;
-    const brand = String.fromCharCode(...bytes.slice(offset, offset + 4));
-    if (AVIF_BRANDS.has(brand)) return true;
+  // Bounded by the file as well as by the box: a download cut short mid-ftyp
+  // still says what it was trying to be, and the structural check is what
+  // refuses it for stopping there.
+  const end = Math.min(bytes.byteLength, MAX_FTYP_BYTES, declared);
+  const brands: string[] = [];
+  if (8 + BRAND_BYTES <= end) brands.push(brandAt(bytes, 8));
+  for (
+    let offset = FTYP_HEADER_BYTES;
+    offset + BRAND_BYTES <= end;
+    offset += BRAND_BYTES
+  ) {
+    brands.push(brandAt(bytes, offset));
   }
-  return false;
+  return brands;
+}
+
+// True for a still AVIF, and false for an image sequence wearing the same
+// extension.
+function isAvif(bytes: Uint8Array): boolean {
+  const brands = ftypBrands(bytes);
+  return brands !== undefined && brandsNameStaticAvif(brands);
 }
 
 // The format the bytes themselves say they are, or undefined when they say
