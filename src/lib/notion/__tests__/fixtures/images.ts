@@ -258,3 +258,231 @@ export function pngMarker(png: Uint8Array): string {
   const from = type + 4 + PNG_MARKER_KEYWORD.length + 1;
   return text.slice(from, type + 4 + length).trimEnd();
 }
+
+// ---------------------------------------------------------------------------
+// Pictures whose *headers* describe something enormous, in files of a few
+// hundred bytes.
+//
+// A decompression bomb is not a big file. Every one of these is small enough to
+// pass the download's size cap without noticing, and each one asks whatever
+// decodes it for gigabytes: the numbers live in the header, and the pixels are
+// only ever conjured on the other side. So they are built rather than
+// downloaded — a real encoder will not write one.
+// ---------------------------------------------------------------------------
+
+function be16(value: number): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(2);
+  new DataView(out.buffer).setUint16(0, value, false);
+  return out;
+}
+
+function le16(value: number): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(2);
+  new DataView(out.buffer).setUint16(0, value, true);
+  return out;
+}
+
+function le24(value: number): Uint8Array<ArrayBuffer> {
+  return bytes(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff);
+}
+
+function le32(value: number): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(4);
+  new DataView(out.buffer).setUint32(0, value, true);
+  return out;
+}
+
+// A PNG chunk with a real CRC: length, type, data, checksum.
+export function pngChunk(
+  type: string,
+  data: Uint8Array,
+): Uint8Array<ArrayBuffer> {
+  const name = ascii(type);
+  return concatBytes(
+    be32(data.byteLength),
+    name,
+    data,
+    be32(crc32(concatBytes(name, data))),
+  );
+}
+
+// The same 1x1 PNG with another size written into its IHDR. Nothing decodes
+// it — the point is a header that claims a picture nobody can hold.
+export function pngDeclaring(
+  width: number,
+  height: number,
+): Uint8Array<ArrayBuffer> {
+  return patchBytes(
+    patchBytes(PNG_BYTES, PNG_WIDTH_OFFSET, ...be32(width)),
+    PNG_HEIGHT_OFFSET,
+    ...be32(height),
+  );
+}
+
+export type AnimationFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+// An animated PNG: the same file with an `acTL` and one `fcTL` per frame, each
+// declaring its own rectangle inside the canvas.
+export function apngDeclaring(
+  canvas: { width: number; height: number },
+  frames: AnimationFrame[],
+): Uint8Array<ArrayBuffer> {
+  const base = pngDeclaring(canvas.width, canvas.height);
+  const head = base.slice(0, 33);
+  const tail = base.slice(33);
+
+  const control = pngChunk(
+    "acTL",
+    concatBytes(be32(frames.length), be32(0)),
+  );
+  const frameChunks = frames.map((frame, index) =>
+    pngChunk(
+      "fcTL",
+      concatBytes(
+        be32(index),
+        be32(frame.width),
+        be32(frame.height),
+        be32(frame.x),
+        be32(frame.y),
+        be16(1),
+        be16(10),
+        bytes(0, 0),
+      ),
+    ),
+  );
+
+  return concatBytes(head, control, ...frameChunks, tail);
+}
+
+// A GIF of a chosen canvas, holding a chosen set of image descriptors. Each
+// frame carries the smallest legal LZW payload, so a file with a thousand of
+// them is still a few kilobytes — which is the whole point.
+export function gifDeclaring(
+  canvas: { width: number; height: number },
+  frames: AnimationFrame[],
+): Uint8Array<ArrayBuffer> {
+  const screen = concatBytes(
+    ascii("GIF89a"),
+    le16(canvas.width),
+    le16(canvas.height),
+    // No global colour table, so nothing follows the descriptor.
+    bytes(0x00, 0x00, 0x00),
+  );
+
+  const images = frames.map((frame) =>
+    concatBytes(
+      bytes(0x2c),
+      le16(frame.x),
+      le16(frame.y),
+      le16(frame.width),
+      le16(frame.height),
+      bytes(0x00),
+      // LZW minimum code size, one data sub-block, and the block terminator.
+      bytes(0x02, 0x02, 0x4c, 0x01, 0x00),
+    ),
+  );
+
+  return concatBytes(screen, ...images, bytes(0x3b));
+}
+
+// A RIFF/WEBP container around whichever chunks a test wants inside it.
+export function buildWebp(
+  chunks: Array<{ type: string; payload: Uint8Array }>,
+): Uint8Array<ArrayBuffer> {
+  const body = concatBytes(
+    ascii("WEBP"),
+    ...chunks.map(({ type, payload }) =>
+      concatBytes(
+        ascii(type),
+        le32(payload.byteLength),
+        payload,
+        // Chunks are padded to an even length.
+        new Uint8Array(payload.byteLength % 2),
+      ),
+    ),
+  );
+  return concatBytes(ascii("RIFF"), le32(body.byteLength), body);
+}
+
+// The extended container declaring a canvas of a chosen size, with the lossy
+// file's own VP8 chunk inside it.
+export function webpDeclaring(
+  width: number,
+  height: number,
+): Uint8Array<ArrayBuffer> {
+  return buildWebp([
+    {
+      type: "VP8X",
+      // flags, three reserved bytes, then the canvas stored one less than it is
+      payload: concatBytes(
+        bytes(0, 0, 0, 0),
+        le24(width - 1),
+        le24(height - 1),
+      ),
+    },
+    { type: "VP8 ", payload: WEBP_BYTES.slice(20) },
+  ]);
+}
+
+// An animated WebP: a VP8X canvas, the ANIM chunk, and one ANMF per frame. A
+// frame's offsets are stored halved, and its size one less than it is.
+export function animatedWebpDeclaring(
+  canvas: { width: number; height: number },
+  frames: AnimationFrame[],
+): Uint8Array<ArrayBuffer> {
+  return buildWebp([
+    {
+      type: "VP8X",
+      payload: concatBytes(
+        // The animation flag.
+        bytes(0x02, 0, 0, 0),
+        le24(canvas.width - 1),
+        le24(canvas.height - 1),
+      ),
+    },
+    { type: "ANIM", payload: concatBytes(le32(0), le16(0)) },
+    ...frames.map((frame) => ({
+      type: "ANMF",
+      payload: concatBytes(
+        le24(frame.x / 2),
+        le24(frame.y / 2),
+        le24(frame.width - 1),
+        le24(frame.height - 1),
+        // duration, then flags
+        le24(10),
+        bytes(0),
+        WEBP_BYTES.slice(12),
+      ),
+    })),
+  ]);
+}
+
+// The same AVIF with another size written into the `ispe` its metadata carries.
+export function avifDeclaring(
+  width: number,
+  height: number,
+): Uint8Array<ArrayBuffer> {
+  return patchBytes(
+    patchBytes(AVIF_BYTES, AVIF_ISPE_WIDTH_OFFSET, ...be32(width)),
+    AVIF_ISPE_HEIGHT_OFFSET,
+    ...be32(height),
+  );
+}
+
+// The same JPEG with another size written into its SOF0 frame header.
+export function jpegDeclaring(
+  width: number,
+  height: number,
+): Uint8Array<ArrayBuffer> {
+  return patchBytes(
+    patchBytes(JPEG_BYTES, JPEG_SOF_WIDTH_OFFSET, ...be16(width)),
+    JPEG_SOF_HEIGHT_OFFSET,
+    ...be16(height),
+  );
+}
+

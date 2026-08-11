@@ -31,9 +31,83 @@ import type { ImageFormat } from "./image-format";
 // bomb or a field somebody wrote a number into.
 export const MAX_IMAGE_DIMENSION = 65_535;
 
+// What a picture costs is not its width or its height but their product, and a
+// bound on each side alone leaves 65535 x 65535 — four gigapixels, sixteen
+// gigabytes decoded, declared in a hundred-byte header that arrives well inside
+// the download's size cap. Nothing here decodes anything; whatever draws,
+// resizes or indexes the file later does, and this is the only place the number
+// it will be asked for can be refused.
+//
+// 40 megapixels is comfortably past any photograph a post carries — a 8K frame
+// is 33 — and, at the four bytes a decoder holds a pixel of RGBA in, it is
+// 160 MB of memory for one picture. That is the ceiling, expressed both ways
+// because the pixels are what the file declares and the bytes are what they
+// cost.
+export const MAX_IMAGE_PIXELS = 40_000_000;
+export const DECODED_BYTES_PER_PIXEL = 4;
+export const MAX_DECODED_IMAGE_BYTES =
+  MAX_IMAGE_PIXELS * DECODED_BYTES_PER_PIXEL;
+
+// An animation is many pictures in one file, and every one of them is a decode.
+// A canvas inside the budget above says nothing about that: a GIF, an APNG or
+// an animated WebP can carry thousands of frames in a few kilobytes, because a
+// frame of one flat colour compresses to almost nothing.
+//
+// Both halves are needed. A count on its own would allow a thousand
+// canvas-sized frames; a total on its own would allow a million one-pixel ones,
+// each of which is still a decode, an allocation and a composite. A frame also
+// has to *be* inside the canvas it belongs to — a rectangle that starts or ends
+// outside one is a file no encoder writes and a size no decoder agrees on.
+//
+// The total bounds work rather than memory: a decoder composites frames onto
+// one canvas, so it holds the canvas and a frame, not the sum. 250 megapixels
+// is a second or so of that work, and past any animation a blog post carries.
+export const MAX_IMAGE_FRAMES = 1_024;
+export const MAX_ANIMATION_PIXELS = 250_000_000;
+
 function isSaneDimension(value: number): boolean {
   return Number.isInteger(value) && value > 0 && value <= MAX_IMAGE_DIMENSION;
 }
+
+// A whole picture: each side inside the per-side cap, and the two of them
+// together inside the decoded budget.
+function isSanePicture(width: number, height: number): boolean {
+  return (
+    isSaneDimension(width) &&
+    isSaneDimension(height) &&
+    width * height <= MAX_IMAGE_PIXELS
+  );
+}
+
+// One frame of an animation, and what the frames before it have already cost.
+// The rectangle has to be a picture, it has to lie entirely inside the canvas,
+// and the animation has to still be inside both of its budgets.
+class FrameBudget {
+  private frames = 0;
+  private pixels = 0;
+
+  constructor(
+    private readonly canvasWidth: number,
+    private readonly canvasHeight: number,
+  ) {}
+
+  add(x: number, y: number, width: number, height: number): boolean {
+    if (!isSanePicture(width, height)) return false;
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0) {
+      return false;
+    }
+    if (x + width > this.canvasWidth || y + height > this.canvasHeight) {
+      return false;
+    }
+
+    this.frames += 1;
+    this.pixels += width * height;
+    return (
+      this.frames <= MAX_IMAGE_FRAMES && this.pixels <= MAX_ANIMATION_PIXELS
+    );
+  }
+}
+
 
 function u16be(bytes: Uint8Array, offset: number): number {
   return (bytes[offset] << 8) | bytes[offset + 1];
@@ -89,14 +163,20 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const MAX_PNG_CHUNK = 0x7fffffff;
 const PNG_BIT_DEPTHS = new Set([1, 2, 4, 8, 16]);
 const PNG_COLOR_TYPES = new Set([0, 2, 3, 4, 6]);
+// An APNG's animation control (frame count and play count) and the frame
+// control that opens each frame: a sequence number, the frame's own rectangle,
+// a delay, and the two operators.
+const PNG_ACTL_BYTES = 8;
+const PNG_FCTL_BYTES = 26;
 
 function isCompletePng(bytes: Uint8Array): boolean {
   if (bytes.byteLength < PNG_SIGNATURE.length) return false;
   if (PNG_SIGNATURE.some((byte, index) => bytes[index] !== byte)) return false;
 
   let offset = PNG_SIGNATURE.length;
-  let first = true;
   let ended = false;
+  // The canvas the IHDR declared, and what the frames after it have cost.
+  let frames: FrameBudget | undefined;
 
   while (offset + 8 <= bytes.byteLength) {
     const length = u32be(bytes, offset);
@@ -107,10 +187,28 @@ function isCompletePng(bytes: Uint8Array): boolean {
     const next = offset + 12 + length;
     if (next > bytes.byteLength) return false;
 
-    if (first) {
+    if (frames === undefined) {
       if (type !== "IHDR" || length !== 13) return false;
-      if (!isSanePngHeader(bytes, offset + 8)) return false;
-      first = false;
+      const canvas = pngHeader(bytes, offset + 8);
+      if (!canvas) return false;
+      frames = new FrameBudget(canvas.width, canvas.height);
+    } else if (type === "acTL") {
+      // An APNG says up front how many frames it has.
+      if (length !== PNG_ACTL_BYTES) return false;
+      const declared = u32be(bytes, offset + 8);
+      if (declared < 1 || declared > MAX_IMAGE_FRAMES) return false;
+    } else if (type === "fcTL") {
+      // Every frame of an APNG carries its own rectangle, which has to lie
+      // inside the canvas the IHDR declared.
+      if (length !== PNG_FCTL_BYTES) return false;
+      const at = offset + 8;
+      const added = frames.add(
+        u32be(bytes, at + 12),
+        u32be(bytes, at + 16),
+        u32be(bytes, at + 4),
+        u32be(bytes, at + 8),
+      );
+      if (!added) return false;
     }
 
     if (type === "IEND") {
@@ -127,7 +225,11 @@ function isCompletePng(bytes: Uint8Array): boolean {
   return ended && offset === bytes.byteLength;
 }
 
-function isSanePngHeader(bytes: Uint8Array, offset: number): boolean {
+// The picture an IHDR declares, or undefined when what it declares is not one.
+function pngHeader(
+  bytes: Uint8Array,
+  offset: number,
+): { width: number; height: number } | undefined {
   const width = u32be(bytes, offset);
   const height = u32be(bytes, offset + 4);
   const depth = bytes[offset + 8];
@@ -136,15 +238,15 @@ function isSanePngHeader(bytes: Uint8Array, offset: number): boolean {
   const filter = bytes[offset + 11];
   const interlace = bytes[offset + 12];
 
-  return (
-    isSaneDimension(width) &&
-    isSaneDimension(height) &&
+  const sane =
+    isSanePicture(width, height) &&
     PNG_BIT_DEPTHS.has(depth) &&
     PNG_COLOR_TYPES.has(color) &&
     compression === 0 &&
     filter === 0 &&
-    interlace <= 1
-  );
+    interlace <= 1;
+
+  return sane ? { width, height } : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +278,10 @@ function isCompleteJpeg(bytes: Uint8Array): boolean {
 
   let offset = 2;
   let framed = false;
+  // A JPEG normally carries one frame; a hierarchical one carries several, and
+  // each of them is a decode of its own.
+  let frames = 0;
+  let pixels = 0;
 
   while (offset < bytes.byteLength) {
     if (bytes[offset] !== 0xff) return false;
@@ -207,8 +313,13 @@ function isCompleteJpeg(bytes: Uint8Array): boolean {
       const height = u16be(bytes, offset + 3);
       const width = u16be(bytes, offset + 5);
       const components = bytes[offset + 7];
-      if (!isSaneDimension(width) || !isSaneDimension(height)) return false;
+      if (!isSanePicture(width, height)) return false;
       if (components === 0) return false;
+      frames += 1;
+      pixels += width * height;
+      if (frames > MAX_IMAGE_FRAMES || pixels > MAX_ANIMATION_PIXELS) {
+        return false;
+      }
       framed = true;
     }
 
@@ -251,9 +362,13 @@ function isCompleteGif(bytes: Uint8Array): boolean {
   const header = String.fromCharCode(...bytes.slice(0, 6));
   if (!GIF_HEADERS.includes(header)) return false;
 
-  if (!isSaneDimension(u16le(bytes, 6)) || !isSaneDimension(u16le(bytes, 8))) {
-    return false;
-  }
+  // The logical screen: the canvas every frame is drawn into. Both of its
+  // fields are 16 bits, so a file of a hundred bytes can ask for four
+  // gigapixels here.
+  const width = u16le(bytes, 6);
+  const height = u16le(bytes, 8);
+  if (!isSanePicture(width, height)) return false;
+  const frames = new FrameBudget(width, height);
 
   const packed = bytes[10];
   let offset = 13 + colorTableBytes(packed);
@@ -276,7 +391,20 @@ function isCompleteGif(bytes: Uint8Array): boolean {
     } else if (block === 0x2c) {
       // An image descriptor: its own frame, an optional local colour table, the
       // LZW minimum code size, then sub-blocks.
+      //
+      // Every one of these is a picture in its own right, drawn at its own
+      // offset — so it has to fit inside the logical screen, and there has to
+      // be a limit on how many of them there are and on what they add up to.
+      // A frame of one flat colour is a handful of bytes, which is how a few
+      // kilobytes come to hold thousands of decodes.
       if (offset + 9 > bytes.byteLength) return false;
+      const added = frames.add(
+        u16le(bytes, offset),
+        u16le(bytes, offset + 2),
+        u16le(bytes, offset + 4),
+        u16le(bytes, offset + 6),
+      );
+      if (!added) return false;
       const local = bytes[offset + 8];
       offset += 9 + colorTableBytes(local);
       if (offset >= bytes.byteLength) return false;
@@ -316,6 +444,10 @@ function skipSubBlocks(bytes: Uint8Array, from: number): number {
 // picture than this.
 const MAX_WEBP_DIMENSION = 16_383;
 
+// An animation frame's own header: two 24-bit offsets, two 24-bit sizes, a
+// duration and a byte of flags, before the sub-chunks that hold its picture.
+const WEBP_ANMF_HEADER_BYTES = 16;
+
 function isCompleteWebp(bytes: Uint8Array): boolean {
   if (bytes.byteLength < 20) return false;
   if (fourcc(bytes, 0) !== "RIFF" || fourcc(bytes, 8) !== "WEBP") return false;
@@ -326,7 +458,8 @@ function isCompleteWebp(bytes: Uint8Array): boolean {
   if (u32le(bytes, 4) !== bytes.byteLength - 8) return false;
 
   let offset = 12;
-  let first = true;
+  // The canvas the first chunk declared, and what the frames after it cost.
+  let frames: FrameBudget | undefined;
 
   while (offset + 8 <= bytes.byteLength) {
     const type = fourcc(bytes, offset);
@@ -335,71 +468,103 @@ function isCompleteWebp(bytes: Uint8Array): boolean {
     const next = offset + 8 + size + (size % 2);
     if (next > bytes.byteLength || size > bytes.byteLength) return false;
 
-    if (first) {
-      if (!isSaneWebpImageChunk(type, bytes, offset + 8, size)) return false;
-      first = false;
+    if (frames === undefined) {
+      const canvas = webpCanvas(type, bytes, offset + 8, size);
+      if (!canvas) return false;
+      frames = new FrameBudget(canvas.width, canvas.height);
+    } else if (type === "ANMF") {
+      // Each frame of an animated WebP is drawn at its own offset inside the
+      // canvas the VP8X declared. The offsets are stored halved, and the sizes
+      // one less than they are.
+      if (size < WEBP_ANMF_HEADER_BYTES) return false;
+      const at = offset + 8;
+      const added = frames.add(
+        u24le(bytes, at) * 2,
+        u24le(bytes, at + 3) * 2,
+        u24le(bytes, at + 6) + 1,
+        u24le(bytes, at + 9) + 1,
+      );
+      if (!added) return false;
     }
 
     offset = next;
   }
 
-  return !first && offset === bytes.byteLength;
+  return frames !== undefined && offset === bytes.byteLength;
 }
 
-function isSaneWebpImageChunk(
+// The picture the first chunk declares, or undefined when that chunk carries no
+// picture at all.
+function webpCanvas(
   type: string,
   bytes: Uint8Array,
   offset: number,
   size: number,
-): boolean {
-  if (type === "VP8 ") return isSaneVp8(bytes, offset, size);
-  if (type === "VP8L") return isSaneVp8l(bytes, offset, size);
-  if (type === "VP8X") return isSaneVp8x(bytes, offset, size);
-  return false;
+): { width: number; height: number } | undefined {
+  if (type === "VP8 ") return vp8Size(bytes, offset, size);
+  if (type === "VP8L") return vp8lSize(bytes, offset, size);
+  if (type === "VP8X") return vp8xSize(bytes, offset, size);
+  return undefined;
 }
 
-function isSaneWebpDimension(value: number): boolean {
-  return isSaneDimension(value) && value <= MAX_WEBP_DIMENSION;
+// A VP8 or VP8L field is 14 bits wide, so those two cannot express a picture
+// larger than 16383 a side however big the budget is.
+function isSaneWebpPicture(width: number, height: number): boolean {
+  return (
+    isSanePicture(width, height) &&
+    width <= MAX_WEBP_DIMENSION &&
+    height <= MAX_WEBP_DIMENSION
+  );
 }
 
 // The lossy keyframe header: a three-byte frame tag whose low bit says
 // keyframe, the start code, then two 14-bit sizes.
-function isSaneVp8(bytes: Uint8Array, offset: number, size: number): boolean {
-  if (size < 10) return false;
+function vp8Size(
+  bytes: Uint8Array,
+  offset: number,
+  size: number,
+): { width: number; height: number } | undefined {
+  if (size < 10) return undefined;
   const tag = u24le(bytes, offset);
-  if ((tag & 1) !== 0) return false;
+  if ((tag & 1) !== 0) return undefined;
   if (
     bytes[offset + 3] !== 0x9d ||
     bytes[offset + 4] !== 0x01 ||
     bytes[offset + 5] !== 0x2a
   ) {
-    return false;
+    return undefined;
   }
-  return (
-    isSaneWebpDimension(u16le(bytes, offset + 6) & 0x3fff) &&
-    isSaneWebpDimension(u16le(bytes, offset + 8) & 0x3fff)
-  );
+  const width = u16le(bytes, offset + 6) & 0x3fff;
+  const height = u16le(bytes, offset + 8) & 0x3fff;
+  return isSaneWebpPicture(width, height) ? { width, height } : undefined;
 }
 
 // The lossless header: a signature byte, then two 14-bit sizes packed into the
 // bitstream, each stored one less than it is.
-function isSaneVp8l(bytes: Uint8Array, offset: number, size: number): boolean {
-  if (size < 5 || bytes[offset] !== 0x2f) return false;
+function vp8lSize(
+  bytes: Uint8Array,
+  offset: number,
+  size: number,
+): { width: number; height: number } | undefined {
+  if (size < 5 || bytes[offset] !== 0x2f) return undefined;
   const packed = u32le(bytes, offset + 1);
-  return (
-    isSaneWebpDimension((packed & 0x3fff) + 1) &&
-    isSaneWebpDimension(((packed >>> 14) & 0x3fff) + 1)
-  );
+  const width = (packed & 0x3fff) + 1;
+  const height = ((packed >>> 14) & 0x3fff) + 1;
+  return isSaneWebpPicture(width, height) ? { width, height } : undefined;
 }
 
 // The extended header: flags, three reserved bytes, then the canvas size as two
-// 24-bit fields, each stored one less than it is.
-function isSaneVp8x(bytes: Uint8Array, offset: number, size: number): boolean {
-  if (size !== 10) return false;
-  return (
-    isSaneDimension(u24le(bytes, offset + 4) + 1) &&
-    isSaneDimension(u24le(bytes, offset + 7) + 1)
-  );
+// 24-bit fields, each stored one less than it is. This one can express a canvas
+// of sixteen million a side, which is the whole reason the budget exists.
+function vp8xSize(
+  bytes: Uint8Array,
+  offset: number,
+  size: number,
+): { width: number; height: number } | undefined {
+  if (size !== 10) return undefined;
+  const width = u24le(bytes, offset + 4) + 1;
+  const height = u24le(bytes, offset + 7) + 1;
+  return isSanePicture(width, height) ? { width, height } : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -471,11 +636,14 @@ function isCompleteAvif(bytes: Uint8Array): boolean {
   const data = boxes.some((box) => box.type === "mdat" || box.type === "idat");
   if (!meta || !data) return false;
 
-  const size = pictureSize(bytes, meta);
+  // Every `ispe` the metadata carries, not the first one: a file can describe
+  // several items, and a thumbnail with an ordinary size says nothing about the
+  // one beside it that asks for four gigapixels.
+  const sizes = pictureSizes(bytes, meta);
   return (
-    size !== undefined &&
-    isSaneDimension(size.width) &&
-    isSaneDimension(size.height)
+    sizes !== undefined &&
+    sizes.length > 0 &&
+    sizes.every((size) => isSanePicture(size.width, size.height))
   );
 }
 
@@ -490,47 +658,49 @@ function namesAvif(bytes: Uint8Array, ftyp: Box): boolean {
   return false;
 }
 
-// The `ispe` property inside meta → iprp → ipco, which is where an AVIF says
-// how big its picture is. A file whose metadata stops before this is a file
+// The `ispe` properties inside meta → iprp → ipco, which is where an AVIF says
+// how big its pictures are. A file whose metadata stops before this is a file
 // whose download stopped.
-function pictureSize(
+function pictureSizes(
   bytes: Uint8Array,
   meta: Box,
-): { width: number; height: number } | undefined {
+): Array<{ width: number; height: number }> | undefined {
   // `meta` is a full box: a version and flags sit before its children.
-  return findIspe(bytes, meta.body + 4, meta.end, 0);
+  return collectIspe(bytes, meta.body + 4, meta.end, 0);
 }
 
 // Only the containers on the path are descended into; an unknown box is a leaf
 // as far as this is concerned, so nothing is misread as a box tree.
 const ISPE_CONTAINERS = new Set(["iprp", "ipco"]);
 
-function findIspe(
+function collectIspe(
   bytes: Uint8Array,
   from: number,
   to: number,
   depth: number,
-): { width: number; height: number } | undefined {
+): Array<{ width: number; height: number }> | undefined {
   if (depth > MAX_BOX_DEPTH || from > to) return undefined;
   const boxes = boxesIn(bytes, from, to);
   if (!boxes) return undefined;
 
+  const sizes: Array<{ width: number; height: number }> = [];
   for (const box of boxes) {
     if (box.type === "ispe") {
       // A full box: version and flags, then two 32-bit dimensions.
       if (box.body + 12 > box.end) return undefined;
-      return {
+      sizes.push({
         width: u32be(bytes, box.body + 4),
         height: u32be(bytes, box.body + 8),
-      };
+      });
     }
     if (ISPE_CONTAINERS.has(box.type)) {
-      const found = findIspe(bytes, box.body, box.end, depth + 1);
-      if (found) return found;
+      const found = collectIspe(bytes, box.body, box.end, depth + 1);
+      if (!found) return undefined;
+      sizes.push(...found);
     }
   }
 
-  return undefined;
+  return sizes;
 }
 
 // ---------------------------------------------------------------------------

@@ -153,6 +153,19 @@ signature with a document behind it, a length that does not match the bytes, or
 anything stapled to the end of a real image is refused — as a category, with
 nothing about the bytes.
 
+**A picture is bounded in pixels, not only in bytes.** A decompression bomb is a
+small file: every dimension in every one of these formats is a number in a
+header, and the pixels it asks for are conjured by whatever decodes it later — a
+browser, a CDN, a thumbnailer. 65535 × 65535 is four gigapixels and sixteen
+gigabytes decoded, written into a hundred-byte GIF header that sails through the
+10 MB cap. So each side is bounded *and so is their product*: at most 40
+megapixels, which is 160 MB decoded at the four bytes a decoder holds a pixel in
+(`src/lib/notion/image-structure.ts`). Animations are checked one level further
+down, because one small canvas can carry thousands of frames in a few kilobytes:
+every frame's rectangle — GIF's image descriptors, APNG's `fcTL`, WebP's `ANMF`
+— has to lie entirely inside the canvas it belongs to, there are at most 1024 of
+them, and together they may not decode to more than 250 megapixels.
+
 **SVG is refused outright**, however it is labelled. A committed image is served
 from the site's own origin, and an SVG is not a picture to a browser — it is a
 document that runs script, so a stored one is same-origin XSS reachable by

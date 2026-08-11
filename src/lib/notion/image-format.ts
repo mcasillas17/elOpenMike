@@ -1,6 +1,22 @@
-import { isCompleteImage, MAX_IMAGE_DIMENSION } from "./image-structure";
+import {
+  isCompleteImage,
+  MAX_IMAGE_DIMENSION,
+  MAX_IMAGE_PIXELS,
+  MAX_DECODED_IMAGE_BYTES,
+  DECODED_BYTES_PER_PIXEL,
+  MAX_IMAGE_FRAMES,
+  MAX_ANIMATION_PIXELS,
+} from "./image-structure";
 
-export { isCompleteImage, MAX_IMAGE_DIMENSION };
+export {
+  isCompleteImage,
+  MAX_IMAGE_DIMENSION,
+  MAX_IMAGE_PIXELS,
+  MAX_DECODED_IMAGE_BYTES,
+  DECODED_BYTES_PER_PIXEL,
+  MAX_IMAGE_FRAMES,
+  MAX_ANIMATION_PIXELS,
+};
 
 // What the sync is allowed to commit under public/images/blog/, and how it
 // decides.
