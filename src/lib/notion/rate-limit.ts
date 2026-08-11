@@ -192,7 +192,11 @@ export class RequestScheduler {
           continue;
         }
         const next = this.queue.shift();
-        this.readyAt = this.now() + this.intervalMs;
+        // Measured from the moment the wait was found to be over, which is the
+        // moment this request goes out. Reading the clock a second time here
+        // would say the same thing and put a step between taking a waiter off
+        // the queue and releasing it.
+        this.readyAt = now + this.intervalMs;
         next?.release();
       }
     } catch (error: unknown) {
