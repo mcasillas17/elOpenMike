@@ -2,8 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, it, expect, beforeEach, afterEach, afterAll } from "vitest";
 import {
+  imageMetadata,
   planImages,
-  readImageFiles,
+  inspectImageFiles,
   applyImagePlan,
 } from "@/lib/notion/image-plan";
 import {
@@ -20,7 +21,6 @@ import { imageDir } from "@/lib/notion/images";
 // what `--check` reports and what a run does would fail here.
 
 const bytes = (value: string) => new TextEncoder().encode(value);
-const decode = (value: Uint8Array) => new TextDecoder().decode(value);
 
 const SCRATCH = path.join(process.cwd(), ".tmp-tests");
 
@@ -110,7 +110,7 @@ describe("image reconciliation against a real tree", () => {
     const sync = planSync(result, existingMdx());
     const images = planImages(
       result.images,
-      await readImageFiles(root),
+      await inspectImageFiles(root),
       prunableImageDirs(result, sync),
     );
     return { result, sync, images };
@@ -175,7 +175,7 @@ describe("image reconciliation against a real tree", () => {
     const { result, sync } = await plan();
     const images = planImages(
       result.images,
-      await readImageFiles(root),
+      await inspectImageFiles(root),
       prunableImageDirs(result, sync),
     );
 
@@ -186,7 +186,7 @@ describe("image reconciliation against a real tree", () => {
 
   it("removes a directory its last image just left", async () => {
     await seed({ [image("gone", "only.png")]: "X" });
-    const existing = await readImageFiles(root);
+    const existing = await inspectImageFiles(root);
 
     const plan = planImages(new Map(), existing, [imageDir("gone")]);
     expect(plan.delete).toEqual([image("gone", "only.png")]);
@@ -196,24 +196,26 @@ describe("image reconciliation against a real tree", () => {
   });
 });
 
-describe("readImageFiles", () => {
+describe("inspectImageFiles", () => {
   it("returns nothing when the blog has no images yet", async () => {
-    expect(await readImageFiles(root)).toEqual(new Map());
+    expect(await inspectImageFiles(root)).toEqual(new Map());
   });
 
-  it("reads every post directory, keyed by repo-relative path", async () => {
+  it("describes every post directory, keyed by repo-relative path", async () => {
     await seed({
       [image("b", "two.png")]: "TWO",
       [image("a", "one.png")]: "ONE",
     });
 
-    const files = await readImageFiles(root);
+    const files = await inspectImageFiles(root);
     expect([...files.keys()]).toEqual([image("a", "one.png"), image("b", "two.png")]);
-    expect(decode(files.get(image("a", "one.png"))!)).toBe("ONE");
+    // A length and a digest, which is everything the plan asks of a file — and
+    // no part of what is inside it.
+    expect(files.get(image("a", "one.png"))).toEqual(imageMetadata(bytes("ONE")));
   });
 
   it("ignores a stray file sitting where a post directory should be", async () => {
     await seed({ "public/images/blog/loose.png": "X" });
-    expect(await readImageFiles(root)).toEqual(new Map());
+    expect(await inspectImageFiles(root)).toEqual(new Map());
   });
 });

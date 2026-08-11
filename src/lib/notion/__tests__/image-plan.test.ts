@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  imageMetadata,
   planImages,
   type ImagePlan,
 } from "@/lib/notion/image-plan";
@@ -16,7 +17,9 @@ const plan = (
 ): ImagePlan =>
   planImages(
     new Map(desired.map(([path, value]) => [path, bytes(value)])),
-    new Map(existing.map(([path, value]) => [path, bytes(value)])),
+    // What a file on disk is worth remembering — its length and its digest —
+    // which is all inspectImageFiles() ever hands back.
+    new Map(existing.map(([path, value]) => [path, imageMetadata(bytes(value))])),
     prunable,
   );
 

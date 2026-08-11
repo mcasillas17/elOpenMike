@@ -74,6 +74,23 @@ image will not download fails — its file on disk is preserved, nothing is
 deleted that run — and it gives back every byte it had taken, so the posts after
 it still sync.
 
+**The images already on disk are never held at all.** Planning them means
+answering one question per file — does it already hold the bytes this run has in
+hand? — and that needs a length and a digest, not a body. Reading each of them
+whole into a `Map<string, Uint8Array>` was the other half of the same failure
+the budget above fixes: a blog whose images weigh 300 MB spent 300 MB proving
+that none of them had changed, on top of everything it had downloaded. So each
+file is opened, read through one 64 KiB buffer shared by the whole walk, and
+reduced to its size and its digest — the same digest, from the same place, that
+gives an image its content-addressed filename. Nothing under
+`public/images/blog` is followed, either: this sync writes regular files there
+and nothing else, so a symlink (or a Windows reparse point) found in that tree
+stops the run rather than being read — and every write opens the path with
+`O_NOFOLLOW`, so one planted between the plan and the write cannot send a post's
+bytes outside the repo. A file the run cannot read stops it too: "unreadable"
+and "absent" must not be the same answer, or `--check` would call a tree in sync
+while a real run rewrote it.
+
 ## Supply-chain hardening
 
 - **Script blocking**: pnpm 10+ blocks dependency install/build scripts by default. The allowlist in `pnpm-workspace.yaml` → `allowBuilds` permits only `esbuild` (native binary setup) and `unrs-resolver` (Tailwind v4 Rust binding). All other lifecycle scripts are blocked.

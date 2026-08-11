@@ -1,4 +1,7 @@
-import { createHash } from "node:crypto";
+import {
+  digestBytes,
+  IMAGE_NAME_DIGEST_LENGTH,
+} from "./image-digest";
 import {
   assertSafeImageUrl,
   ImageUrlValidationError,
@@ -72,6 +75,12 @@ export function safeImageErrorMessage(error: unknown): string {
 // Content-addressed: identical bytes always produce the same filename, so an
 // unchanged image yields no diff and the 10-minute cron stays quiet (spec §6).
 //
+// The digest is the one image-plan.ts compares a file on disk with, taken from
+// one place (image-digest.ts) rather than restated here: the name a file is
+// given and the answer to "does that file already hold these bytes?" are two
+// questions about the same hash, and asking them differently is how a sync
+// rewrites a file it just wrote.
+//
 // The extension comes from the format downloadImage *proved* the bytes to be,
 // never from a declared content type: the extension is what the host serves the
 // file's Content-Type from, so it is what decides whether a browser draws the
@@ -79,7 +88,7 @@ export function safeImageErrorMessage(error: unknown): string {
 // see image-format.ts.
 export function imageFileName(bytes: Uint8Array, format: ImageFormat): string {
   const extension = extensionForFormat(format);
-  const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
+  const hash = digestBytes(bytes).slice(0, IMAGE_NAME_DIGEST_LENGTH);
   return `${hash}.${extension}`;
 }
 

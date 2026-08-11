@@ -9,7 +9,7 @@ import {
   renderPosts,
   type ImageDownloader,
 } from "@/lib/notion/sync";
-import { planImages } from "@/lib/notion/image-plan";
+import { imageMetadata, planImages } from "@/lib/notion/image-plan";
 import { postPath } from "@/lib/notion/plan";
 import { serializePost } from "@/lib/notion/serialize";
 import { imageDir } from "@/lib/notion/images";
@@ -108,7 +108,7 @@ function check(
     const syncPlan = planSync(rendered, existing);
     const images = planImages(
       rendered.images,
-      onDisk,
+      new Map([...onDisk].map(([file, bytes]) => [file, imageMetadata(bytes)])),
       prunableImageDirs(rendered, syncPlan),
     );
     const pending = pendingOperations(syncPlan.plan, images);

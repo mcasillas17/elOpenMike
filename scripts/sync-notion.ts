@@ -15,7 +15,7 @@ import { postPath, massDeleteError } from "../src/lib/notion/plan";
 import { downloadImage } from "../src/lib/notion/images";
 import {
   planImages,
-  readImageFiles,
+  inspectImageFiles,
   applyImagePlan,
 } from "../src/lib/notion/image-plan";
 import { collectSources } from "../src/lib/notion/collect";
@@ -185,9 +185,13 @@ async function main(): Promise<void> {
   // before anything is touched, that both `--check` and the writing path use.
   // Planning MDX alone let `--check` report "in sync" while a real run went on
   // to rewrite and prune images.
+  // The tree on disk is described, not held: a size and a digest per file, read
+  // one file at a time (see inspectImageFiles). Reading every image into memory
+  // to compare it made a run's peak the images it downloaded plus the whole of
+  // public/images/blog.
   const imagePlan = planImages(
     outcome.images,
-    await readImageFiles(ROOT),
+    await inspectImageFiles(ROOT),
     prunableImageDirs(outcome, syncPlan),
   );
   const pending = pendingOperations(plan, imagePlan);
