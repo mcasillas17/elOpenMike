@@ -91,26 +91,57 @@ export async function retrieveDataSourceSchema(
 // See data-source.ts: one resolver, called by the sync and by the migration, so
 // both halves of the repo read and write the same rows.
 
-// Query results mix full pages with partial page/data-source objects; only the
-// full page objects carry the properties the frontmatter is built from.
-function asPageObject(result: { id: string }): PageObject | undefined {
-  if (!("properties" in result) || !("last_edited_time" in result)) {
-    return undefined;
-  }
-  const page = result as {
-    id: string;
-    last_edited_time: string;
-    archived?: boolean;
-    in_trash?: boolean;
-    properties: Record<string, unknown>;
-  };
+// A query's results are not all pages. The SDK spells them out as
+// `PageObjectResponse | PartialPageObjectResponse | DataSourceObjectResponse |
+// PartialDataSourceObjectResponse`, and a wiki — a database whose rows are
+// themselves databases — is where the last two turn up.
+//
+// The old test was "does it have properties and a last_edited_time?", and a
+// data source object has both. So a child database was read as a post, and its
+// *schema* became that post's metadata: a property configuration lives in the
+// same shape of map as a property value, so `Slug` came back as
+// `{ type: "rich_text", rich_text: {} }` — an empty object where the runs go —
+// and the first reader to touch it died with `(runs ?? []).map is not a
+// function`, a TypeError naming neither the database, nor the row, nor the
+// field. It took the sync down before a file was written and the migration down
+// in its preflight.
+//
+// So a row has to say it is a page and carry what a page carries, and the
+// answer is narrowed rather than cast.
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asPageObject(result: unknown): PageObject | undefined {
+  if (!isRecord(result) || result.object !== "page") return undefined;
+  if (typeof result.id !== "string" || result.id === "") return undefined;
+  if (typeof result.last_edited_time !== "string") return undefined;
+  if (!isRecord(result.properties)) return undefined;
+
   return {
-    id: page.id,
-    last_edited_time: page.last_edited_time,
-    archived: page.archived,
-    in_trash: page.in_trash,
-    properties: page.properties,
+    id: result.id,
+    last_edited_time: result.last_edited_time,
+    archived:
+      typeof result.archived === "boolean" ? result.archived : undefined,
+    in_trash:
+      typeof result.in_trash === "boolean" ? result.in_trash : undefined,
+    properties: result.properties,
   };
+}
+
+// A row that is a database of its own. A wiki lists them beside its pages, the
+// blog does not publish them, and skipping one loses nothing: it was never a
+// post and never claimed a file on disk.
+function isDataSourceRow(result: unknown): boolean {
+  return isRecord(result) && result.object === "data_source";
+}
+
+// What the id of a row is worth saying in a message. Ids are generated rather
+// than typed, so they are safe to print into a terminal or a public Actions
+// log; the row's contents never are.
+function rowId(result: unknown): string {
+  const id = isRecord(result) ? result.id : undefined;
+  return typeof id === "string" && id !== "" ? id : "with no id";
 }
 
 // Reads a single page's current metadata. Used to revalidate the snapshot the
@@ -126,7 +157,9 @@ export async function retrievePage(
   const page = asPageObject(result);
   if (!page) {
     throw new Error(
-      `page ${pageId} returned no properties — the integration may have lost access to it`,
+      `page ${pageId} did not come back as a readable page — the integration ` +
+        "may have lost access to it, or the id names something that is not a " +
+        "page",
     );
   }
   return page;
@@ -214,6 +247,12 @@ function nextCursor(
 
 // Walks every page in the data source. Notion's query does not return trashed
 // pages, so what comes back is the live contents of the database.
+//
+// `result_type: "page"` asks the API for the pages alone, which is what this
+// repo publishes from — a wiki's rows include the child databases underneath
+// it, and those are not posts. The answer is still checked row by row: a
+// parameter is a request, not a guarantee, and this is the read every deletion
+// downstream is decided from.
 export async function queryPages(
   client: Client,
   dataSourceId: string,
@@ -229,14 +268,30 @@ export async function queryPages(
         data_source_id: dataSourceId,
         start_cursor: cursor,
         page_size: 100,
+        result_type: "page",
       }),
     );
 
     assertQueryComplete(response.request_status, dataSourceId);
 
     for (const result of response.results) {
+      // A child database is a row this database holds and not a post; skipping
+      // it loses nothing, because it never claimed a file on disk.
+      if (isDataSourceRow(result)) continue;
+
       const page = asPageObject(result);
-      if (page && accept(page)) pages.push(page);
+      // Anything else has to be readable as a page. Dropping one quietly is
+      // how a post is deleted: nothing claims its file, and an unclaimed file
+      // is one the reconciler removes — so the run stops here instead, before
+      // a desired set is built and long before a file is compared.
+      if (!page) {
+        throw new Error(
+          `data source ${dataSourceId} returned a row (${rowId(result)}) that ` +
+            "is neither a page this run can read nor a child data source — " +
+            "nothing was read, planned, written or deleted this run",
+        );
+      }
+      if (accept(page)) pages.push(page);
     }
     cursor = nextCursor(response, seen, `data source ${dataSourceId}`);
   } while (cursor);

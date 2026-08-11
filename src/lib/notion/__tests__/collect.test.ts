@@ -215,6 +215,7 @@ describe("retrievePage", () => {
           attempts += 1;
           if (attempts < 3) throw rateLimited();
           return {
+            object: "page",
             id: "page-a",
             last_edited_time: "2026-06-01T12:00:00.000Z",
             in_trash: false,
@@ -243,7 +244,7 @@ describe("retrievePage", () => {
     } as unknown as Client;
 
     await expect(retrievePage(client, "page-a")).rejects.toThrow(
-      "returned no properties",
+      /did not come back as a readable page/,
     );
   });
 });
