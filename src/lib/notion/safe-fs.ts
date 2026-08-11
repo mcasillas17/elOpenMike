@@ -87,7 +87,9 @@ export type SafeTree = {
   list(relative: string): Promise<string[] | undefined>;
   // What is at a path, without following it, or undefined when nothing is.
   entry(relative: string): Promise<Stats | undefined>;
-  // A regular file, opened for reading, proved not to be a link.
+  // A regular file, opened for reading, proved not to be a link — including the
+  // one no flag refuses: a hard link is a second name for the same file, and a
+  // file in a tree this sync owns has exactly one.
   openFile(relative: string): Promise<FileHandle>;
   // A regular file, truncated and opened for writing, with every directory
   // above it created if it is missing and proved if it is not.
@@ -336,6 +338,13 @@ export function openSafeTree(root: string, refuse: TreeRefusal): SafeTree {
       try {
         const opened = await handle.stat();
         if (!opened.isFile()) throw refuse.notAFile(relative);
+        // The link the flags cannot see. `O_NOFOLLOW` refuses a symbolic link
+        // and `lstat` reports a hard link as the ordinary regular file it is —
+        // but a second name for a file is a file this sync did not put there,
+        // and reading one is reading whatever the other name is. The write side
+        // refuses it because it is about to truncate it; the read side refuses
+        // it because it is about to send it somewhere.
+        if (opened.nlink > 1) throw refuse.notAFile(relative);
         assertSameInode(opened, await look(full, relative), relative);
         return handle;
       } catch (error: unknown) {

@@ -33,7 +33,8 @@ type ContentTreeProblem =
   | "not-a-plain-directory"
   | "unreadable"
   | "escapes-root"
-  | "changed-underfoot";
+  | "changed-underfoot"
+  | "no-posts-directory";
 
 export class ContentTreeError extends Error {
   constructor(
@@ -102,6 +103,15 @@ const REFUSAL: TreeRefusal = {
   raced: refuseRace,
 };
 
+function refuseNoPosts(): ContentTreeError {
+  return new ContentTreeError(
+    "no-posts-directory",
+    `${BLOG_CONTENT_ROOT} is not there — a migration is about the posts in ` +
+      "that directory, so a checkout (or a working directory) without one is " +
+      `not a blog with nothing to migrate; ${NOTHING_HAPPENED}`,
+  );
+}
+
 const contentTree = (root: string): SafeTree => openSafeTree(root, REFUSAL);
 
 async function readPost(tree: SafeTree, file: string): Promise<string> {
@@ -148,6 +158,57 @@ export async function readExistingPosts(
   }
 
   return existing;
+}
+
+// One authored post, as the migration reads it: the file's own name, which is
+// where its slug comes from, and the bytes inside it.
+export type LocalPostFile = { name: string; contents: string };
+
+// Every content/blog/*.mdx on disk, for the one-time migration that pushes them
+// into Notion.
+//
+// The sync's half of this module reads the same directory to compare it with
+// what Notion says; this half reads it to *send* it, which is the direction
+// that decides what a link there costs. The migration used to walk the tree by
+// hand — `fs.readdir` of `content/blog`, `fs.readFile` of each name — and both
+// of those follow whatever they are pointed at: a link at `content`, at
+// `content/blog` or at a single post is a file outside the repo being read and
+// published to a Notion page. A hard link is the same thing again with nothing
+// to see: `lstat` calls it a regular file and no open flag refuses one.
+//
+// So it goes through the same walk the sync uses, which proves every directory
+// between the repo and a post before stepping through it, refuses anything that
+// is not a plain directory or a regular file with a single name, and treats an
+// answer it does not have as an error rather than as an absence. Sorted, so two
+// runs over one tree migrate in one order.
+export async function readLocalPostFiles(
+  root: string,
+): Promise<LocalPostFile[]> {
+  const tree = contentTree(root);
+
+  const names = await tree.list(BLOG_CONTENT_ROOT);
+  // Not "no posts": the sync writes this directory and may legitimately run
+  // before it exists, but a migration is defined by what is in it.
+  if (names === undefined) throw refuseNoPosts();
+
+  const posts: LocalPostFile[] = [];
+  for (const name of [...names].sort()) {
+    if (!name.endsWith(POST_FILE_EXTENSION)) continue;
+    const file = `${BLOG_CONTENT_ROOT}/${name}`;
+
+    const entry = await tree.entry(file);
+    // Gone between the listing and the look. The sync reads that as one less
+    // post on disk; a migration cannot, because the file it was about to send
+    // is the thing that just moved.
+    if (entry === undefined) throw refuseRace(file);
+    // A directory named like a post is not one, and holds none.
+    if (entry.isDirectory()) continue;
+    if (entry.isSymbolicLink() || !entry.isFile()) throw refuseKind(file);
+
+    posts.push({ name, contents: await readPost(tree, file) });
+  }
+
+  return posts;
 }
 
 // Applies exactly what planReconcile() described. The directory is created if

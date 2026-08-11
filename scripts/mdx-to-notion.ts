@@ -24,14 +24,18 @@
 // published — which, mid-migration, means the very file a killed run needs in
 // order to finish its draft. If one does go missing, restore it from git and
 // run this again; the drafts it cannot match to a file are listed at the end.
-import fs from "node:fs/promises";
-import path from "node:path";
+//
+// The posts themselves are read through the walk the sync uses rather than by
+// hand: this run *uploads* what it finds under content/blog, so a link at any
+// name on the way down is the difference between migrating a blog and
+// publishing whatever that link points at. See src/lib/notion/content-files.ts.
 import {
   createNotionClient,
   fetchBlockTree,
   queryPages,
   retrieveDataSourceSchema,
 } from "../src/lib/notion/client";
+import { readLocalPostFiles } from "../src/lib/notion/content-files";
 import { resolveConfiguredDataSourceId } from "../src/lib/notion/data-source";
 import { pageSlug, pageStatus, pageTitle } from "../src/lib/notion/fetch-post";
 import {
@@ -42,15 +46,16 @@ import {
 } from "../src/lib/notion/migrate";
 import { createMigrationExecutor } from "../src/lib/notion/migrate-executor";
 
-const BLOG_DIR = path.join(process.cwd(), "content", "blog");
+const ROOT = process.cwd();
 
-async function readLocalPosts(dir: string) {
-  const names = (await fs.readdir(dir)).filter((n) => n.endsWith(".mdx")).sort();
-  return Promise.all(
-    names.map(async (name) =>
-      toLocalPost(name, await fs.readFile(path.join(dir, name), "utf8")),
-    ),
-  );
+// Every post the migration is about, read through the walk that proves the tree
+// rather than through a readdir that follows it: this is the run that *uploads*
+// content/blog, so a link at `content`, at `content/blog` or at one post is the
+// difference between migrating a blog and publishing whatever that link points
+// at. See src/lib/notion/content-files.ts.
+async function readLocalPosts(root: string) {
+  const files = await readLocalPostFiles(root);
+  return files.map(({ name, contents }) => toLocalPost(name, contents));
 }
 
 async function main(): Promise<void> {
@@ -91,7 +96,7 @@ async function main(): Promise<void> {
   // any draft this run would resume. One unresolvable page stops the whole run
   // rather than half of it.
   const prepared = await prepareMigration(
-    await readLocalPosts(BLOG_DIR),
+    await readLocalPosts(ROOT),
     existing,
     { dataSourceId, schema },
     (pageId) => fetchBlockTree(client, pageId),

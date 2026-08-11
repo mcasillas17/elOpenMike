@@ -251,6 +251,22 @@ drift apart:
 Every problem across every post and the schema is reported together, and a run
 that finds one **writes nothing at all**.
 
+### What the run reads off the disk
+
+The migration's input is `content/blog/*.mdx`, and reading it is an *upload*, so
+the tree is walked rather than trusted: every directory between the repo and a
+post is examined immediately before it is stepped through, and a post is only
+read if it is a regular file with a single name. A `content` or `content/blog`
+that has become a symbolic link, a post that is a link to somewhere outside the
+repo, or a post that is a second name — a **hard** link, which no open flag
+refuses and which `lstat` reports as an ordinary file — stops the run rather
+than being read and published to a Notion page. So does a tree that changed
+between the listing and the read, and so does a post the run may not open: "I
+was not allowed to look" is never answered with "there is nothing there". A
+missing `content/blog` is refused too, because a migration is defined by that
+directory — a checkout without one is not a blog with nothing in it. This is the
+same walk the content sync uses (`src/lib/notion/safe-fs.ts`).
+
 ### What the run checks while it is writing
 
 The plan above is built from a read that is already old by the time the first
