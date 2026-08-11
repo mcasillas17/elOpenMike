@@ -61,9 +61,13 @@ async function capturePostImages(
       if (block.type === "image") {
         const url = imageUrl(block);
         if (url) {
-          // Asked before the transfer, not after: a run with no room for
-          // another file at all has no reason to spend a download finding out.
-          reservation.room();
+          // Asked before the *first* transfer only, and only of the count: a
+          // run that cannot hold another file cannot hold this one, which is
+          // certainly new, so there is no reason to spend a download proving
+          // it. After that a later image may turn out to be one this post
+          // already holds — which costs nothing to keep — so the question is
+          // asked of the file below rather than of the fetch.
+          if (files.size === 0) reservation.room();
           let image: Awaited<ReturnType<ImageDownloader>>;
           try {
             image = await download(url);

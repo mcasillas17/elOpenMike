@@ -304,6 +304,29 @@ describe("a run whose images will not all fit", () => {
     expect(outcome.failures.map((failure) => failure.slug)).toEqual(["b"]);
   });
 
+  it("keeps a post whose only remaining image is one it already holds", async () => {
+    const { download } = downloader();
+    const url = sized("same", 10);
+    const outcome = await renderPosts(
+      [
+        source("first", [imageBlock(sized("first", 10))]),
+        // Two references to one image: one file, so one slot, and the run has
+        // exactly one left.
+        source("twice", [imageBlock(url), imageBlock(url)]),
+      ],
+      download,
+      [],
+      new ImageBudget({ maxBytes: 1_000_000, maxCount: 2 }),
+    );
+
+    expect(outcome.failures).toEqual([]);
+    expect(outcome.rendered.map((post) => post.slug)).toEqual([
+      "first",
+      "twice",
+    ]);
+    expect(outcome.images.size).toBe(2);
+  });
+
   it("does not fetch an image there is no room to keep", async () => {
     const { attempted, download } = downloader();
     await renderPosts(

@@ -67,8 +67,10 @@ export function createNotionClient(
 
 type SupportedFetch = NonNullable<NotionClientOptions["fetch"]>;
 
-const defaultFetch: SupportedFetch = (url, init) =>
-  fetch(url, init as RequestInit);
+// What the SDK would use if it were choosing: the global `fetch`, bound so the
+// call still has its own receiver. Named here because the paced wrapper below
+// has to be given something to wrap.
+const defaultFetch = fetch.bind(globalThis) as unknown as SupportedFetch;
 
 // One request, in a slot of its own, with what came back reported to the
 // scheduler before the next slot is handed out — so a 429 pauses the workers
