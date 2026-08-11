@@ -122,7 +122,13 @@ describe("fetching block trees through the pool", () => {
             state.active -= 1;
             return {
               results: [
-                { id: `${block_id}-child`, type: "paragraph", has_children: false },
+                {
+                  object: "block",
+                  id: `${block_id}-child`,
+                  type: "paragraph",
+                  has_children: false,
+                  paragraph: { rich_text: [] },
+                },
               ],
               has_more: false,
               next_cursor: null,

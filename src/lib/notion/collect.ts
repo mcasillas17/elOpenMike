@@ -1,4 +1,5 @@
 import type { PageObject } from "./client";
+import { isPartialBlockError } from "./block-shape";
 import { isPublished, pageSlug, toPostSource } from "./fetch-post";
 import { mapWithConcurrency, MAX_CONCURRENT_REQUESTS } from "./pool";
 import type { MdBlock, PostFailure, PostSource } from "./types";
@@ -80,9 +81,13 @@ type Collected =
 // — is reported as a per-post failure rather than rejected out of the pool: an
 // author unpublishing one post mid-run must not take the other posts' sync down
 // with it, and the failure carries the same preserve-or-skip meaning as an
-// image that would not download. A block fetch that fails outright still
-// rejects the whole run, exactly as it did before: that is an integration or
-// API problem, not one post's problem.
+// image that would not download.
+//
+// A block tree that came back with a partial block in it is the same kind of
+// problem and gets the same treatment: that one post cannot be published, its
+// file on disk is kept, and `--check` fails on it. Any *other* block fetch
+// failure still rejects the whole run, exactly as it did before: that is an
+// integration or API problem, not one post's problem.
 export async function collectSources(
   pages: PageObject[],
   { fetchBlocks, retrievePage, limit = MAX_CONCURRENT_REQUESTS }: CollectDeps,
@@ -90,7 +95,19 @@ export async function collectSources(
   const results = await mapWithConcurrency(
     pages,
     async (page): Promise<Collected> => {
-      const blocks = await fetchBlocks(page.id);
+      let blocks: MdBlock[];
+      try {
+        blocks = await fetchBlocks(page.id);
+      } catch (error: unknown) {
+        if (!isPartialBlockError(error)) throw error;
+        return {
+          ok: false,
+          failure: failureFor(
+            page,
+            error instanceof Error ? error.message : String(error),
+          ),
+        };
+      }
 
       // The snapshot's properties are what the pre-fetch slug-collision guard
       // checked, so the accepted post is built from them; `after` only decides

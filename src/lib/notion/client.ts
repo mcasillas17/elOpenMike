@@ -1,5 +1,6 @@
 import { Client } from "@notionhq/client";
 import { withReadRetry } from "./retry";
+import { assertFullBlock } from "./block-shape";
 import type { DataSourceSchema } from "./properties";
 import type { MdBlock } from "./types";
 
@@ -223,6 +224,11 @@ export async function queryPublishedPages(
 }
 
 // Depth-first walk resolving every child list. Notion paginates children at 100.
+//
+// Every result is proved to be a block this run can convert before it becomes
+// one: the response's own type says a result may be a *partial* block — an id
+// and nothing else — and casting that to a block is how a post published with
+// a paragraph missing. See block-shape.ts.
 export async function fetchBlockTree(
   client: Client,
   blockId: string,
@@ -240,11 +246,12 @@ export async function fetchBlockTree(
       }),
     );
 
-    for (const result of response.results as unknown as MdBlock[]) {
-      const children = result.has_children
-        ? await fetchBlockTree(client, result.id)
+    for (const result of response.results) {
+      const block = assertFullBlock(result, blockId);
+      const children = block.has_children
+        ? await fetchBlockTree(client, block.id)
         : [];
-      blocks.push({ ...result, children });
+      blocks.push({ ...block, children });
     }
 
     cursor = nextCursor(response, seen, `the children of block ${blockId}`);
