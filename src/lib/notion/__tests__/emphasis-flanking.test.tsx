@@ -61,7 +61,11 @@ describe("edge whitespace inside an annotated run", () => {
       "  **wide**  tail",
     );
     expect(source(["two  words", { bold: true }])).toBe("**two  words**");
-    expect(source(["a\nb ", { bold: true }], ["c"])).toBe("**a\nb** c");
+    // The trailing space still moves outside the delimiters; the line ending
+    // inside them is written as the reference it renders as, because a pair of
+    // delimiters lives on one line and a blank line would break it. See
+    // rich-text.ts and underline-line-breaks.test.tsx.
+    expect(source(["a\nb ", { bold: true }], ["c"])).toBe("**a&#10;b** c");
   });
 
   it("still leaves a run that is nothing but whitespace unwrapped", () => {

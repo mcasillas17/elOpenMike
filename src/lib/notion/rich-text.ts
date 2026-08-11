@@ -1,6 +1,10 @@
 import type { Annotations, RichText } from "./types";
 import { inlineCode } from "./code-span";
-import { endsAtLineStart, escapeMarkdown } from "./escape";
+import {
+  endsAtLineStart,
+  escapeMarkdown,
+  referenceLineEndings,
+} from "./escape";
 import { markdownDestination } from "./link-destination";
 import { describeUrlSafely } from "./safe-url";
 import {
@@ -15,6 +19,15 @@ import {
 export type RichTextOptions = {
   // False where the text cannot open a block: a heading's content, a table
   // cell, an image's alt text. See escape.ts.
+  //
+  // It says one more thing, and the two are the same fact: text that opens a
+  // block is text whose line endings survive into the file as line endings.
+  // Every context that sets this false is a wrapper markdown writes on a single
+  // line, and every one of them flattens the endings itself before the text is
+  // written — a heading, an alt text and a link block's label as the character
+  // references they render as, a table cell as `<br />`. So a raw line ending
+  // reaches the file from here only when this is true, and that is the only
+  // case a wrapper generated below has to be protected from. See wrapped().
   atLineStart?: boolean;
   onWarning?: (message: string) => void;
 };
@@ -64,7 +77,7 @@ export function richTextToMarkdown(
   const segments: Segment[] = [];
 
   for (const group of groupRuns(rich)) {
-    const rendered = renderGroup(group, lineStart, onWarning);
+    const rendered = renderGroup(group, lineStart, atLineStart, onWarning);
     segments.push(rendered.segment);
     lineStart = rendered.lineStart;
   }
@@ -121,6 +134,7 @@ function mergeByCode(runs: RichText[]): Array<{ code: boolean; text: string }> {
 function renderGroup(
   runs: RichText[],
   atLineStart: boolean,
+  flow: boolean,
   onWarning?: (message: string) => void,
 ): { segment: Segment; lineStart: boolean } {
   const annotations = runs[0].annotations;
@@ -180,7 +194,7 @@ function renderGroup(
   if (!emphasised) {
     return {
       segment: plainSegment(
-        insideLink ? `[${inner}](${destination})` : inner,
+        insideLink ? `[${wrapped(inner, flow)}](${destination})` : inner,
         insideLink,
       ),
       lineStart: insideLink ? false : lineStart,
@@ -188,7 +202,14 @@ function renderGroup(
   }
 
   const { lead, core, trail } = splitEdgeWhitespace(inner);
-  const withElements = `${lead}${wrapElements(core, annotations)}${trail}`;
+  // Everything a wrapper encloses. Outside a link the edge whitespace sits
+  // outside the delimiters too — it was never part of the formatting and is
+  // written as it always was — but a link's brackets enclose it, so there it is
+  // written the same way as the rest.
+  const held = wrapped(core, flow);
+  const openEdge = insideLink ? wrapped(lead, flow) : lead;
+  const closeEdge = insideLink ? wrapped(trail, flow) : trail;
+  const withElements = `${openEdge}${wrapElements(held, annotations)}${closeEdge}`;
 
   // Markdown has no delimiter for underline, so a run carrying it is written as
   // elements throughout — which is the same move made below wherever two
@@ -206,20 +227,20 @@ function renderGroup(
   }
 
   const layers = delimiterLayers(annotations);
-  const wrapped = wrapDelimiters(core, annotations);
+  const delimited = wrapDelimiters(held, annotations);
   const marker = layers[0][0];
   // What the outermost delimiter run actually touches on the inside. Delimiter
   // runs are maximal, so the `**` of bold and the `*` of italic written back to
   // back are one run of three, and what it touches is the first layer written
   // with another character — or the text itself. Read from the structure rather
-  // than scanned back off `wrapped`, where a trailing `\*` the escaper wrote is
-  // indistinguishable from a delimiter of our own.
+  // than scanned back off `delimited`, where a trailing `\*` the escaper wrote
+  // is indistinguishable from a delimiter of our own.
   let outermost = 0;
   while (outermost < layers.length && layers[outermost][0] === marker) {
     outermost += 1;
   }
-  const inside = layers[outermost] ?? core;
-  const withDelimiters = `${lead}${wrapped}${trail}`;
+  const inside = layers[outermost] ?? held;
+  const withDelimiters = `${openEdge}${delimited}${closeEdge}`;
 
   // Inside a link the delimiters are already surrounded by the brackets, which
   // are punctuation and flank them for free.
@@ -246,6 +267,33 @@ function renderGroup(
     },
     lineStart: insideLink ? false : endsAtLineStart(trail, false),
   };
+}
+
+// The text a wrapper is about to enclose, ready to be enclosed.
+//
+// Every wrapper this module writes — the `**` of bold, the `[…](…)` of a link,
+// the `<u>` underline has no delimiter for — lives on one markdown line. A line
+// ending inside one is at best allowed and at worst fatal: a blank line ends
+// the paragraph outright, so `**a` and `b**` become two paragraphs and four
+// literal asterisks, and `<u>a` … `b</u>` is an element MDX refuses to compile
+// at all — which takes the whole post down, not the run that carried the break.
+//
+// So in flow context the endings are written as the character references they
+// already render as. micromark decides the block structure from the raw bytes,
+// before any reference is resolved, so the wrapper stays on the line it opened
+// on; the reader still gets the line ending, because that is what the reference
+// *is*; and md-to-rich-text reads it back as the character it stands for, so
+// CRLF and a lone carriage return survive the round trip into Notion intact.
+// This is the same move a heading, an image's alt text and a code run carrying
+// a break already make. See escape.ts and code-span.ts.
+//
+// Outside flow context nothing is done, because there is nothing left to do:
+// every one of those callers flattens the endings itself — a heading and an alt
+// text into references, a table cell into `<br />` — so no raw ending reaches
+// the file, and encoding one here would only turn a cell's visible line break
+// into a space.
+function wrapped(text: string, flow: boolean): string {
+  return flow ? referenceLineEndings(text) : text;
 }
 
 function plainSegment(markdown: string, opensLink: boolean): Segment {
