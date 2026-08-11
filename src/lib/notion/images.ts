@@ -21,6 +21,23 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 // normal. More than a handful means a loop or an open redirector.
 export const MAX_IMAGE_REDIRECTS = 5;
 
+// `fetch` has no timeout of its own, and neither had this. A host that accepts
+// the connection and then says nothing held the promise open forever — and
+// because a post's images are all awaited before it renders, one stalled socket
+// hung the entire run: the scheduled workflow sat on a runner until the job
+// timed out, having written nothing, and the next tick started behind the last.
+//
+// So every image runs under two deadlines. The total is the whole budget for
+// one image, start to finish, which a body trickling forever cannot outlast.
+// The idle one is shorter and is reset by every piece of progress — the address
+// resolving, a redirect answering, a chunk of the body arriving — so it ends a
+// transfer that has simply stopped without punishing a slow one that has not.
+//
+// Signed Notion URLs live an hour, so a minute is plenty for the one image the
+// budget covers; the idle budget is what a stalled socket meets first.
+export const IMAGE_TOTAL_TIMEOUT_MS = 60_000;
+export const IMAGE_IDLE_TIMEOUT_MS = 15_000;
+
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 type ImageDownloadFailureReason =
@@ -31,6 +48,7 @@ type ImageDownloadFailureReason =
   | "too-large"
   | "empty-body"
   | "http-status"
+  | "timed-out"
   | "transfer-failed";
 
 class ImageDownloadError extends Error {
@@ -71,10 +89,95 @@ export function imageDir(slug: string): string {
   return `${BLOG_IMAGE_ROOT}/${slug}`;
 }
 
+// The timers a download runs on. Injected so a test owns the clock: what these
+// deadlines are worth is decided by what happens at the moment one fires, and
+// waiting a real minute to find out is not a test anybody runs.
+export type ImageTimers = {
+  setTimeout: (fire: () => void, ms: number) => unknown;
+  clearTimeout: (handle: unknown) => void;
+};
+
+const realTimers: ImageTimers = {
+  setTimeout: (fire, ms) => setTimeout(fire, ms),
+  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+
 export type DownloadImageOptions = {
   fetchImpl?: typeof fetch;
   resolve?: AddressResolver;
+  totalTimeoutMs?: number;
+  idleTimeoutMs?: number;
+  timers?: ImageTimers;
 };
+
+// One image's two deadlines and the AbortController that enforces them.
+//
+// Every await in a download goes through `guard`, because aborting a signal is
+// not the same as being answered: a `fetch` implementation is free to ignore
+// the signal, and a ReadableStream that has stopped producing will simply never
+// settle the read it owes. Racing the work against the expiry is what makes the
+// budget a promise the caller actually gets back on time; the abort is what
+// makes sure nothing is left running behind it.
+class ImageDeadline {
+  readonly controller = new AbortController();
+  private readonly expiry: Promise<never>;
+  private expire: (error: Error) => void = () => {};
+  private totalHandle: unknown;
+  private idleHandle: unknown;
+  private done = false;
+
+  constructor(
+    private readonly timers: ImageTimers,
+    totalMs: number,
+    private readonly idleMs: number,
+  ) {
+    this.expiry = new Promise<never>((_, reject) => {
+      this.expire = reject;
+    });
+    // The expiry is raced against, not awaited: a download that finishes first
+    // leaves it settling into nobody's hands, and an unhandled rejection is a
+    // process-level event. One no-op handler makes it handled forever.
+    this.expiry.catch(() => {});
+
+    this.totalHandle = timers.setTimeout(
+      () => this.fire(`no answer within ${totalMs}ms`),
+      totalMs,
+    );
+    this.touch();
+  }
+
+  // Progress: the address resolved, a redirect answered, a chunk arrived. The
+  // idle budget starts again from here; the total one does not.
+  touch(): void {
+    if (this.done) return;
+    this.timers.clearTimeout(this.idleHandle);
+    this.idleHandle = this.timers.setTimeout(
+      () => this.fire(`no progress for ${this.idleMs}ms`),
+      this.idleMs,
+    );
+  }
+
+  guard<T>(work: Promise<T>): Promise<T> {
+    return Promise.race([work, this.expiry]);
+  }
+
+  // Named without a url, a host or a query: this message reaches a terminal and
+  // a public Actions log, and a signed Notion URL carries its own credentials.
+  private fire(detail: string): void {
+    if (this.done) return;
+    this.clear();
+    this.controller.abort();
+    this.expire(new ImageDownloadError("timed-out", `timed out — ${detail}`));
+  }
+
+  // Always, on every path out of a download: a timer nothing cleared keeps the
+  // process alive after the work it was watching is over.
+  clear(): void {
+    this.done = true;
+    this.timers.clearTimeout(this.totalHandle);
+    this.timers.clearTimeout(this.idleHandle);
+  }
+}
 
 // Follows redirects by hand: `fetch` would follow them itself, and a validated
 // Notion host is free to answer 302 Location: http://169.254.169.254/... — so
@@ -82,17 +185,27 @@ export type DownloadImageOptions = {
 async function fetchValidated(
   url: string,
   { fetchImpl = fetch, resolve }: DownloadImageOptions,
-  signal: AbortSignal,
+  deadline: ImageDeadline,
 ): Promise<Response> {
-  let target = await assertSafeImageUrl(url, resolve);
+  const signal = deadline.controller.signal;
+  // Resolution is part of the budget too: a resolver that never answers is a
+  // download that never starts, and this one is injected, so it is watched
+  // rather than waited on.
+  let target = await deadline.guard(assertSafeImageUrl(url, resolve));
+  deadline.touch();
 
   for (let hop = 0; ; hop++) {
     let response: Response;
     try {
-      response = await fetchImpl(target, { redirect: "manual", signal });
-    } catch {
+      response = await deadline.guard(
+        fetchImpl(target, { redirect: "manual", signal }),
+      );
+    } catch (error: unknown) {
+      if (error instanceof ImageDownloadError) throw error;
       throw new ImageDownloadError("request-failed", "request failed");
     }
+    // An answer, even a redirect, is progress.
+    deadline.touch();
     if (!REDIRECT_STATUSES.has(response.status)) return response;
 
     const location = response.headers.get("location");
@@ -120,7 +233,8 @@ async function fetchValidated(
     }
     // Free the socket before the next hop; a 3xx may still carry a body.
     await response.body?.cancel();
-    target = await assertSafeImageUrl(next, resolve);
+    target = await deadline.guard(assertSafeImageUrl(next, resolve));
+    deadline.touch();
   }
 }
 
@@ -135,10 +249,16 @@ function tooLarge(detail: string): Error {
 // passed. arrayBuffer() would buffer the entire response into memory first,
 // which turns a hostile or mistaken 500 MB "image" into an OOM rather than an
 // error message.
+//
+// A read is also where a transfer stops without ending: the socket stays open,
+// the promise never settles, and there is nothing to notice unless something is
+// watching the clock. So every read runs under the deadline, and every chunk
+// that does arrive resets the idle half of it.
 async function readCapped(
   response: Response,
-  controller: AbortController,
+  deadline: ImageDeadline,
 ): Promise<Uint8Array> {
+  const controller = deadline.controller;
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
     controller.abort();
@@ -154,9 +274,21 @@ async function readCapped(
   let total = 0;
 
   for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    let read: ReadableStreamReadResult<Uint8Array>;
+    try {
+      read = await deadline.guard(reader.read());
+    } catch (error: unknown) {
+      // The deadline aborted the request already; the reader is what still
+      // holds the stream, so it is released here. Not awaited: a body that
+      // stopped answering reads is exactly the kind that could sit on its own
+      // cancel too, and the deadline has to be a promise the caller gets back.
+      void reader.cancel("image download timed out").catch(() => {});
+      throw error;
+    }
+    if (read.done) break;
 
+    const value = read.value;
+    deadline.touch();
     total += value.byteLength;
     if (total > MAX_IMAGE_BYTES) {
       // Cancel first — the reader is still healthy, so this resolves — then
@@ -192,13 +324,24 @@ export type DownloadedImage = {
 // the site publishes: the declared type is checked before the body is read at
 // all, and the bytes are checked against it once they are in hand. An SVG never
 // gets as far as being a value a caller could write.
+//
+// And nothing runs without a clock on it. One image has a total budget and an
+// idle one (see ImageDeadline), both enforced through the same AbortController
+// the size cap uses, and both cleared before this returns either way.
 export async function downloadImage(
   url: string,
   options: DownloadImageOptions = {},
 ): Promise<DownloadedImage> {
+  const {
+    timers = realTimers,
+    totalTimeoutMs = IMAGE_TOTAL_TIMEOUT_MS,
+    idleTimeoutMs = IMAGE_IDLE_TIMEOUT_MS,
+  } = options;
+  const deadline = new ImageDeadline(timers, totalTimeoutMs, idleTimeoutMs);
+  const controller = deadline.controller;
+
   try {
-    const controller = new AbortController();
-    const response = await fetchValidated(url, options, controller.signal);
+    const response = await fetchValidated(url, options, deadline);
     if (!response.ok) {
       controller.abort();
       throw new ImageDownloadError(
@@ -216,7 +359,7 @@ export async function downloadImage(
       throw new ImageFormatError("unsupported-content-type");
     }
 
-    const bytes = await readCapped(response, controller);
+    const bytes = await readCapped(response, deadline);
     const format = verifyImageFormat(declared, bytes);
 
     return { bytes, contentType: IMAGE_FORMAT_MIME[format], format };
@@ -229,5 +372,9 @@ export async function downloadImage(
       throw error;
     }
     throw new ImageDownloadError("transfer-failed", "transfer failed");
+  } finally {
+    // Every path out, including the ones that already fired: a timer nothing
+    // cleared holds the process open long after the image is decided.
+    deadline.clear();
   }
 }
