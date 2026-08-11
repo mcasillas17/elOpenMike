@@ -74,6 +74,21 @@ image will not download fails — its file on disk is preserved, nothing is
 deleted that run — and it gives back every byte it had taken, so the posts after
 it still sync.
 
+**Every image runs under a deadline, and giving up never waits on the host.**
+One image has a total budget and a shorter idle one that every piece of progress
+resets (`src/lib/notion/images.ts`), both enforced through the AbortController
+the size cap already uses — a body that trickles forever cannot outlast the
+first, and one that simply stops meets the second. Ending a transfer is then two
+separate things, in this order: the request is **aborted**, which is the half
+this side controls and the half that actually tears the connection down, and the
+body is then *asked* to release. That ask is never awaited: a cancel is a promise
+the other side settles, so the host that stopped answering reads is exactly the
+host that sits on its cancel too — and the function whose whole job is to come
+back on time hung on the cleanup its own deadline had just asked for. It is fired
+instead, its rejection always taken so a quiet failure cannot become an unhandled
+one, on every path that gives up: a redirect's body before the next hop, a type
+this site does not publish, a refused status, the size cap and the deadline.
+
 **The images already on disk are never held at all.** Planning them means
 answering one question per file — does it already hold the bytes this run has in
 hand? — and that needs a length and a digest, not a body. Reading each of them

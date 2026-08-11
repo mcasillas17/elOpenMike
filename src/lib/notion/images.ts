@@ -43,6 +43,44 @@ export const IMAGE_IDLE_TIMEOUT_MS = 15_000;
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
+// Letting go of a body is best effort, and it is never what a download waits
+// on.
+//
+// Every refusal here ends by giving up a response — the 3xx body before the
+// next hop, a body of a type this will not read, one that went past the size
+// cap, one a deadline ended — and each of those was written as `await
+// ...cancel()`. But a cancel is a promise the *other side* settles: a host that
+// has stopped answering reads is exactly the host whose stream sits on its
+// cancel too, and a stream that has already been errored rejects it. So the
+// function whose whole purpose is to come back on time hung on the cleanup that
+// its own deadline had just asked for, or reported "transfer failed" for an
+// image it had refused for a reason it knew.
+//
+// Fired rather than awaited, and its rejection always taken: an unhandled
+// rejection is a process-level event, which is a strange way for a path whose
+// job is to fail quietly to end a run.
+function release(cancel: () => Promise<unknown>): void {
+  try {
+    void cancel().catch(() => undefined);
+  } catch {
+    // A reader that is already released, or a body already locked elsewhere,
+    // throws synchronously. There is nothing left to give up in either case.
+  }
+}
+
+// Giving up on a response for good: the request is aborted *first*, because
+// that is the half of this that this side controls and the half that actually
+// tears the connection down, and the body is then asked to release — an ask
+// that may never be answered and is not waited for.
+function abandon(
+  controller: AbortController,
+  body: ReadableStream<Uint8Array> | null | undefined,
+  reason: string,
+): void {
+  controller.abort();
+  if (body) release(() => body.cancel(reason));
+}
+
 type ImageDownloadFailureReason =
   | "request-failed"
   | "redirect-missing-location"
@@ -252,8 +290,12 @@ async function fetchValidated(
         "redirect Location is invalid",
       );
     }
-    // Free the socket before the next hop; a 3xx may still carry a body.
-    await response.body?.cancel();
+    // Free the socket before the next hop; a 3xx may still carry a body. Asked
+    // for, not waited on: this download is still alive, so nothing is aborted —
+    // and a hop that will not let go of its body must not stop the chain.
+    if (response.body) {
+      release(() => response.body!.cancel("redirect body not read"));
+    }
     target = await deadline.guard(assertSafeImageUrl(next, resolve));
     deadline.touch();
   }
@@ -282,7 +324,7 @@ async function readCapped(
   const controller = deadline.controller;
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
-    controller.abort();
+    abandon(controller, response.body, "image exceeds the size cap");
     throw tooLarge(`content-length ${declared} bytes`);
   }
 
@@ -299,11 +341,12 @@ async function readCapped(
     try {
       read = await deadline.guard(reader.read());
     } catch (error: unknown) {
-      // The deadline aborted the request already; the reader is what still
-      // holds the stream, so it is released here. Not awaited: a body that
-      // stopped answering reads is exactly the kind that could sit on its own
-      // cancel too, and the deadline has to be a promise the caller gets back.
-      void reader.cancel("image download timed out").catch(() => {});
+      // The deadline aborted the request already; this makes sure the other
+      // ways out of a read have too, and then lets the reader go — best
+      // effort, because a body that stopped answering reads is exactly the
+      // kind that would sit on its own cancel.
+      controller.abort();
+      release(() => reader.cancel("image download ended"));
       throw error;
     }
     if (read.done) break;
@@ -312,10 +355,10 @@ async function readCapped(
     deadline.touch();
     total += value.byteLength;
     if (total > MAX_IMAGE_BYTES) {
-      // Cancel first — the reader is still healthy, so this resolves — then
-      // abort the request itself so the connection is torn down too.
-      await reader.cancel("image exceeds the size cap");
+      // Abort first: that is what tears the connection down, and it does not
+      // depend on a stream that has every reason not to co-operate.
       controller.abort();
+      release(() => reader.cancel("image exceeds the size cap"));
       throw tooLarge(`exceeds ${MAX_IMAGE_BYTES} bytes`);
     }
     chunks.push(value);
@@ -364,7 +407,7 @@ export async function downloadImage(
   try {
     const response = await fetchValidated(url, options, deadline);
     if (!response.ok) {
-      controller.abort();
+      abandon(controller, response.body, "server refused the image");
       throw new ImageDownloadError(
         "http-status",
         `server returned status ${response.status}`,
@@ -375,8 +418,7 @@ export async function downloadImage(
     // weighs, and there is no reason to spend the transfer on one.
     const declared = response.headers.get("content-type") ?? "";
     if (!formatFromContentType(declared)) {
-      await response.body?.cancel();
-      controller.abort();
+      abandon(controller, response.body, "image type is not published here");
       throw new ImageFormatError("unsupported-content-type");
     }
 
@@ -385,6 +427,9 @@ export async function downloadImage(
 
     return { bytes, contentType: IMAGE_FORMAT_MIME[format], format };
   } catch (error: unknown) {
+    // Whatever ended this, the request behind it is over: a body proved to be
+    // the wrong picture is one nothing will read the rest of.
+    controller.abort();
     if (
       error instanceof ImageUrlValidationError ||
       error instanceof ImageDownloadError ||
