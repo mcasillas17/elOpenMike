@@ -286,7 +286,14 @@ capped at the same 60s ceiling every wait here is under, and reset the moment a
 request is answered normally. The pause and a caller's own `Retry-After` back-off
 are the same number started at the same moment, so they overlap rather than add.
 The clock, the sleep and the jitter are all injectable, which is how the timing
-is tested without spending it.
+is tested without spending it. The per-request deadline moves with the pacing:
+the SDK starts its own timer the moment it calls `fetch`, and the wait for a
+slot happens inside that call, so its timer would count the pause against the
+request it was holding back — one `Retry-After: 60` aborting every request
+queued behind it, as an error carrying no status that no policy here repeats.
+The deadline is applied once the slot is granted instead, using the SDK's own
+helper, so a request still has sixty seconds to be answered and a pause costs
+it none of them.
 
 **The limit, honestly.** Between the last read and the write it justified there
 is one round-trip in which somebody else can still change the page, and Notion

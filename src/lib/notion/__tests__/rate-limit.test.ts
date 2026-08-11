@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { createNotionClient } from "@/lib/notion/client";
+import { describe, expect, it, vi } from "vitest";
+import {
+  createNotionClient,
+  NOTION_REQUEST_TIMEOUT_MS,
+} from "@/lib/notion/client";
 import {
   MAX_REQUEST_PAUSE_MS,
   NOTION_REQUESTS_PER_SECOND,
@@ -508,5 +511,92 @@ describe("a scheduler whose own wait fails", () => {
       "rejected",
     ]);
     expect(broken.waiting).toBe(0);
+  });
+});
+
+// The SDK starts a per-request timer the moment it calls `fetch`, and the wait
+// for a slot happens inside that call. So its timer counted the pacing — and,
+// far worse, the 429 pause — against the request itself: a single
+// `Retry-After: 60` aborted every request queued behind it as a
+// RequestTimeoutError, which carries no status and which no retry policy here
+// repeats. The pause meant to save those workers was what failed them.
+describe("the deadline a request is under", () => {
+  const answer = (status: number, headers: Headers) => ({
+    ok: status < 400,
+    status,
+    headers,
+    text: async () =>
+      status < 400
+        ? JSON.stringify({ object: "page", id: "page-1" })
+        : JSON.stringify({ code: "rate_limited", message: "slow down" }),
+  });
+
+  it("does not start until the request actually goes out", async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: number[] = [];
+      let first = true;
+      const client = createNotionClient("secret_t", {
+        fetch: async () => {
+          sent.push(Date.now());
+          if (first) {
+            first = false;
+            return answer(429, new Headers({ "retry-after": "60" }));
+          }
+          return answer(200, new Headers());
+        },
+      });
+
+      // Two workers: the first meets the rate limit, the second is queued
+      // behind the pause it causes.
+      const refused = client.pages
+        .retrieve({ page_id: "page-1" })
+        .then(
+          () => () => "resolved",
+          (error: unknown) => () => {
+            throw error;
+          },
+        );
+      const queued = client.pages.retrieve({ page_id: "page-2" }).then(
+        (value) => () => value,
+        (error: unknown) => () => {
+          throw error;
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+      expect(await refused).toThrow(
+        expect.objectContaining({ status: 429 }) as unknown as Error,
+      );
+      // The one that waited is the one this is about: it went out after the
+      // pause and was answered, rather than being timed out inside it.
+      expect((await queued)()).toMatchObject({ id: "page-1" });
+      expect(sent[1] - sent[0]).toBeGreaterThanOrEqual(60_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still ends a request that goes out and is never answered", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = createNotionClient("secret_t", {
+        fetch: () => new Promise(() => {}),
+      });
+
+      const settled = client.pages.retrieve({ page_id: "page-1" }).then(
+        () => () => "resolved",
+        (error: unknown) => () => {
+          throw error;
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(NOTION_REQUEST_TIMEOUT_MS + 1_000);
+
+      expect(await settled).toThrow(/timed out/i);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

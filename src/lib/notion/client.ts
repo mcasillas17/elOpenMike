@@ -1,4 +1,4 @@
-import { Client } from "@notionhq/client";
+import { Client, RequestTimeoutError } from "@notionhq/client";
 import { withReadRetry } from "./retry";
 import { RequestScheduler } from "./rate-limit";
 import { assertFullBlock } from "./block-shape";
@@ -58,6 +58,9 @@ export function createNotionClient(
     auth: token,
     notionVersion: NOTION_VERSION,
     retry: false,
+    // Not a deadline: the deadline is applied below, once the request is
+    // actually going out. See paced().
+    timeoutMs: SDK_TIMEOUT_DISABLED_MS,
     ...clientOptions,
     // After the spread: the pacing is not something a caller opts out of by
     // passing a fetch of its own. Its own fetch is what gets paced.
@@ -72,16 +75,42 @@ type SupportedFetch = NonNullable<NotionClientOptions["fetch"]>;
 // has to be given something to wrap.
 const defaultFetch = fetch.bind(globalThis) as unknown as SupportedFetch;
 
-// One request, in a slot of its own, with what came back reported to the
-// scheduler before the next slot is handed out — so a 429 pauses the workers
-// queued behind this one rather than only the caller that met it.
+// How long one request may go unanswered. The SDK's own default, kept, because
+// what it is for has not changed: a socket that accepts the connection and then
+// says nothing.
+//
+// What changed is when it starts counting. The SDK begins its timer the moment
+// it calls `fetch`, and the wait for a slot happens inside that call — so its
+// timer counted the pacing, and then the 429 pause, against the request itself.
+// With a cap of sixty seconds on a pause and sixty on a request, one
+// `Retry-After: 60` aborted every request queued behind it, as a
+// RequestTimeoutError that carries no status and that no retry policy here
+// repeats: the pause meant to save those workers was what failed them, and the
+// requests still went out afterwards, into nobody's hands, spending slots the
+// retry that was still wanted then had to wait for.
+//
+// So the deadline is ours and starts when the request does. It is the SDK's own
+// helper, so the error, its code and its message are exactly what they were;
+// the SDK's copy of the timer is set past anything the scheduler can hold a
+// request for, so it never decides anything. Its timer is cleared when the
+// request settles either way, so nothing is left holding the process open.
+export const NOTION_REQUEST_TIMEOUT_MS = 60_000;
+const SDK_TIMEOUT_DISABLED_MS = 24 * 60 * 60 * 1000;
+
+// One request, in a slot of its own, under a deadline that starts with it, with
+// what came back reported to the scheduler before the next slot is handed out —
+// so a 429 pauses the workers queued behind this one rather than only the
+// caller that met it.
 function paced(
   send: SupportedFetch,
   scheduler: RequestScheduler,
 ): SupportedFetch {
   return (url, init) =>
     scheduler.run(async () => {
-      const response = await send(url, init);
+      const response = await RequestTimeoutError.rejectAfterTimeout(
+        send(url, init),
+        NOTION_REQUEST_TIMEOUT_MS,
+      );
       scheduler.observe(response.status, response.headers);
       return response;
     });
