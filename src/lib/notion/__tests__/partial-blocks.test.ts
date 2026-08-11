@@ -61,6 +61,17 @@ const page = (results: Array<Record<string, unknown>>): ChildrenResponse => ({
   next_cursor: null,
 });
 
+// The error a walk refused with. Written as a helper so a walk that *succeeds*
+// fails the test rather than handing back a tree nothing looks at.
+async function refusal(work: Promise<unknown>): Promise<Error> {
+  try {
+    await work;
+  } catch (error: unknown) {
+    return error as Error;
+  }
+  throw new Error("the walk returned a tree instead of refusing");
+}
+
 describe("a children list carrying a block Notion did not fill in", () => {
   it("refuses a partial block on the first page", async () => {
     const client = childrenClient({ "page-1": [page([partial("b1")])] });
@@ -121,9 +132,7 @@ describe("a children list carrying a block Notion did not fill in", () => {
       "page-1": [page([{ object: "page", id: "b1" }])],
     });
 
-    const error = await fetchBlockTree(client, "page-1").catch(
-      (thrown: unknown) => thrown as Error,
-    );
+    const error = await refusal(fetchBlockTree(client, "page-1"));
 
     expect(error.message).toMatch(/not a block/i);
     expect(isPartialBlockError(error)).toBe(true);
@@ -144,9 +153,7 @@ describe("a children list carrying a block Notion did not fill in", () => {
       ],
     });
 
-    const error = await fetchBlockTree(client, "page-1").catch(
-      (thrown: unknown) => thrown as Error,
-    );
+    const error = await refusal(fetchBlockTree(client, "page-1"));
 
     expect(error.message).toContain("b1-1");
     expect(error.message).toContain("b1");
@@ -156,9 +163,7 @@ describe("a children list carrying a block Notion did not fill in", () => {
   it("is recognizable as a partial-block failure and nothing else", async () => {
     const client = childrenClient({ "page-1": [page([partial("b1")])] });
 
-    const error = await fetchBlockTree(client, "page-1").catch(
-      (thrown: unknown) => thrown,
-    );
+    const error = await refusal(fetchBlockTree(client, "page-1"));
 
     expect(isPartialBlockError(error)).toBe(true);
     expect(isPartialBlockError(new Error("something else"))).toBe(false);
