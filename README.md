@@ -252,6 +252,25 @@ how one post becomes two pages claiming one slug. Only a `429`, which promises
 the request never landed, is waited out. The run stops instead — and re-running
 it is safe by design.
 
+**The rate limit belongs to the integration, so one scheduler holds it.**
+Notion allows an integration roughly three requests a second. Bounding the
+fan-out at three bounds *concurrency*, which is not a rate — three workers each
+answered in 40ms is seventy-five requests a second — and a retry wrapper bounds
+one call's repeats, so a `429` answered to one worker was invisible to the other
+two, which carried on into the same wall. So every request a client makes goes
+through one scheduler in front of the HTTP layer (`src/lib/notion/rate-limit.ts`):
+slots are handed out one per interval and in the order they were asked for, so
+the run's average stays under the limit however many workers there are and
+however fast Notion answers — retries included, because a retry is a request. A
+`429` or a `529` read off any response holds back everything queued behind it
+until `Retry-After` says the integration may talk again, or, where Notion sends
+no header, until a jittered exponential back-off does: doubling from one second,
+capped at the same 60s ceiling every wait here is under, and reset the moment a
+request is answered normally. The pause and a caller's own `Retry-After` back-off
+are the same number started at the same moment, so they overlap rather than add.
+The clock, the sleep and the jitter are all injectable, which is how the timing
+is tested without spending it.
+
 **The limit, honestly.** Between the last read and the write it justified there
 is one round-trip in which somebody else can still change the page, and Notion
 offers no way to say "apply this only if the page is still the version I read".

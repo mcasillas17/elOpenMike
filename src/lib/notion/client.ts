@@ -1,5 +1,6 @@
 import { Client } from "@notionhq/client";
 import { withReadRetry } from "./retry";
+import { RequestScheduler } from "./rate-limit";
 import { assertFullBlock } from "./block-shape";
 import { isOffSite } from "./archived";
 import type { DataSourceSchema } from "./properties";
@@ -16,10 +17,16 @@ type NotionClientOptions = NonNullable<ConstructorParameters<typeof Client>[0]>;
 // The parts of it a caller here may set: the HTTP layer, so a test can count
 // what reaches the wire, and the base URL. Auth, API version and the retry
 // policy are this module's to decide.
+//
+// `scheduler` is not one of the SDK's options: it is the pacing every request
+// goes through, and it is exposed so a test can hand over one whose clock it
+// owns rather than sit through a real third of a second per request. Left out,
+// each client gets one of its own — which is the right grain, because Notion's
+// limit is per integration and a client is what holds the integration's token.
 export type NotionClientOverrides = Pick<
   NotionClientOptions,
   "fetch" | "baseUrl"
->;
+> & { scheduler?: RequestScheduler };
 
 // The SDK retries on its own. Version 5 ships `retry: { maxRetries: 2 }` and
 // treats a 429 *and a 529* as retryable for every HTTP method — POST and PATCH
@@ -36,16 +43,46 @@ export type NotionClientOverrides = Pick<
 // So the SDK is told to send each request exactly once, and every repeat in
 // this repo is one of ours: bounded, capped, and split by whether the call
 // changes anything (see retry.ts).
+//
+// What none of those repeats could do is *pace* anything: they bound one call's
+// attempts, and Notion's limit is on the integration. So the HTTP layer is
+// wrapped in one scheduler per client — every request the SDK makes waits its
+// turn in it, and a 429 or a 529 read off any response holds back everything
+// queued behind it. See rate-limit.ts.
 export function createNotionClient(
   token: string,
   overrides: NotionClientOverrides = {},
 ): Client {
+  const { scheduler = new RequestScheduler(), ...clientOptions } = overrides;
   return new Client({
     auth: token,
     notionVersion: NOTION_VERSION,
     retry: false,
-    ...overrides,
+    ...clientOptions,
+    // After the spread: the pacing is not something a caller opts out of by
+    // passing a fetch of its own. Its own fetch is what gets paced.
+    fetch: paced(clientOptions.fetch ?? defaultFetch, scheduler),
   });
+}
+
+type SupportedFetch = NonNullable<NotionClientOptions["fetch"]>;
+
+const defaultFetch: SupportedFetch = (url, init) =>
+  fetch(url, init as RequestInit);
+
+// One request, in a slot of its own, with what came back reported to the
+// scheduler before the next slot is handed out — so a 429 pauses the workers
+// queued behind this one rather than only the caller that met it.
+function paced(
+  send: SupportedFetch,
+  scheduler: RequestScheduler,
+): SupportedFetch {
+  return (url, init) =>
+    scheduler.run(async () => {
+      const response = await send(url, init);
+      scheduler.observe(response.status, response.headers);
+      return response;
+    });
 }
 
 export type PageObject = {

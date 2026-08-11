@@ -25,11 +25,20 @@ export function readHeader(
 // can't hold a scheduled sync open for hours.
 export const MAX_RETRY_WAIT_MS = 60_000;
 
-export function retryAfterMs(headers: unknown, attempt: number): number {
+// The Retry-After Notion sent, in milliseconds, or undefined where it sent none
+// this side can use. Uncapped: a caller decides what its own ceiling is, and
+// the two callers here have the same one for different reasons — one is waiting
+// out its own repeat, the other is holding back a whole run.
+export function retryAfterHeaderMs(headers: unknown): number | undefined {
   const seconds = Number(readHeader(headers, "retry-after"));
-  const wait =
-    Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : attempt * 1000;
-  return Math.min(wait, MAX_RETRY_WAIT_MS);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined;
+}
+
+export function retryAfterMs(headers: unknown, attempt: number): number {
+  return Math.min(
+    retryAfterHeaderMs(headers) ?? attempt * 1000,
+    MAX_RETRY_WAIT_MS,
+  );
 }
 
 export type RetryOptions = {
