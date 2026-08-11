@@ -59,7 +59,11 @@ const post: LocalPost = {
 
 type Wrap = (executor: MigrationExecutor) => MigrationExecutor;
 
-async function migrate(notion: FakeNotion, wrap: Wrap = (e) => e) {
+async function migrate(
+  notion: FakeNotion,
+  wrap: Wrap = (e) => e,
+  posts: LocalPost[] = [post],
+) {
   const pages: RemotePage[] = (await queryPages(notion.client, "ds-1")).map(
     (page) => ({
       pageId: page.id,
@@ -72,7 +76,7 @@ async function migrate(notion: FakeNotion, wrap: Wrap = (e) => e) {
   );
 
   const prepared = await prepareMigration(
-    [post],
+    posts,
     pages,
     { dataSourceId: "ds-1", schema: statusSchema },
     (pageId) => fetchBlockTree(notion.client, pageId),
@@ -278,6 +282,71 @@ describe("a page that is published, whole, and somebody else's", () => {
     expect(error.message).toMatch(/by hand/i);
     expect(livePages(notion)[0].status).toBe("Published");
   });
+});
+
+describe("a page somebody moved before an earlier readback", () => {
+  // Reading a page is three round-trips — its metadata, its whole block tree,
+  // its metadata again — and one of those reads guards every write. A 150-block
+  // post is a create, one append and the promotion, so the retrieves are:
+  //
+  //   1, 2  the read that guards the append
+  //   3, 4  the read that guards the promotion (agreeOnMetadata's)
+  //   5, 6  the read that proves the promotion
+  //
+  // A page that has moved by any of them is never written to again — and never
+  // written *back*, because nothing this run did is on the site yet.
+  const long: LocalPost = {
+    ...post,
+    content: Array.from({ length: 150 }, (_, i) => `Line ${i + 1}.`).join("\n\n"),
+  };
+
+  const beforeRetrieve = (
+    notion: FakeNotion,
+    nth: number,
+    change: (pageId: string) => void,
+  ): void => {
+    let seen = 0;
+    notion.beforeRead = (kind, id) => {
+      if (kind !== "retrieve") return;
+      seen += 1;
+      if (seen !== nth) return;
+      notion.beforeRead = undefined;
+      change(id);
+    };
+  };
+
+  // A page still reading "Draft" is the page this run left there, so it is not
+  // a move at all until the promotion has made it Published — which is what the
+  // suite above covers.
+  const moves: Array<[string, (notion: FakeNotion, pageId: string) => void]> = [
+    ["moved into another status", (notion, id) => notion.setStatus(id, "In progress")],
+    ["stripped of its status", (notion, id) => notion.setStatus(id, "")],
+    ["published by somebody else", (notion, id) => notion.setStatus(id, "Published")],
+    ["moved to the trash", (notion, id) => notion.trash(id)],
+  ];
+
+  const points: Array<[string, number, string[]]> = [
+    ["the append", 1, ["create:page-1:100"]],
+    ["the promotion", 3, ["create:page-1:100", "append:page-1:50"]],
+  ];
+
+  for (const [where, retrieve, mutations] of points) {
+    for (const [name, move] of moves) {
+      it(`stops before ${where} when the page is ${name}`, async () => {
+        const notion = new FakeNotion();
+        beforeRetrieve(notion, retrieve, (id) => move(notion, id));
+
+        const error = await failure(migrate(notion, undefined, [long]));
+
+        expect(error.message).toMatch(/one\.mdx/);
+        expect(error.message).toMatch(/page-1/);
+        // The writes that had already been earned, and not one more: no
+        // promotion, and no Status written back over whatever somebody chose.
+        expect(notion.mutations).toEqual(mutations);
+        expect(notion.published).toEqual([]);
+      });
+    }
+  }
 });
 
 describe("a clean run", () => {
