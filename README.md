@@ -429,7 +429,14 @@ Inline formatting travels with the text: code spans, bold, italic, underline,
 strikethrough and links become the annotations a Notion page stores rather than
 the characters that spell them. Block structure travels too — headings,
 numbered and bulleted lists (nested included), to-dos, quotes, dividers, code
-fences and tables all migrate as the blocks they are.
+fences and tables all migrate as the blocks they are. A table is recognized the
+way GFM defines one and the way the site renders one: by the **delimiter row**
+under its header, with the outer pipes optional on every row and the two rows
+agreeing about how many cells there are. `Command | What it does` over
+`------- | ------------` is a table, whether or not anybody drew the edges; a
+paragraph that merely contains pipes stays a paragraph, and `---` under a line
+of prose is still the setext heading Notion has no level for. Alignment markers
+are read and dropped, since a Notion table has no per-column alignment.
 
 Markdown cannot tell some Notion blocks apart, so three come back as the shape
 that renders identically rather than as a guess: a callout migrates back as a

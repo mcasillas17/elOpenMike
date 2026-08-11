@@ -308,9 +308,8 @@ function readBlock(
 
   if (content.startsWith(">")) return readQuote(lines, index, offset);
 
-  if (content.startsWith("|") && isTableDelimiterRow(lines[index + 1])) {
-    return readTable(lines, index, offset);
-  }
+  const columns = tableWidthAt(lines, index);
+  if (columns !== undefined) return readTable(lines, index, offset, columns);
 
   if (BULLET.test(content) || ORDERED.test(content)) {
     return readListItem(lines, index, offset);
@@ -403,6 +402,10 @@ function readParagraph(
         );
       }
       if (opensBlock(content, true)) break;
+      // A table interrupts a paragraph, which is what the site's renderer does
+      // with one: the header row is the first line of the table rather than the
+      // last line of the prose above it.
+      if (tableWidthAt(lines, scan) !== undefined) break;
     }
 
     collected.push(content);
@@ -632,16 +635,49 @@ function asChildren(
   return blocks as ChildBlockRequest[];
 }
 
-// GFM: a table exists only where a delimiter row follows the header, which is
-// what keeps a paragraph of literal pipes a paragraph.
+// GFM: a table exists only where a *delimiter row* follows the header, which is
+// what keeps a paragraph of literal pipes a paragraph — and the outer pipes are
+// optional, on every row, which is what stops half the tables on GitHub from
+// migrating as prose. The header and the delimiter row have to agree about how
+// many cells there are; where they do not, GFM reads neither as a table and
+// neither does this.
+//
+// Two shapes a delimiter row would otherwise swallow are read as themselves,
+// because that is what the site's own renderer does with them: `---` under a
+// line of prose is a setext heading (refused below, since Notion has no level
+// for it), and `- | -` opens a list. Both are ambiguous only until the older
+// construct is given precedence, which is what remark-gfm does.
 function isTableDelimiterRow(line: string | undefined): boolean {
   if (line === undefined || isBlank(line)) return false;
   const { width, content } = measureIndent(line);
   if (width >= 4 || !content.includes("-")) return false;
+  if (SETEXT.test(content) || opensBlock(content)) return false;
   const cells = splitTableCells(content);
   return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell));
 }
 
+// How many columns the table starting at `index` has, or undefined where no
+// table starts there. A header that opens a block of its own is that block: a
+// bullet, an ordered item or a quote with a delimiter row underneath is a list
+// or a quote, not a table with a marker in its first cell.
+function tableWidthAt(lines: string[], index: number): number | undefined {
+  const line = lines[index];
+  if (line === undefined || isBlank(line)) return undefined;
+  const { width: indent, content } = measureIndent(line);
+  if (indent >= 4 || opensBlock(content)) return undefined;
+
+  const delimiter = lines[index + 1];
+  if (!isTableDelimiterRow(delimiter)) return undefined;
+
+  const header = splitTableCells(content).length;
+  const columns = splitTableCells(measureIndent(delimiter).content).length;
+  return header > 0 && header === columns ? header : undefined;
+}
+
+// A cell may be delimited by a pipe on each side, on one side, or on neither,
+// and a row is free to disagree with the row above it about which. The leading
+// pipe is a delimiter rather than an empty first cell, and so is the trailing
+// one — `a | b`, `| a | b`, `a | b |` and `| a | b |` are all two cells.
 function splitTableCells(line: string): string[] {
   const trimmed = line.trim();
   const cells: string[] = [];
@@ -677,18 +713,9 @@ function readTable(
   lines: string[],
   index: number,
   offset: number,
+  width: number,
 ): { block: BlockObjectRequest; next: number } {
-  const header = splitTableCells(measureIndent(lines[index]).content);
-  const width = header.length;
-  const delimiter = splitTableCells(measureIndent(lines[index + 1]).content);
-  if (delimiter.length !== width) {
-    throw unsupported(
-      `a table whose delimiter row has ${delimiter.length} cells where its header has ${width}`,
-      offset + index,
-    );
-  }
-
-  const rows = [header];
+  const rows = [splitTableCells(measureIndent(lines[index]).content)];
   let scan = index + 2;
   while (scan < lines.length) {
     const { width: indent, content } = measureIndent(lines[scan]);
@@ -704,7 +731,11 @@ function readTable(
       table: {
         table_width: width,
         // GFM has no table without a header row, so the header markdown had to
-        // write is the header Notion records.
+        // write is the header Notion records. The delimiter row's alignment
+        // markers have nowhere to land — a Notion table has no per-column
+        // alignment — so they are read and dropped rather than refused: a table
+        // that renders left-aligned is still a table, and a paragraph of pipes
+        // is not.
         has_column_header: true,
         // The header is on the table's first line and the delimiter row takes
         // the second, so every body row is one further down than its position.

@@ -178,8 +178,8 @@ const BLOCK_CASES: Array<[string, string]> = [
     "sessionid=abcdef is the value\n===",
   ],
   [
-    "a table whose rows disagree",
-    "| a | sk-live-0000 |\n| --- |\n| 1 | 2 |",
+    "a table Notion cannot nest that deep",
+    "> quoted\n>\n> a | sk-live-0000\n> --- | ---\n> 1 | 2",
   ],
 ];
 
