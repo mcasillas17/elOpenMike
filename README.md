@@ -266,8 +266,9 @@ of Notion's day into "these posts could not be read", which is what `--check`
 reports to CI. A **write** is not retried on any of those: a 5xx on
 `pages.create` does not say whether the page was created, and repeating it is
 how one post becomes two pages claiming one slug. Only a `429`, which promises
-the request never landed, is waited out. The run stops instead — and re-running
-it is safe by design.
+the request never landed, is waited out. A request that ran out of time splits
+the same way, and for the same reason: repeated on a read, never on a write. The
+run stops instead — and re-running it is safe by design.
 
 **The rate limit belongs to the integration, so one scheduler holds it.**
 Notion allows an integration roughly three requests a second. Bounding the
@@ -291,9 +292,25 @@ the SDK starts its own timer the moment it calls `fetch`, and the wait for a
 slot happens inside that call, so its timer would count the pause against the
 request it was holding back — one `Retry-After: 60` aborting every request
 queued behind it, as an error carrying no status that no policy here repeats.
-The deadline is applied once the slot is granted instead, using the SDK's own
-helper, so a request still has sixty seconds to be answered and a pause costs
-it none of them.
+The deadline is applied once the slot is granted instead, so a request still has
+sixty seconds to be answered and a pause costs it none of them.
+
+**A deadline covers the answer, not just the headers.** The SDK reads a response
+with `await response.text()`, which happens after `fetch` has already resolved —
+so a host that answered `200 OK` and then stopped sending was under no clock at
+all, and that read is owed forever: the scheduled sync sat on a runner until the
+job timed out, having written nothing, with the slot spent and the socket still
+open. So one budget covers the whole request — the fetch, the headers, and every
+byte of the body — and the response handed to the SDK is bound to it: its body
+is read under the deadline, and the timer comes off when the body ends, is
+cancelled, or fails. It is enforced with an `AbortController`, because rejecting
+a promise stops nothing; a request this side has given up on is aborted rather
+than left in flight. The error is still the SDK's own `RequestTimeoutError`, so
+its code and message are unchanged. What may be *repeated* after one splits the
+same way everything else does: a read is sent again — reading twice leaves
+Notion exactly as it was, and the alternative is one stalled socket costing a
+post — and a write never is, because a timeout says nothing about whether the
+request landed.
 
 **The limit, honestly.** Between the last read and the write it justified there
 is one round-trip in which somebody else can still change the page, and Notion

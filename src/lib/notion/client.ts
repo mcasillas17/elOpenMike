@@ -75,44 +75,240 @@ type SupportedFetch = NonNullable<NotionClientOptions["fetch"]>;
 // has to be given something to wrap.
 const defaultFetch = fetch.bind(globalThis) as unknown as SupportedFetch;
 
-// How long one request may go unanswered. The SDK's own default, kept, because
-// what it is for has not changed: a socket that accepts the connection and then
-// says nothing.
+// How long one request may go unanswered — the whole request: the fetch, the
+// headers, and every byte of the body the SDK then reads. The SDK's own default
+// duration, kept, because what it is for has not changed: a socket that accepts
+// the connection and then says nothing.
 //
-// What changed is when it starts counting. The SDK begins its timer the moment
-// it calls `fetch`, and the wait for a slot happens inside that call — so its
-// timer counted the pacing, and then the 429 pause, against the request itself.
-// With a cap of sixty seconds on a pause and sixty on a request, one
+// What changed is what it covers, and when it starts counting.
+//
+// It starts with the request. The SDK begins its timer the moment it calls
+// `fetch`, and the wait for a slot happens inside that call — so its timer
+// counted the pacing, and then the 429 pause, against the request itself. With
+// a cap of sixty seconds on a pause and sixty on a request, one
 // `Retry-After: 60` aborted every request queued behind it, as a
-// RequestTimeoutError that carries no status and that no retry policy here
-// repeats: the pause meant to save those workers was what failed them, and the
-// requests still went out afterwards, into nobody's hands, spending slots the
-// retry that was still wanted then had to wait for.
+// RequestTimeoutError that carries no status: the pause meant to save those
+// workers was what failed them, and the requests still went out afterwards,
+// into nobody's hands, spending slots the retry that was still wanted then had
+// to wait for.
 //
-// So the deadline is ours and starts when the request does. It is the SDK's own
-// helper, so the error, its code and its message are exactly what they were;
-// the SDK's copy of the timer is set past anything the scheduler can hold a
-// request for, so it never decides anything. Its timer is cleared when the
-// request settles either way, so nothing is left holding the process open.
+// And it covers the answer, not just the headers. The SDK reads a response with
+// `await response.text()`, which happens after `fetch` resolves — so a host that
+// answered `200 OK` and then stopped sending was under no clock at all. That
+// read is owed forever: the scheduled sync sat on a runner until the job timed
+// out, having written nothing, with the slot spent and the socket still open.
+// So the response handed back is bound to the same deadline, and the timer comes
+// off when the body ends, is cancelled, or fails — not when the headers arrive.
+//
+// It is enforced by an AbortController, because rejecting a promise stops
+// nothing: `RequestTimeoutError.rejectAfterTimeout` left the request it gave up
+// on in flight, and a request that never answers stays in flight forever. The
+// error is still the SDK's own type, so its code and message are exactly what
+// they were; the SDK's copy of the timer is set past anything the scheduler can
+// hold a request for, so it never decides anything, and it is cleared when our
+// promise settles either way.
 export const NOTION_REQUEST_TIMEOUT_MS = 60_000;
 const SDK_TIMEOUT_DISABLED_MS = 24 * 60 * 60 * 1000;
 
-// One request, in a slot of its own, under a deadline that starts with it, with
-// what came back reported to the scheduler before the next slot is handed out —
-// so a 429 pauses the workers queued behind this one rather than only the
-// caller that met it.
+// The timers a request runs on, read through the global at call time so a test
+// that installs a fake clock owns this one too.
+const setRequestTimer = (fire: () => void, ms: number): unknown =>
+  setTimeout(fire, ms);
+const clearRequestTimer = (handle: unknown): void =>
+  clearTimeout(handle as ReturnType<typeof setTimeout>);
+
+// What the SDK contracts for in a response: `ok`, `status`, `headers` and
+// `text()`. A real `fetch` also hands back a `body`, which is where a stalled
+// answer actually stalls.
+type SupportedResponse = Awaited<ReturnType<SupportedFetch>>;
+type ResponseWithBody = SupportedResponse & {
+  body?: ReadableStream<Uint8Array> | null;
+};
+
+// One request's budget, and the AbortController that enforces it.
+//
+// Every await goes through `guard`, because aborting a signal is not the same
+// as being answered: a `fetch` implementation is free to ignore the signal, and
+// a ReadableStream that has stopped producing will simply never settle the read
+// it owes. Racing the work against the expiry is what makes the budget a
+// promise the caller gets back on time; the abort is what makes sure nothing is
+// left running behind it. (images.ts learned this for the other half of the run
+// — the image downloads — and this is the same lesson on the posts themselves.)
+class RequestDeadline {
+  readonly controller = new AbortController();
+  private readonly expiry: Promise<never>;
+  private expire: (error: Error) => void = () => {};
+  private handle: unknown;
+  private failure: Error | undefined;
+  private done = false;
+
+  constructor(ms: number) {
+    this.expiry = new Promise<never>((_, reject) => {
+      this.expire = reject;
+    });
+    // Raced against rather than awaited: a request that finishes first leaves
+    // this settling into nobody's hands, and an unhandled rejection is a
+    // process-level event. One no-op handler makes it handled forever.
+    this.expiry.catch(() => {});
+    this.handle = setRequestTimer(() => this.fire(), ms);
+  }
+
+  guard<T>(work: Promise<T>): Promise<T> {
+    return Promise.race([work, this.expiry]).catch((error: unknown) => {
+      // Whichever rejection arrives first, the deadline is what ended this:
+      // aborting the request errors whatever it was waiting on, so the abort's
+      // own AbortError routinely reaches the race ahead of the expiry that
+      // caused it.
+      throw this.failure ?? error;
+    });
+  }
+
+  private fire(): void {
+    if (this.done) return;
+    this.clear();
+    this.failure = new RequestTimeoutError();
+    this.controller.abort(this.failure);
+    this.expire(this.failure);
+  }
+
+  // Every path out of a request, and only at the end of one: the body ending,
+  // being cancelled, or failing. A timer nothing cleared keeps the process
+  // alive after the request it was watching is over.
+  clear(): void {
+    if (this.done) return;
+    this.done = true;
+    clearRequestTimer(this.handle);
+  }
+}
+
+// The init the request actually goes out with. A caller that brought its own
+// signal keeps it — its abort is forwarded rather than replaced, so both
+// reasons can still end this request.
+function underSignal(
+  init: Parameters<SupportedFetch>[1],
+  deadline: RequestDeadline,
+): Parameters<SupportedFetch>[1] {
+  const theirs = (init as { signal?: AbortSignal } | undefined)?.signal;
+  if (theirs) {
+    if (theirs.aborted) deadline.controller.abort(theirs.reason);
+    else {
+      theirs.addEventListener(
+        "abort",
+        () => deadline.controller.abort(theirs.reason),
+        { once: true },
+      );
+    }
+  }
+  return {
+    ...(init ?? {}),
+    signal: deadline.controller.signal,
+  } as Parameters<SupportedFetch>[1];
+}
+
+// The body, still arriving, still on the clock. Every read is raced against the
+// deadline, and the deadline comes off at exactly three moments: the stream
+// ended, somebody cancelled it, or it failed.
+function deadlineBoundBody(
+  source: ReadableStream<Uint8Array>,
+  deadline: RequestDeadline,
+): ReadableStream<Uint8Array> {
+  const reader = source.getReader();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      let read: ReadableStreamReadResult<Uint8Array>;
+      try {
+        read = await deadline.guard(reader.read());
+      } catch (error: unknown) {
+        deadline.clear();
+        // The deadline aborted the request already; the reader is what still
+        // holds the stream, so it is released here. Not awaited: a body that
+        // stopped answering reads is exactly the kind that could sit on its own
+        // cancel too.
+        void reader.cancel("the request timed out").catch(() => {});
+        throw error;
+      }
+      if (read.done) {
+        deadline.clear();
+        controller.close();
+        return;
+      }
+      controller.enqueue(read.value);
+    },
+    async cancel(reason) {
+      deadline.clear();
+      await reader.cancel(reason);
+    },
+  });
+}
+
+async function readFully(body: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  for (;;) {
+    const read = await reader.read();
+    if (read.done) break;
+    text += decoder.decode(read.value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
+// The response the SDK gets: the same status, the same headers, and a body that
+// is still under the deadline the request went out with.
+function deadlineBound(
+  response: SupportedResponse,
+  deadline: RequestDeadline,
+): SupportedResponse {
+  const source = response as ResponseWithBody;
+  const body = source.body ? deadlineBoundBody(source.body, deadline) : null;
+
+  const text = async (): Promise<string> => {
+    try {
+      // With a body, the deadline is enforced read by read inside the stream.
+      // Without one — a 204, or a `fetch` that hands back nothing but `text()`
+      // — the whole read is raced instead, so neither shape goes unwatched.
+      const value = body
+        ? await readFully(body)
+        : await deadline.guard(source.text());
+      deadline.clear();
+      return value;
+    } catch (error: unknown) {
+      deadline.clear();
+      throw error;
+    }
+  };
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    headers: response.headers,
+    text,
+    body,
+  } as SupportedResponse;
+}
+
+// One request, in a slot of its own, under a deadline that starts when it does
+// and lasts until its answer has been read in full, with what came back
+// reported to the scheduler before the next slot is handed out — so a 429
+// pauses the workers queued behind this one rather than only the caller that
+// met it.
 function paced(
   send: SupportedFetch,
   scheduler: RequestScheduler,
 ): SupportedFetch {
   return (url, init) =>
     scheduler.run(async () => {
-      const response = await RequestTimeoutError.rejectAfterTimeout(
-        send(url, init),
-        NOTION_REQUEST_TIMEOUT_MS,
-      );
+      const deadline = new RequestDeadline(NOTION_REQUEST_TIMEOUT_MS);
+      let response: SupportedResponse;
+      try {
+        response = await deadline.guard(send(url, underSignal(init, deadline)));
+      } catch (error: unknown) {
+        // Nothing came back, so there is nothing left to watch.
+        deadline.clear();
+        throw error;
+      }
       scheduler.observe(response.status, response.headers);
-      return response;
+      return deadlineBound(response, deadline);
     });
 }
 
