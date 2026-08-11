@@ -394,6 +394,17 @@ different Notion pages claim one slug (<id>, <id>)`. Everything needed to open
 the right page and fix the right line, and nothing that republishes what is
 already being refused.
 
+And the same rule holds for a **pagination cursor**, which is nobody's typing at
+all: it is an opaque token Notion issues and this repo hands straight back
+without reading, so the honest assumption about what is inside one is the worst
+one. A walk that stops — because a list promised more results and handed back no
+cursor to follow, or handed back one it had already followed — says which list,
+which **page number** it stopped on and which of those two things happened, and
+never the token. Where Notion refuses a cursor and quotes it back in its own
+error message, the value is scrubbed out of everything that error carries — its
+message, its stack, the raw body the SDK keeps on it — while its status and
+everything else a caller reads are left exactly as they were.
+
 ## Deploy (Fly.io)
 
 Runs as a Next.js standalone server in a container (`Dockerfile` + `fly.toml`;

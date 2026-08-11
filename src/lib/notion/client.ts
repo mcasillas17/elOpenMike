@@ -485,35 +485,95 @@ function assertQueryComplete(
 // stop the walk before any partial result reaches a caller. `seen` is per list:
 // cursors are only meaningful within the list that issued them, so a nested
 // block's children get their own set.
-type Paginated = { has_more?: boolean; next_cursor?: string | null };
+//
+// What a refusal says is where the walk stopped and what shape of wrongness
+// stopped it: the list, the page number, and the category. Never the cursor. A
+// cursor is an opaque token Notion issues and this repo hands straight back
+// without reading; the honest assumption about what is inside one is the worst
+// one — state, an identifier, a credential of its own — and these messages are
+// printed into a terminal and into a public Actions log. Quoting the repeated
+// one printed it in full, and JSON.stringify'ing an unusable one printed an
+// object's contents as readily as a string's.
+type Paginated = { has_more?: boolean; next_cursor?: unknown };
 
 function nextCursor(
   response: Paginated,
   seen: Set<string>,
   what: string,
+  page: number,
 ): string | undefined {
   if (response.has_more !== true) return undefined;
 
   const cursor = response.next_cursor;
+  // One message for every unusable shape — absent, null, empty, whitespace, or
+  // something that was never a string — because the categories differ only in
+  // what the value was, and what the value was is the part that is not said.
   if (typeof cursor !== "string" || cursor.trim() === "") {
     throw new Error(
-      `${what} reported more results (has_more) but handed back no cursor to ` +
-        `follow (next_cursor ${JSON.stringify(cursor ?? null)}) — what arrived ` +
-        "is a subset of the list presented as the end of it, so nothing was " +
-        "read, planned, written or deleted this run",
+      `${what} reported more results (has_more) at page ${page} but handed ` +
+        "back no cursor to follow — what arrived is a subset of the list " +
+        "presented as the end of it, so nothing was read, planned, written " +
+        "or deleted this run",
     );
   }
 
   if (seen.has(cursor)) {
     throw new Error(
-      `${what} handed back the cursor "${cursor}" a second time — the ` +
-        "pagination is looping rather than advancing, so nothing was read, " +
-        "planned, written or deleted this run",
+      `${what} handed back a cursor it had already followed at page ${page} ` +
+        "— the pagination is looping rather than advancing, so nothing was " +
+        "read, planned, written or deleted this run",
     );
   }
 
   seen.add(cursor);
   return cursor;
+}
+
+// What replaces a cursor wherever one is found in something being printed.
+const CURSOR_REDACTED = "[cursor]";
+
+// Notion is entitled to refuse a cursor and to quote it back while doing so —
+// `body.start_cursor should be a valid uuid, instead was "…"` — and the SDK
+// keeps the whole response body on the error besides. That message is the one
+// `scripts/sync-notion.ts` prints, so the value goes out of every string the
+// error carries: its message, its stack (which begins with the message) and any
+// property holding the raw body.
+//
+// The error object itself is kept, so a caller still reads the status, the code
+// and everything else it was going to read. Where a string cannot be replaced —
+// a frozen error, an exotic getter — nothing is let out at all: the refusal is
+// replaced with one that says only where the walk stopped.
+function withoutCursor(
+  error: unknown,
+  cursor: string | undefined,
+  what: string,
+  page: number,
+): unknown {
+  if (cursor === undefined || typeof error !== "object" || error === null) {
+    return error;
+  }
+
+  const carrier = error as Record<string, unknown>;
+  let clean = true;
+  for (const key of Object.getOwnPropertyNames(carrier)) {
+    try {
+      const value = carrier[key];
+      if (typeof value !== "string" || !value.includes(cursor)) continue;
+      carrier[key] = value.split(cursor).join(CURSOR_REDACTED);
+      clean = typeof carrier[key] === "string" &&
+        !(carrier[key] as string).includes(cursor);
+    } catch {
+      clean = false;
+    }
+    if (!clean) break;
+  }
+  if (clean) return error;
+
+  return new Error(
+    `${what} was refused at page ${page} over the cursor it was given, in ` +
+      "terms this run could not repeat without repeating the cursor — so " +
+      "nothing was read, planned, written or deleted this run",
+  );
 }
 
 // Walks every page in the data source. Notion's query does not return trashed
@@ -537,17 +597,27 @@ export async function queryPages(
 ): Promise<PageObject[]> {
   const pages: PageObject[] = [];
   const seen = new Set<string>();
+  const what = `data source ${dataSourceId}`;
   let cursor: string | undefined;
+  let page = 0;
 
   do {
-    const response = await withReadRetry(() =>
-      client.dataSources.query({
-        data_source_id: dataSourceId,
-        start_cursor: cursor,
-        page_size: 100,
-        result_type: "page",
-      }),
-    );
+    // Counted from the start of the walk, so a refusal can say where it
+    // stopped without saying what it was holding when it stopped.
+    page += 1;
+    let response: Awaited<ReturnType<typeof client.dataSources.query>>;
+    try {
+      response = await withReadRetry(() =>
+        client.dataSources.query({
+          data_source_id: dataSourceId,
+          start_cursor: cursor,
+          page_size: 100,
+          result_type: "page",
+        }),
+      );
+    } catch (error: unknown) {
+      throw withoutCursor(error, cursor, what, page);
+    }
 
     assertQueryComplete(response.request_status, dataSourceId);
 
@@ -556,12 +626,12 @@ export async function queryPages(
       // it loses nothing, because it never claimed a file on disk.
       if (isDataSourceRow(result)) continue;
 
-      const page = asPageObject(result);
+      const row = asPageObject(result);
       // Anything else has to be readable as a page. Dropping one quietly is
       // how a post is deleted: nothing claims its file, and an unclaimed file
       // is one the reconciler removes — so the run stops here instead, before
       // a desired set is built and long before a file is compared.
-      if (!page) {
+      if (!row) {
         throw new Error(
           `data source ${dataSourceId} returned a row (${rowId(result)}) that ` +
             "is neither a page this run can read nor a child data source — " +
@@ -572,10 +642,10 @@ export async function queryPages(
       // holding no slug. Dropping one loses nothing — it claims no file on
       // disk — which is what makes archiving a page and re-running a way to
       // take a post down or redo it.
-      if (isOffSite(page)) continue;
-      if (accept(page)) pages.push(page);
+      if (isOffSite(row)) continue;
+      if (accept(row)) pages.push(row);
     }
-    cursor = nextCursor(response, seen, `data source ${dataSourceId}`);
+    cursor = nextCursor(response, seen, what, page);
   } while (cursor);
 
   return pages;
@@ -607,16 +677,24 @@ export async function fetchBlockTree(
 ): Promise<MdBlock[]> {
   const blocks: MdBlock[] = [];
   const seen = new Set<string>();
+  const what = `the children of block ${blockId}`;
   let cursor: string | undefined;
+  let page = 0;
 
   do {
-    const response = await withReadRetry(() =>
-      client.blocks.children.list({
-        block_id: blockId,
-        start_cursor: cursor,
-        page_size: 100,
-      }),
-    );
+    page += 1;
+    let response: Awaited<ReturnType<typeof client.blocks.children.list>>;
+    try {
+      response = await withReadRetry(() =>
+        client.blocks.children.list({
+          block_id: blockId,
+          start_cursor: cursor,
+          page_size: 100,
+        }),
+      );
+    } catch (error: unknown) {
+      throw withoutCursor(error, cursor, what, page);
+    }
 
     for (const result of response.results) {
       const block = assertFullBlock(result, blockId);
@@ -626,7 +704,7 @@ export async function fetchBlockTree(
       blocks.push({ ...block, children });
     }
 
-    cursor = nextCursor(response, seen, `the children of block ${blockId}`);
+    cursor = nextCursor(response, seen, what, page);
   } while (cursor);
 
   return blocks;
