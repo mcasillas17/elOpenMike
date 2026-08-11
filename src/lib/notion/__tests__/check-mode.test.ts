@@ -259,7 +259,7 @@ describe("what the sync script is wired to", () => {
     // writing path, which still ends by returning normally so the posts that
     // did sync are committed.
     const writing = script.slice(
-      script.indexOf("await fs.mkdir(BLOG_DIR"),
+      script.indexOf("await applyContentPlan("),
       script.indexOf("main().catch"),
     );
 

@@ -304,9 +304,9 @@ describe("what the production scripts are wired to", () => {
     );
     const validated = sync.indexOf("const schemaErrors = schemaProblems(schema)");
     const pages = sync.indexOf("const pages = await queryPublishedPages");
-    const files = sync.indexOf("const existing = await readExisting");
+    const files = sync.indexOf("const existing = await readExistingPosts");
     const planning = sync.indexOf("const syncPlan = planSync");
-    const writing = sync.indexOf("await fs.mkdir");
+    const writing = sync.indexOf("await applyContentPlan");
 
     expect([resolved, retrieved, validated, pages, files, planning, writing]).not
       .toContain(-1);

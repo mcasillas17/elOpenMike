@@ -122,6 +122,23 @@ from both sides instead, and every uncertain answer is an error. A file the run
 cannot read stops it too: "unreadable" and "absent" must not be the same answer,
 or `--check` would call a tree in sync while a real run rewrote it.
 
+**Both halves of the tree are read and written by tested modules.** The MDX half
+used to live in `scripts/sync-notion.ts`, where nothing tested it, and it read
+every failure as an empty blog:
+
+```ts
+try { names = await fs.readdir(dir) } catch { return existing }
+```
+
+A tree the run may not open, a `content` that had become a link, a post whose
+read failed — all of them came back as "there are no posts", which plans every
+post as missing, every file as an orphan, and lets `--check` report a blog in
+sync that it compared against nothing at all. It is now
+`src/lib/notion/content-files.ts`, beside the image half and on the same
+walker: only `ENOENT` and `ENOTDIR` mean "nothing written here yet", every other
+errno stops the run, and a run that cannot read the tree fails the check rather
+than passing it.
+
 ## Supply-chain hardening
 
 - **Script blocking**: pnpm 10+ blocks dependency install/build scripts by default. The allowlist in `pnpm-workspace.yaml` → `allowBuilds` permits only `esbuild` (native binary setup) and `unrs-resolver` (Tailwind v4 Rust binding). All other lifecycle scripts are blocked.

@@ -1,5 +1,3 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import {
   createNotionClient,
   queryPublishedPages,
@@ -12,6 +10,10 @@ import { isPublished, pageSlug } from "../src/lib/notion/fetch-post";
 import { schemaProblems } from "../src/lib/notion/properties";
 import { validatePosts, validateSourceSlugs } from "../src/lib/notion/validate";
 import { postPath, massDeleteError } from "../src/lib/notion/plan";
+import {
+  readExistingPosts,
+  applyContentPlan,
+} from "../src/lib/notion/content-files";
 import { downloadImage } from "../src/lib/notion/images";
 import {
   planImages,
@@ -29,7 +31,6 @@ import {
 } from "../src/lib/notion/sync";
 
 const ROOT = process.cwd();
-const BLOG_DIR = path.join(ROOT, "content", "blog");
 const CHECK_ONLY = process.argv.includes("--check");
 const ALLOW_MASS_DELETE = process.argv.includes("--allow-mass-delete");
 
@@ -37,25 +38,6 @@ function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`missing required environment variable ${name}`);
   return value;
-}
-
-async function readExisting(dir: string): Promise<Map<string, string>> {
-  const existing = new Map<string, string>();
-  let names: string[];
-  try {
-    names = await fs.readdir(dir);
-  } catch {
-    return existing;
-  }
-  for (const name of names) {
-    if (name.endsWith(".mdx")) {
-      existing.set(
-        postPath(name.replace(/\.mdx$/, "")),
-        await fs.readFile(path.join(dir, name), "utf8"),
-      );
-    }
-  }
-  return existing;
 }
 
 // A post that failed keeps whatever is already on disk, so the run is not a
@@ -116,7 +98,11 @@ async function main(): Promise<void> {
   }
 
   const pages = await queryPublishedPages(client, dataSourceId, isPublished);
-  const existing = await readExisting(BLOG_DIR);
+  // Read through the same module the writing half uses, which fails closed:
+  // a tree this run may not open is not an empty one, and reading it as empty
+  // plans every post as missing and reports a blog it never saw as in sync.
+  // See content-files.ts.
+  const existing = await readExistingPosts(ROOT);
 
   // Two pages claiming one slug are one file on disk, and nothing on disk says
   // which page wrote it — so a run where one of them fails silently republishes
@@ -208,13 +194,7 @@ async function main(): Promise<void> {
     process.exit(verdict.exitCode);
   }
 
-  await fs.mkdir(BLOG_DIR, { recursive: true });
-  for (const file of plan.write) {
-    await fs.writeFile(path.join(ROOT, file), desired.get(file)!, "utf8");
-  }
-  for (const file of plan.delete) {
-    await fs.rm(path.join(ROOT, file), { force: true });
-  }
+  await applyContentPlan(ROOT, plan, desired);
   await applyImagePlan(ROOT, imagePlan, outcome.images);
 
   console.log(
