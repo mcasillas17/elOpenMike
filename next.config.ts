@@ -7,15 +7,30 @@ import type { NextConfig } from "next";
 // data via inline `self.__next_f.push(...)` scripts whose content varies per
 // page, so neither a fixed hash nor 'self' alone can cover them. The only
 // external script we load is the Cloudflare Web Analytics beacon.
-const csp = [
+//
+// The comedy page is the only page that reaches off-site for content, and it
+// reaches to exactly two hosts (src/components/comedy/YouTubeEmbed.tsx): the
+// thumbnail at https://img.youtube.com/vi/<id>/hqdefault.jpg, and — only once
+// somebody clicks it — the player at https://www.youtube-nocookie.com/embed/.
+// Both are named in full. `https://*.youtube.com` or the bare `youtube.com`
+// would license every host Google puts behind that name, tracking endpoints
+// included, which is the thing the nocookie embed is chosen to avoid; and
+// neither is needed to name one thumbnail host and one player host.
+export const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
   // next/font and React inline style props require inline styles.
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  // The facade thumbnail. No other YouTube host is drawn from: the player's own
+  // images load inside its frame, under its own origin and its own policy.
+  "img-src 'self' data: blob: https://img.youtube.com",
   "font-src 'self' data:",
   // Cloudflare analytics beacon reports to cloudflareinsights.com.
   "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com",
+  // The player, and nothing else — not even 'self': this site frames no page of
+  // its own, so leaving frame-src to fall back to default-src would have
+  // allowed one for no reason.
+  "frame-src https://www.youtube-nocookie.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -25,8 +40,8 @@ const csp = [
 
 // Security headers applied to every response. See
 // node_modules/next/dist/docs/.../config/next-config-js/headers.md
-const securityHeaders = [
-  { key: "Content-Security-Policy", value: csp },
+export const securityHeaders = [
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
