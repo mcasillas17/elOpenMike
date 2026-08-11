@@ -97,14 +97,30 @@ the budget above fixes: a blog whose images weigh 300 MB spent 300 MB proving
 that none of them had changed, on top of everything it had downloaded. So each
 file is opened, read through one 64 KiB buffer shared by the whole walk, and
 reduced to its size and its digest — the same digest, from the same place, that
-gives an image its content-addressed filename. Nothing under
-`public/images/blog` is followed, either: this sync writes regular files there
-and nothing else, so a symlink (or a Windows reparse point) found in that tree
-stops the run rather than being read — and every write opens the path with
-`O_NOFOLLOW`, so one planted between the plan and the write cannot send a post's
-bytes outside the repo. A file the run cannot read stops it too: "unreadable"
-and "absent" must not be the same answer, or `--check` would call a tree in sync
-while a real run rewrote it.
+gives an image its content-addressed filename.
+
+**Nothing in either tree is followed, at any level.** `content/blog` and
+`public/images/blog` are written by this sync and by nothing else, which writes
+regular files inside plain directories — so a symlink (or a Windows reparse
+point) anywhere in them stops the run rather than being read, written or
+deleted. *Anywhere* is the point: checking the last name in a path and opening
+it with `O_NOFOLLOW` says nothing about the four directories above it, and a
+link at `public`, at `public/images` or at the blog root itself moves the whole
+walk somewhere else before that check is ever made — every file "found on disk"
+is then one outside the repo, every write lands there, and every orphan is
+pruned there. So every component is `lstat`ed immediately before the operation
+that uses it, the no-follow flags are used where the platform has them, the
+resolved path is compared with where it is spelled, and what was opened is
+compared by device and inode with what is at that name afterwards; a
+disagreement is refused rather than guessed at (`src/lib/notion/safe-fs.ts`).
+Directories are created one component at a time rather than with
+`recursive: true`, deletion is `unlink` and `rmdir` — never recursive, never
+resolving a link — and a plan whose path climbs out of the tree it names is
+refused before a single syscall. Node has no `openat(2)`, so the window between
+a check and the syscall it justifies cannot be closed from here; it is checked
+from both sides instead, and every uncertain answer is an error. A file the run
+cannot read stops it too: "unreadable" and "absent" must not be the same answer,
+or `--check` would call a tree in sync while a real run rewrote it.
 
 ## Supply-chain hardening
 
