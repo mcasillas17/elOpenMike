@@ -57,6 +57,23 @@ Optional:
   this variable. It is checked against the database before anything is read, so
   an id from another database fails immediately.
 
+**Images are held in memory, so the run has a ceiling on them.** A post's images
+are downloaded while their signed Notion URLs are still valid and kept until the
+whole plan has been computed — `--check` has to be able to say whether a run
+would change anything without changing anything, and a plan built halfway
+through a run is not an answer. So nothing can be streamed to disk, and without
+a bound the run's peak memory was whatever the blog happened to weigh: one image
+is capped at 10 MB, and a hundred posts carrying ten each is 10 GB on a runner
+with a few. That does not end in an error message — the process is killed
+mid-run, having written nothing. One run may therefore hold **256 MiB across at
+most 512 image files** (`src/lib/notion/image-budget.ts`), accounted by exact
+length and once per file, so the same image referenced twice in a post costs
+what it costs on disk. Posts are rendered one at a time, so the post that
+crosses the line is the post reported: it fails exactly the way a post whose
+image will not download fails — its file on disk is preserved, nothing is
+deleted that run — and it gives back every byte it had taken, so the posts after
+it still sync.
+
 ## Supply-chain hardening
 
 - **Script blocking**: pnpm 10+ blocks dependency install/build scripts by default. The allowlist in `pnpm-workspace.yaml` → `allowBuilds` permits only `esbuild` (native binary setup) and `unrs-resolver` (Tailwind v4 Rust binding). All other lifecycle scripts are blocked.

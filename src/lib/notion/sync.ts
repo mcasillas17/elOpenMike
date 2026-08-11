@@ -5,6 +5,7 @@ import {
   safeImageErrorMessage,
   type DownloadedImage,
 } from "./images";
+import { ImageBudget, type ImageReservation } from "./image-budget";
 import type { ImagePlan } from "./image-plan";
 import { isValidSlug } from "./slug";
 import { planReconcile, type ReconcilePlan } from "./reconcile";
@@ -41,9 +42,16 @@ function imageUrl(block: MdBlock): string | undefined {
 // Walks a post's block tree and downloads every image while its signed URL is
 // still valid (they expire after one hour). Throws on the first failure: a post
 // is published with all of its images or not at all.
+//
+// Every file it keeps is accounted against the run's memory budget, exactly
+// once and by its exact length — the same image referenced twice in one post is
+// one file on disk, so it is one claim on the budget. A post whose images will
+// not fit fails here, like a post whose image will not download, and gives back
+// whatever it had already taken (see renderPosts).
 async function capturePostImages(
   post: PostSource,
   download: ImageDownloader,
+  reservation: ImageReservation,
 ): Promise<{ paths: Map<string, string>; files: Map<string, Uint8Array> }> {
   const paths = new Map<string, string>();
   const files = new Map<string, Uint8Array>();
@@ -53,6 +61,9 @@ async function capturePostImages(
       if (block.type === "image") {
         const url = imageUrl(block);
         if (url) {
+          // Asked before the transfer, not after: a run with no room for
+          // another file at all has no reason to spend a download finding out.
+          reservation.room();
           let image: Awaited<ReturnType<ImageDownloader>>;
           try {
             image = await download(url);
@@ -61,7 +72,14 @@ async function capturePostImages(
           }
           const { bytes, format } = image;
           const name = imageFileName(bytes, format);
-          files.set(`${imageDir(post.slug)}/${name}`, bytes);
+          const file = `${imageDir(post.slug)}/${name}`;
+          // Content-addressed, so the same image twice is the same file: the
+          // second reference costs nothing to keep and must cost nothing to
+          // account for either.
+          if (!files.has(file)) {
+            reservation.take(bytes.byteLength);
+            files.set(file, bytes);
+          }
           paths.set(block.id, `/images/blog/${post.slug}/${name}`);
         }
       }
@@ -77,6 +95,13 @@ async function capturePostImages(
 // the shared set once that post has rendered completely, so a half-downloaded
 // post never leaves stray files behind.
 //
+// Posts are rendered one at a time on purpose. Their images cannot be released
+// as they go — every one of them has to survive until the plan is computed and
+// applied at the end of the run — so what a sequential loop buys is not a lower
+// ceiling but a decidable one: the run's held bytes only ever grow by one
+// post's worth, and the post that crosses the budget is the post reported. See
+// image-budget.ts.
+//
 // `priorFailures` carries the posts that never reached rendering — a page that
 // failed revalidation, say — so every way of losing a post ends up in one list
 // and gets the same preserve-or-skip treatment from planSync().
@@ -84,6 +109,7 @@ export async function renderPosts(
   sources: PostSource[],
   download: ImageDownloader,
   priorFailures: PostFailure[] = [],
+  budget: ImageBudget = new ImageBudget(),
 ): Promise<RenderOutcome> {
   const outcome: RenderOutcome = {
     rendered: [],
@@ -93,8 +119,15 @@ export async function renderPosts(
   };
 
   for (const post of sources) {
+    // This post's claim on the run's memory, given up in full unless the post
+    // reaches the end of the block below with its images in the shared set.
+    const reservation = budget.open();
     try {
-      const { paths, files } = await capturePostImages(post, download);
+      const { paths, files } = await capturePostImages(
+        post,
+        download,
+        reservation,
+      );
       const warnings: string[] = [];
       const body = blocksToMarkdown(post.blocks, {
         imagePath: (id) => paths.get(id) ?? "",
@@ -109,12 +142,18 @@ export async function renderPosts(
         frontmatter: post.frontmatter,
         body,
       });
+      reservation.commit();
     } catch (error: unknown) {
       outcome.failures.push({
         slug: post.slug,
         pageId: post.pageId,
         message: error instanceof Error ? error.message : String(error),
       });
+    } finally {
+      // A no-op after the commit above, and the whole of this post's bytes
+      // otherwise — including a post that failed *after* its images were
+      // downloaded, whose bytes are dropped with the map that held them.
+      reservation.release();
     }
   }
 
