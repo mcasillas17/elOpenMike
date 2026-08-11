@@ -230,6 +230,116 @@ export const asciiBytes = ascii;
 export const rawBytes = bytes;
 
 // ---------------------------------------------------------------------------
+// A static AVIF that keeps its coded bytes where its metadata is.
+//
+// ISO base media allows both: a top-level `mdat`, which is what AVIF_BYTES
+// above uses, or an `idat` — an item data box, which is a child of `meta` and
+// never a box of its own at the top of a file. Reading meta's children means
+// stepping over the version and flags a full box writes before them, which is
+// the difference between finding the picture and deciding the file has none.
+//
+// Built out of the real file: the same brands, the same handler, item info and
+// item properties (`ispe` among them), and the same coded bytes — moved out of
+// the mdat and into an idat inside the metadata.
+// ---------------------------------------------------------------------------
+
+// The mdat above uses the 64-bit size form, so its payload starts sixteen bytes
+// in rather than eight.
+const AVIF_MDAT_BODY_OFFSET = AVIF_MDAT_OFFSET + 16;
+const AVIF_ITEM_DATA = AVIF_BYTES.slice(AVIF_MDAT_BODY_OFFSET);
+// hdlr, dinf, pitm and iinf, and the iprp holding ipco → ispe: everything meta
+// needs to describe a picture, taken from the file that describes one. The
+// `iloc` is left out rather than rebuilt, since its extents describe offsets
+// into a file that no longer exists — and nothing here resolves them.
+const AVIF_META_DESCRIPTION = concatBytes(
+  AVIF_BYTES.slice(36, 175),
+  AVIF_BYTES.slice(201, 461),
+);
+
+function isoBox(type: string, ...payload: Uint8Array[]): Uint8Array<ArrayBuffer> {
+  const body = concatBytes(...payload);
+  return concatBytes(be32(body.byteLength + 8), ascii(type), body);
+}
+
+type StaticAvif = {
+  // What the file holds its picture in, and where.
+  itemData?: Uint8Array;
+  mediaData?: Uint8Array;
+  // Bytes inside the meta box, after its last child, that are not a box at all.
+  smuggledInMeta?: Uint8Array;
+};
+
+function buildStaticAvif(parts: StaticAvif): {
+  file: Uint8Array<ArrayBuffer>;
+  metaSizeOffset: number;
+  itemDataSizeOffset: number;
+} {
+  const ftyp = AVIF_BYTES.slice(0, 24);
+  const itemData =
+    parts.itemData === undefined
+      ? new Uint8Array()
+      : isoBox("idat", parts.itemData);
+
+  const meta = isoBox(
+    "meta",
+    // A full box: a version byte and three flag bytes before the children.
+    bytes(0, 0, 0, 0),
+    AVIF_META_DESCRIPTION,
+    itemData,
+    parts.smuggledInMeta ?? new Uint8Array(),
+  );
+
+  const file = concatBytes(
+    ftyp,
+    meta,
+    parts.mediaData === undefined ? new Uint8Array() : isoBox("mdat", parts.mediaData),
+  );
+
+  return {
+    file,
+    metaSizeOffset: ftyp.byteLength,
+    itemDataSizeOffset:
+      ftyp.byteLength + 12 + AVIF_META_DESCRIPTION.byteLength,
+  };
+}
+
+const NESTED_IDAT = buildStaticAvif({ itemData: AVIF_ITEM_DATA });
+
+export const AVIF_NESTED_IDAT_BYTES = NESTED_IDAT.file;
+// The size field of the meta box, and of the idat box inside it.
+export const AVIF_NESTED_META_SIZE_OFFSET = NESTED_IDAT.metaSizeOffset;
+export const AVIF_NESTED_IDAT_SIZE_OFFSET = NESTED_IDAT.itemDataSizeOffset;
+
+// The same file with an item data box that holds nothing: a description of a
+// picture whose bytes never arrived, which tiles perfectly.
+export const AVIF_EMPTY_IDAT_BYTES = buildStaticAvif({
+  itemData: new Uint8Array(),
+}).file;
+
+// And the same, one level out: a top-level mdat with nothing in it.
+export const AVIF_EMPTY_MDAT_BYTES = buildStaticAvif({
+  mediaData: new Uint8Array(),
+}).file;
+
+// A file describing a picture it does not carry at all.
+export const AVIF_NO_DATA_BYTES = buildStaticAvif({}).file;
+
+// An item data box at the top of the file, where an item data box never is.
+export const AVIF_TOP_LEVEL_IDAT_BYTES = patchBytes(
+  AVIF_BYTES,
+  AVIF_MDAT_OFFSET + 4,
+  ...ascii("idat"),
+);
+
+// A document riding along *inside* the box tree rather than after it: the meta
+// box's size covers bytes that are not a box, which no walk of its children can
+// account for.
+export const AVIF_META_POLYGLOT_BYTES = buildStaticAvif({
+  itemData: AVIF_ITEM_DATA,
+  smuggledInMeta: SCRIPT_SVG_BYTES,
+}).file;
+
+// ---------------------------------------------------------------------------
 // A real PNG of a chosen size, carrying a marker a test can read back.
 //
 // The download tests are about transport — redirects, chunking, the size cap —

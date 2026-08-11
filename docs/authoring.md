@@ -153,6 +153,19 @@ signature with a document behind it, a length that does not match the bytes, or
 anything stapled to the end of a real image is refused — as a category, with
 nothing about the bytes.
 
+For AVIF that walk is a box tree, and every level of it has to tile its parent
+exactly, so a document hidden in the space a box's size claims and no child
+accounts for is refused the same way one stapled to the end of the file is. The
+picture's own bytes have to be there too: a still AVIF keeps them in a top-level
+`mdat` or in an `idat` inside the `meta` that describes them — which is a child
+of `meta`, past the version and flags a full box writes, and never a box of its
+own at the top of a file — and either way the box has to hold something. What is
+deliberately *not* done is resolving the item locations: nothing here decodes,
+and `iloc`'s extents only mean something to a decoder. A file that tiles at
+every level, names itself a still picture and declares a possible size, but
+points an item at nothing, is a broken image rather than a document wearing a
+picture's extension — and it is the second of those this check exists to catch.
+
 **A picture is bounded in pixels, not only in bytes.** A decompression bomb is a
 small file: every dimension in every one of these formats is a number in a
 header, and the pixels it asks for are conjured by whatever decodes it later — a

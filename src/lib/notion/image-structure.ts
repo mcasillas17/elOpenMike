@@ -610,6 +610,8 @@ const MOVIE_BOXES = new Set(["moov", "moof", "mfra", "mvex", "trak", "styp"]);
 // Enough for any real file's box tree, and a bound on the walk.
 const MAX_BOXES = 512;
 const MAX_BOX_DEPTH = 6;
+// A full box writes a version byte and three flag bytes before its contents.
+const FULL_BOX_HEADER = 4;
 
 type Box = { type: string; start: number; end: number; body: number };
 
@@ -669,18 +671,25 @@ function isCompleteAvif(bytes: Uint8Array): boolean {
   if (boxes.some((box) => MOVIE_BOXES.has(box.type))) return false;
 
   const meta = boxes.find((box) => box.type === "meta");
-  // A description with no picture behind it is a truncated file.
-  const data = boxes.some((box) => box.type === "mdat" || box.type === "idat");
-  if (!meta || !data) return false;
+  if (!meta) return false;
+  const described = readMeta(bytes, meta);
+  if (!described) return false;
+
+  // A description with no picture behind it is a truncated file. The coded
+  // bytes are either in a top-level `mdat` or in an `idat` inside the metadata
+  // that describes them, and either way there have to be some: a box holding
+  // nothing is a download that stopped after the description.
+  const mediaData = boxes.some(
+    (box) => box.type === "mdat" && box.end > box.body,
+  );
+  if (!mediaData && !described.itemData) return false;
 
   // Every `ispe` the metadata carries, not the first one: a file can describe
   // several items, and a thumbnail with an ordinary size says nothing about the
   // one beside it that asks for four gigapixels.
-  const sizes = pictureSizes(bytes, meta);
   return (
-    sizes !== undefined &&
-    sizes.length > 0 &&
-    sizes.every((size) => isSanePicture(size.width, size.height))
+    described.sizes.length > 0 &&
+    described.sizes.every((size) => isSanePicture(size.width, size.height))
   );
 }
 
@@ -700,43 +709,76 @@ function namesStaticAvif(bytes: Uint8Array, ftyp: Box): boolean {
   return brandsNameStaticAvif(brands);
 }
 
-// The `ispe` properties inside meta → iprp → ipco, which is where an AVIF says
-// how big its pictures are. A file whose metadata stops before this is a file
-// whose download stopped.
-function pictureSizes(
+// What the metadata says: the sizes of the pictures it describes, and whether
+// it carries their bytes itself.
+//
+// `meta` is a full box, so a version and three flag bytes sit between its header
+// and its children — read as a box header instead, they are a four-byte box of
+// type "" and the whole tree below is misread. Its children have to tile it
+// exactly, which is what refuses a document smuggled into the space a size
+// claims and nothing accounts for.
+//
+// The supported subset is deliberately narrow. A still AVIF keeps its coded
+// data in a top-level `mdat` or in an `idat` here, and both are proved to exist
+// and to hold something. What is *not* done is resolving the item locations —
+// walking `iloc`'s extents to prove the primary item's bytes lie inside that
+// data. Nothing here decodes, and an extent list only means anything to
+// something that does; by this point the file has had to tile exactly at every
+// level, name itself a still picture, and declare a size a picture can have. A
+// file that passes all of that and still points an item at nothing is a broken
+// image, which is a decoder's answer to give — not a document riding under a
+// picture's extension, which is what this check exists to refuse.
+function readMeta(
   bytes: Uint8Array,
   meta: Box,
-): Array<{ width: number; height: number }> | undefined {
-  // `meta` is a full box: a version and flags sit before its children.
-  return collectIspe(bytes, meta.body + 4, meta.end, 0);
+):
+  | { sizes: Array<{ width: number; height: number }>; itemData: boolean }
+  | undefined {
+  if (meta.body + FULL_BOX_HEADER > meta.end) return undefined;
+  const children = boxesIn(bytes, meta.body + FULL_BOX_HEADER, meta.end);
+  if (!children) return undefined;
+
+  let itemData = false;
+  for (const box of children) {
+    if (box.type !== "idat") continue;
+    // An item data box with nothing in it describes a picture whose bytes
+    // never arrived.
+    if (box.end <= box.body) return undefined;
+    itemData = true;
+  }
+
+  const sizes = collectIspe(bytes, children, 0);
+  return sizes === undefined ? undefined : { sizes, itemData };
 }
 
 // Only the containers on the path are descended into; an unknown box is a leaf
 // as far as this is concerned, so nothing is misread as a box tree.
 const ISPE_CONTAINERS = new Set(["iprp", "ipco"]);
 
+// The `ispe` properties inside meta → iprp → ipco, which is where an AVIF says
+// how big its pictures are. A file whose metadata stops before this is a file
+// whose download stopped.
 function collectIspe(
   bytes: Uint8Array,
-  from: number,
-  to: number,
+  boxes: readonly Box[],
   depth: number,
 ): Array<{ width: number; height: number }> | undefined {
-  if (depth > MAX_BOX_DEPTH || from > to) return undefined;
-  const boxes = boxesIn(bytes, from, to);
-  if (!boxes) return undefined;
-
   const sizes: Array<{ width: number; height: number }> = [];
+
   for (const box of boxes) {
     if (box.type === "ispe") {
       // A full box: version and flags, then two 32-bit dimensions.
-      if (box.body + 12 > box.end) return undefined;
+      if (box.body + FULL_BOX_HEADER + 8 > box.end) return undefined;
       sizes.push({
-        width: u32be(bytes, box.body + 4),
-        height: u32be(bytes, box.body + 8),
+        width: u32be(bytes, box.body + FULL_BOX_HEADER),
+        height: u32be(bytes, box.body + FULL_BOX_HEADER + 4),
       });
     }
     if (ISPE_CONTAINERS.has(box.type)) {
-      const found = collectIspe(bytes, box.body, box.end, depth + 1);
+      if (depth >= MAX_BOX_DEPTH) return undefined;
+      const children = boxesIn(bytes, box.body, box.end);
+      if (!children) return undefined;
+      const found = collectIspe(bytes, children, depth + 1);
       if (!found) return undefined;
       sizes.push(...found);
     }

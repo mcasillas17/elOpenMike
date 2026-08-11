@@ -12,10 +12,18 @@ import {
   patchBytes as patch,
   rawBytes as raw,
   AVIF_BYTES,
+  AVIF_EMPTY_IDAT_BYTES,
+  AVIF_EMPTY_MDAT_BYTES,
   AVIF_ISPE_HEIGHT_OFFSET,
   AVIF_ISPE_WIDTH_OFFSET,
   AVIF_MDAT_OFFSET,
+  AVIF_META_POLYGLOT_BYTES,
+  AVIF_NESTED_IDAT_BYTES,
+  AVIF_NESTED_IDAT_SIZE_OFFSET,
+  AVIF_NESTED_META_SIZE_OFFSET,
+  AVIF_NO_DATA_BYTES,
   AVIF_PREFIX,
+  AVIF_TOP_LEVEL_IDAT_BYTES,
   GIF87_BYTES,
   GIF89_BYTES,
   GIF_FIRST_BLOCK_OFFSET,
@@ -70,6 +78,7 @@ const VALID: Array<[ImageFormat, Uint8Array, string]> = [
   ["webp", WEBP_LOSSLESS_BYTES, "image/webp"],
   ["webp", WEBP_EXTENDED_BYTES, "image/webp"],
   ["avif", AVIF_BYTES, "image/avif"],
+  ["avif", AVIF_NESTED_IDAT_BYTES, "image/avif"],
 ];
 
 describe("a whole, well-formed file of each format", () => {
@@ -367,6 +376,91 @@ describe("AVIF structure", () => {
     expect(isCompleteImage("avif", patch(AVIF_BYTES, 252, ...ascii("free")))).toBe(
       false,
     );
+  });
+});
+
+// ISO base media lets a still image keep its coded bytes in either of two
+// places: a top-level `mdat`, or an `idat` inside the `meta` that describes it.
+// An item data box is a child of meta and never a box of its own at the top of
+// a file, and meta is a full box — a version and three flag bytes before its
+// children — so finding one means reading past those rather than treating the
+// first four bytes of the version as a box header.
+describe("where an AVIF keeps its picture", () => {
+  it("accepts one carried in an idat inside the metadata", () => {
+    expect(isCompleteImage("avif", AVIF_NESTED_IDAT_BYTES)).toBe(true);
+    expect(verifyImageFormat("image/avif", AVIF_NESTED_IDAT_BYTES)).toBe("avif");
+  });
+
+  it("refuses a description with no picture behind it at all", () => {
+    expect(isCompleteImage("avif", AVIF_NO_DATA_BYTES)).toBe(false);
+  });
+
+  it("refuses an item data box holding nothing", () => {
+    expect(isCompleteImage("avif", AVIF_EMPTY_IDAT_BYTES)).toBe(false);
+  });
+
+  it("refuses a media data box holding nothing", () => {
+    expect(isCompleteImage("avif", AVIF_EMPTY_MDAT_BYTES)).toBe(false);
+  });
+
+  // An `idat` is meaningful inside the metadata that locates it and nowhere
+  // else, so one at the top of a file is a box of arbitrary bytes wearing a
+  // name the check used to accept as a picture.
+  it("refuses an item data box at the top of the file", () => {
+    expect(isCompleteImage("avif", AVIF_TOP_LEVEL_IDAT_BYTES)).toBe(false);
+  });
+});
+
+describe("the bounds of an AVIF's metadata", () => {
+  const metaSize = (bytes: Uint8Array): number =>
+    (bytes[AVIF_NESTED_META_SIZE_OFFSET] << 24) +
+    (bytes[AVIF_NESTED_META_SIZE_OFFSET + 1] << 16) +
+    (bytes[AVIF_NESTED_META_SIZE_OFFSET + 2] << 8) +
+    bytes[AVIF_NESTED_META_SIZE_OFFSET + 3];
+
+  const withMetaSize = (size: number): Uint8Array =>
+    patch(
+      AVIF_NESTED_IDAT_BYTES,
+      AVIF_NESTED_META_SIZE_OFFSET,
+      (size >>> 24) & 0xff,
+      (size >>> 16) & 0xff,
+      (size >>> 8) & 0xff,
+      size & 0xff,
+    );
+
+  it("refuses a meta box its children do not tile exactly", () => {
+    const declared = metaSize(AVIF_NESTED_IDAT_BYTES);
+    for (const size of [declared - 4, declared + 4, 8, 10, 0x7fffffff]) {
+      expect(isCompleteImage("avif", withMetaSize(size))).toBe(false);
+    }
+  });
+
+  it("refuses an item data box that runs past the metadata holding it", () => {
+    expect(
+      isCompleteImage(
+        "avif",
+        patch(AVIF_NESTED_IDAT_BYTES, AVIF_NESTED_IDAT_SIZE_OFFSET, 0x00, 0x00, 0xf0, 0x00),
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses an item data box claiming less than its own header", () => {
+    expect(
+      isCompleteImage(
+        "avif",
+        patch(AVIF_NESTED_IDAT_BYTES, AVIF_NESTED_IDAT_SIZE_OFFSET, 0, 0, 0, 4),
+      ),
+    ).toBe(false);
+  });
+
+  // A document after the last box is refused by the top-level walk. One
+  // *inside* the box tree — bytes the meta box's size covers and no child
+  // accounts for — is the same trick one level down.
+  it("refuses a document smuggled inside the metadata", () => {
+    expect(isCompleteImage("avif", AVIF_META_POLYGLOT_BYTES)).toBe(false);
+    expect(() =>
+      verifyImageFormat("image/avif", AVIF_META_POLYGLOT_BYTES),
+    ).toThrow(ImageFormatError);
   });
 });
 
