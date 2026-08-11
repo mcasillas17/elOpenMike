@@ -244,29 +244,60 @@ export function openSafeTree(root: string, refuse: TreeRefusal): SafeTree {
     }
   }
 
+  // Holds a directory still for the length of one listing. O_DIRECTORY and
+  // O_NOFOLLOW make the open itself refuse anything that is not the plain
+  // directory that was just proved; on a platform with neither — Windows, where
+  // opening a directory fails anyway — the same question is asked with an
+  // lstat, which is the check that stands there in any case.
+  async function pinDirectory(
+    full: string,
+    relative: string,
+  ): Promise<{ stats: Stats; release: () => Promise<void> }> {
+    if (DIRECTORY_ONLY === 0) {
+      const stats = await look(full, relative);
+      if (stats === undefined) throw refuse.raced(relative);
+      if (!stats.isDirectory() || stats.isSymbolicLink()) {
+        throw refuse.notADirectory(relative);
+      }
+      return { stats, release: async () => undefined };
+    }
+
+    let handle: FileHandle;
+    try {
+      handle = await fs.open(full, READ_DIRECTORY);
+    } catch (error: unknown) {
+      const code = errno(error);
+      if (code === "ELOOP" || code === "ENOTDIR") {
+        throw refuse.notADirectory(relative);
+      }
+      throw refuse.unreadable(relative, "listed");
+    }
+
+    const release = () => handle.close().catch(() => undefined);
+    try {
+      const stats = await handle.stat();
+      if (!stats.isDirectory()) throw refuse.notADirectory(relative);
+      return { stats, release };
+    } catch (error: unknown) {
+      await release();
+      throw error;
+    }
+  }
+
   return {
     async list(relative: string): Promise<string[] | undefined> {
       const directory = await walk(relative, false);
       if (!directory.found) return undefined;
 
-      // Pinned open with the no-follow flags before it is listed, and compared
-      // with the path afterwards: the listing describes the directory that was
-      // proved, or it is not used at all.
-      let handle: FileHandle;
-      try {
-        handle = await fs.open(directory.path, READ_DIRECTORY);
-      } catch (error: unknown) {
-        const code = errno(error);
-        if (code === "ELOOP" || code === "ENOTDIR") {
-          throw refuse.notADirectory(relative);
-        }
-        throw refuse.unreadable(relative, "listed");
-      }
+      // Pinned before it is listed and compared with the path afterwards: the
+      // listing describes the directory that was proved, or it is not used at
+      // all. Where the platform can hold a directory open with the no-follow
+      // flags it is held; where it cannot — Windows has neither flag, and
+      // opening a directory there fails outright — the same comparison is made
+      // with two lstats, which is what stands in that case anyway.
+      const pin = await pinDirectory(directory.path, relative);
 
       try {
-        const pinned = await handle.stat();
-        if (!pinned.isDirectory()) throw refuse.notADirectory(relative);
-
         let names: string[];
         try {
           names = await fs.readdir(directory.path);
@@ -275,10 +306,10 @@ export function openSafeTree(root: string, refuse: TreeRefusal): SafeTree {
           throw refuse.unreadable(relative, "listed");
         }
 
-        assertSameInode(pinned, await look(directory.path, relative), relative);
+        assertSameInode(pin.stats, await look(directory.path, relative), relative);
         return names;
       } finally {
-        await handle.close().catch(() => undefined);
+        await pin.release();
       }
     },
 
