@@ -559,14 +559,29 @@ function readListItem(
 
   // GFM's checkbox is part of a bullet's content rather than its marker, which
   // is why a to-do and a bullet share a content column.
-  const checkbox = bullet ? CHECKBOX.exec(text) : undefined;
+  //
+  // It is also part of the item's *first line* and of nothing else. An item's
+  // text is not always one line — a shift+enter inside a Notion to-do, or a
+  // paragraph pasted into it, which the sync writes back out with the marker on
+  // the first line and the rest at the item's content column — and a pattern
+  // anchored to the end of the whole item never matches one of those. The item
+  // stopped being a to-do at that point: its checkbox became the first four
+  // characters of a bullet's text, where `[x]` opens no link and the inline
+  // reader refuses the post outright. So the marker is read off the first
+  // logical line, and every line after it stays the item's own text.
+  const lineBreak = text.indexOf("\n");
+  const firstLine = lineBreak === -1 ? text : text.slice(0, lineBreak);
+  // Kept with its leading newline, so the item's second line is still its
+  // second line once the marker in front of the first one is gone.
+  const continuation = lineBreak === -1 ? "" : text.slice(lineBreak);
+  const checkbox = bullet ? CHECKBOX.exec(firstLine) : undefined;
   if (checkbox) {
     return {
       block: {
         object: "block",
         type: "to_do",
         to_do: {
-          rich_text: inlineToRichText(checkbox[2] ?? "", {
+          rich_text: inlineToRichText(`${checkbox[2] ?? ""}${continuation}`, {
             line: bodyOffset + 1,
           }),
           checked: checkbox[1] !== " ",
