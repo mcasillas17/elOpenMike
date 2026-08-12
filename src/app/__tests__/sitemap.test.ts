@@ -15,14 +15,18 @@ describe("sitemap", () => {
     ).toBe(true);
   });
 
-  it("uses each post's frontmatter date for its blog url", () => {
+  // <lastmod> is the post's revision date where it has one, falling back to its
+  // publication date. Asserting `date` alone passed only while no post carried
+  // an `updated` — which stopped being true the first time a post synced from
+  // Notion. See sitemap-revised.test.ts for the fixture-driven cases.
+  it("uses each post's effective modification date for its blog url", () => {
     const entries = sitemap();
     for (const post of getAllPosts()) {
       const entry = entries.find(
         (e) => e.url === `https://elopenmike.com/blog/${post.slug}`,
       );
       expect(entry).toBeDefined();
-      expect(entry?.lastModified).toEqual(new Date(post.date));
+      expect(entry?.lastModified).toEqual(new Date(post.updated || post.date));
     }
   });
 
