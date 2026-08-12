@@ -29,7 +29,7 @@ export function Header() {
         <Link
           href={routes.home}
           aria-label="elOpenMike — home"
-          className="font-display text-lg font-extrabold"
+          className="inline-flex min-h-11 items-center font-display text-lg font-extrabold"
         >
           <span className="text-web-strong">el</span>Open<span className="text-spidey">Mike</span>
         </Link>
@@ -65,7 +65,7 @@ export function Header() {
             aria-expanded={open}
             aria-controls="mobile-nav"
             onClick={() => setOpen((o) => !o)}
-            className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-edge text-ink"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-edge text-ink sm:hidden"
           >
             <span aria-hidden="true">{open ? "✕" : "☰"}</span>
           </button>
@@ -81,7 +81,7 @@ export function Header() {
                   <Link
                     href={item.href}
                     onClick={() => setOpen(false)}
-                    className="block rounded-lg px-2 py-2 text-sm text-muted hover:bg-surface hover:text-ink"
+                    className="flex min-h-11 items-center rounded-lg px-2 text-sm text-muted hover:bg-surface hover:text-ink"
                   >
                     {item.label}
                   </Link>

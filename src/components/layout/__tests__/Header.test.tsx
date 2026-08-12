@@ -48,9 +48,12 @@ describe("Header", () => {
   it("toggles a mobile menu exposing the nav links", () => {
     render(<Header />);
     const toggle = screen.getByRole("button", { name: /menu/i });
+    expect(toggle).toHaveClass("h-11", "w-11");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByRole("link", { name: "Experience" }).length).toBeGreaterThan(1);
+    const experienceLinks = screen.getAllByRole("link", { name: "Experience" });
+    expect(experienceLinks.length).toBeGreaterThan(1);
+    expect(experienceLinks.at(-1)).toHaveClass("min-h-11");
   });
 });

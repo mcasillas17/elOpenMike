@@ -33,4 +33,9 @@ describe("PostCard", () => {
       screen.queryByRole("heading", { level: 2, name: "Demo Post" }),
     ).not.toBeInTheDocument();
   });
+
+  it("keeps tag links touch-sized", () => {
+    render(<PostCard post={post} />);
+    expect(screen.getByRole("link", { name: "AI" })).toHaveClass("min-h-11");
+  });
 });

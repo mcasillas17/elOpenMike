@@ -26,5 +26,6 @@ describe("FeaturedPost", () => {
       "href",
       "/blog/tag/ai",
     );
+    expect(screen.getByRole("link", { name: "AI" })).toHaveClass("min-h-11");
   });
 });

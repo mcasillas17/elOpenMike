@@ -129,7 +129,7 @@ export default async function PostPage({
         />
         <Link
           href={routes.blog}
-          className="rounded text-sm text-muted hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+          className="inline-flex min-h-11 items-center rounded text-sm text-muted hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
           ← Back to blog
         </Link>
@@ -150,7 +150,7 @@ export default async function PostPage({
               <Link
                 key={t}
                 href={routes.blogTag(tagSlug(t))}
-                className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+                className="inline-flex min-h-11 items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
               >
                 <Tag>{t}</Tag>
               </Link>

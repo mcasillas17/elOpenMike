@@ -41,7 +41,7 @@ export function FeaturedPost({ post }: { post: PostMeta }) {
             <Link
               key={tag}
               href={routes.blogTag(tagSlug(tag))}
-              className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+              className="inline-flex min-h-11 items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
             >
               <Tag>{tag}</Tag>
             </Link>

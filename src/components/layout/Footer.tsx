@@ -9,12 +9,12 @@ export function Footer() {
         <p className="text-sm text-muted">
           © {new Date().getFullYear()} {site.name}
         </p>
-        <ul className="flex gap-5">
+        <ul className="flex flex-wrap items-center justify-center gap-x-5">
           <li>
             <a
               href={site.resumeHref}
               download
-              className="text-sm text-muted transition-colors hover:text-web-strong"
+              className="inline-flex min-h-11 items-center text-sm text-muted transition-colors hover:text-web-strong"
             >
               Resume
             </a>
@@ -23,7 +23,7 @@ export function Footer() {
             <li key={s.href}>
               <a
                 href={s.href}
-                className="text-sm text-muted transition-colors hover:text-web-strong"
+                className="inline-flex min-h-11 items-center text-sm text-muted transition-colors hover:text-web-strong"
                 target={s.href.startsWith("http") ? "_blank" : undefined}
                 rel={s.href.startsWith("http") ? "noopener noreferrer" : undefined}
               >
@@ -34,7 +34,7 @@ export function Footer() {
           <li>
             <a
               href={routes.feed}
-              className="rounded text-sm text-muted transition-colors hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+              className="inline-flex min-h-11 items-center rounded text-sm text-muted transition-colors hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
             >
               RSS
             </a>

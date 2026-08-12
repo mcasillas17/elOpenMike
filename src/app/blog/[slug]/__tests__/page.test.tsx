@@ -41,6 +41,19 @@ describe("/blog/[slug] page", () => {
     }
   });
 
+  it("keeps back and topic links touch-sized", async () => {
+    render(await PostPage({ params: Promise.resolve({ slug: sample.slug }) }));
+
+    expect(screen.getByRole("link", { name: /back to blog/i })).toHaveClass(
+      "min-h-11",
+    );
+    if (sample.tags.length > 0) {
+      expect(screen.getByRole("link", { name: sample.tags[0] })).toHaveClass(
+        "min-h-11",
+      );
+    }
+  });
+
   it("calls notFound for an unknown slug (throws)", async () => {
     await expect(
       PostPage({ params: Promise.resolve({ slug: "nope-not-real" }) }),

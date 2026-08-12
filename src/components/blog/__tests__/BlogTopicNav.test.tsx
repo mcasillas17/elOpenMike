@@ -8,10 +8,10 @@ describe("BlogTopicNav", () => {
     render(<BlogTopicNav totalPosts={7} />);
 
     expect(screen.getByRole("navigation", { name: "Blog topics" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "All posts (7)" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(screen.getByRole("link", { name: "All posts (7)" }))
+      .toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "All posts (7)" }))
+      .toHaveClass("min-h-11");
   });
 
   it("marks the selected topic and retains a way back to all posts", () => {
