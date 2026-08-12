@@ -36,6 +36,9 @@ describe("PostCard", () => {
 
   it("keeps tag links touch-sized", () => {
     render(<PostCard post={post} />);
-    expect(screen.getByRole("link", { name: "AI" })).toHaveClass("min-h-11");
+    expect(screen.getByRole("link", { name: "AI" })).toHaveClass(
+      "min-h-11",
+      "min-w-11",
+    );
   });
 });

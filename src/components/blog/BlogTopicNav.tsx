@@ -11,7 +11,7 @@ export function BlogTopicNav({
 }) {
   const tags = getAllTags();
   const linkClass =
-    "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web";
+    "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border px-3 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web";
 
   return (
     <nav aria-label="Blog topics" className="mt-8">

@@ -50,6 +50,7 @@ describe("/blog/[slug] page", () => {
     if (sample.tags.length > 0) {
       expect(screen.getByRole("link", { name: sample.tags[0] })).toHaveClass(
         "min-h-11",
+        "min-w-11",
       );
     }
   });

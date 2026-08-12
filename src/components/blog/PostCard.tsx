@@ -38,7 +38,7 @@ export function PostCard({
             <Link
               key={t}
               href={routes.blogTag(tagSlug(t))}
-              className="inline-flex min-h-11 items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
             >
               <Tag>{t}</Tag>
             </Link>

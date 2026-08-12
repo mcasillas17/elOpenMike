@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("home renders and links to the blog", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await page.getByRole("link", { name: "Blog" }).first().click();
+  await page.getByRole("link", { name: "Writing" }).first().click();
   await expect(page).toHaveURL(/\/blog$/);
 });
 

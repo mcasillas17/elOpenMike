@@ -58,6 +58,12 @@ export const securityHeaders = [
 const nextConfig: NextConfig = {
   // Emit a self-contained server (.next/standalone) for a lean container image.
   output: "standalone",
+  // A git worktree sits below the primary checkout, whose lockfile otherwise
+  // wins automatic root detection. Pinning the app root keeps build artifacts
+  // (including standalone/server.js) inside the checkout that ran the build.
+  turbopack: {
+    root: process.cwd(),
+  },
   images: {
     // Serve images as-is. Avoids requiring `sharp` in the container (sharp's
     // build is intentionally blocked by our supply-chain allowlist). Hand-

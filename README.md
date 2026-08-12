@@ -17,6 +17,9 @@ pnpm start        # serve the production build the way the container does
 pnpm e2e          # Playwright, against that same server
 ```
 
+The E2E server defaults to port 3000. If another local process owns it, choose
+another explicitly, for example `E2E_PORT=3100 pnpm e2e`.
+
 `pnpm start` runs `.next/standalone/server.js` — the artifact the `Dockerfile`
 builds and Fly runs — after staging `public` and `.next/static` beside it
 exactly as the `Dockerfile` does. (`next start` does not work under
@@ -38,6 +41,14 @@ Posts are written in Notion and synced into `content/blog/` by
 `.github/workflows/sync-content.yml` (every 10 minutes, plus a manual
 "Run workflow" button). See [`docs/authoring.md`](docs/authoring.md) for the
 authoring workflow.
+
+The public writing experience lives at `/blog`: the newest post is featured,
+topic counts link into filtered archives, and each article provides updated and
+reading-time context, section permalinks, copyable syntax-highlighted code,
+related reading, chronological navigation, RSS, and email follow-up. Rich
+Notion content is rendered responsively, including images, tables, and task
+lists. Search, pagination, a table of contents, and reading progress are
+deliberately deferred until the archive or article length makes them useful.
 
 Required GitHub secrets:
 

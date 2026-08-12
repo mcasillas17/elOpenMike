@@ -11,7 +11,7 @@ import { defineConfig, devices } from "@playwright/test";
 // `pnpm start` stages exactly what the Dockerfile stages and then starts that
 // server, building first when there is nothing to stage, so this works from
 // the clean checkout CI's e2e job runs in.
-const PORT = 3000;
+const PORT = Number(process.env.E2E_PORT ?? 3000);
 const HOSTNAME = "127.0.0.1";
 const baseURL = `http://${HOSTNAME}:${PORT}`;
 

@@ -11,7 +11,7 @@ describe("BlogTopicNav", () => {
     expect(screen.getByRole("link", { name: "All posts (7)" }))
       .toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "All posts (7)" }))
-      .toHaveClass("min-h-11");
+      .toHaveClass("min-h-11", "min-w-11");
   });
 
   it("marks the selected topic and retains a way back to all posts", () => {
