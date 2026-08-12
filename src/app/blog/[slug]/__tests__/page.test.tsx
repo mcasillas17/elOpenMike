@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { getAllPosts, getPostSlugs } from "@/lib/blog";
 
 vi.mock("next-mdx-remote/rsc", () => ({
@@ -27,6 +28,17 @@ describe("/blog/[slug] page", () => {
     });
     expect(meta.title).toBe(sample.title);
     expect(meta.description).toBe(sample.excerpt);
+  });
+
+  it("shows the excerpt and publication context before the article body", async () => {
+    render(await PostPage({ params: Promise.resolve({ slug: sample.slug }) }));
+
+    expect(screen.getByText(sample.excerpt)).toBeInTheDocument();
+    expect(screen.getByText(/Published/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${sample.readingMinutes} min read`, "i"))).toBeInTheDocument();
+    if (sample.updated && sample.updated !== sample.date) {
+      expect(screen.getByText(/Updated/i)).toBeInTheDocument();
+    }
   });
 
   it("calls notFound for an unknown slug (throws)", async () => {

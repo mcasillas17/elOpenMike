@@ -28,11 +28,15 @@ describe("PostNav", () => {
       "href",
       "/blog/older",
     );
+    expect(screen.getByText(/Newer post/, { selector: "span.text-xs" })).toBeInTheDocument();
+    expect(screen.getByText(/Older post/, { selector: "span.text-xs" })).toBeInTheDocument();
+    expect(screen.queryByText(/Previous/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Next/)).not.toBeInTheDocument();
   });
 
   it("renders only the side that exists", () => {
     render(<PostNav next={post("older", "Older post")} />);
-    expect(screen.queryByText(/Previous/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Newer post/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Older post/ })).toBeInTheDocument();
   });
 

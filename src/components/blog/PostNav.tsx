@@ -17,7 +17,7 @@ export function PostNav({ prev, next }: { prev?: PostMeta; next?: PostMeta }) {
           className="rounded-xl border border-edge p-4 hover:border-web focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
           <span className="text-xs uppercase tracking-[0.2em] text-muted">
-            ← Previous
+            ← Newer post
           </span>
           <span className="mt-1 block font-display font-bold text-ink">
             {prev.title}
@@ -30,7 +30,7 @@ export function PostNav({ prev, next }: { prev?: PostMeta; next?: PostMeta }) {
           className="rounded-xl border border-edge p-4 hover:border-web focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web sm:col-start-2 sm:text-right"
         >
           <span className="text-xs uppercase tracking-[0.2em] text-muted">
-            Next →
+            Older post →
           </span>
           <span className="mt-1 block font-display font-bold text-ink">
             {next.title}
