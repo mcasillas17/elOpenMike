@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { devices, test, expect } from "@playwright/test";
 
 test("serves an RSS feed with at least one item", async ({ request }) => {
   const response = await request.get("/feed.xml");
@@ -139,40 +139,56 @@ test("a reader can copy a highlighted code block", async ({ context, page }) => 
   await expect(codeBlock.getByRole("status")).toHaveText("Code copied");
 });
 
-test("mobile writing controls meet the 44px target without widening the page", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/blog");
+test.describe("touch reader", () => {
+  const iPhone = devices["iPhone 13"];
+  test.use({
+    viewport: iPhone.viewport,
+    deviceScaleFactor: iPhone.deviceScaleFactor,
+    hasTouch: iPhone.hasTouch,
+    isMobile: iPhone.isMobile,
+    userAgent: iPhone.userAgent,
+  });
 
-  const targets = [
-    page.getByRole("button", { name: "Menu" }),
-    page.getByRole("link", { name: /All posts/ }),
-    page.locator('article a[href^="/blog/tag/"]').first(),
-  ];
+  test("mobile controls meet the 44px target without widening the page", async ({
+    page,
+  }) => {
+    await page.goto("/blog");
 
-  for (const target of targets) {
-    const box = await target.boundingBox();
-    expect(box?.height).toBeGreaterThanOrEqual(44);
-    expect(box?.width).toBeGreaterThanOrEqual(44);
-  }
+    const targets = [
+      page.getByRole("button", { name: "Menu" }),
+      page.getByRole("link", { name: /All posts/ }),
+      page.locator('article a[href^="/blog/tag/"]').first(),
+    ];
 
-  await page.locator("article h2 a").first().click();
-  for (const target of [
-    page.getByRole("link", { name: /Back to blog/i }),
-    page.getByRole("button", { name: "Copy code" }).first(),
-    page.getByRole("link", { name: "Link to this section" }).first(),
-  ]) {
-    const box = await target.boundingBox();
-    expect(box?.height).toBeGreaterThanOrEqual(44);
-    expect(box?.width).toBeGreaterThanOrEqual(44);
-  }
+    for (const target of targets) {
+      const box = await target.boundingBox();
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+    }
 
-  const pageWidths = await page.evaluate(() => ({
-    client: document.documentElement.clientWidth,
-    scroll: document.documentElement.scrollWidth,
-  }));
-  expect(pageWidths.scroll).toBeLessThanOrEqual(pageWidths.client);
+    await page.locator("article h2 a").first().click();
+    const permalink = page
+      .getByRole("link", { name: "Link to this section" })
+      .first();
+    await expect(permalink).toBeVisible();
+    await expect(permalink).toHaveCSS("opacity", "1");
+
+    for (const target of [
+      page.getByRole("link", { name: /Back to blog/i }),
+      page.getByRole("button", { name: "Copy code" }).first(),
+      permalink,
+    ]) {
+      const box = await target.boundingBox();
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+    }
+
+    const pageWidths = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(pageWidths.scroll).toBeLessThanOrEqual(pageWidths.client);
+  });
 });
 
 test("the homepage links to the blog from the writing section", async ({

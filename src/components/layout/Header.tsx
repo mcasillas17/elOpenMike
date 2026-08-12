@@ -15,6 +15,18 @@ export function Header() {
   const active = useActiveSection(ids);
   const [open, setOpen] = useState(false);
 
+  function navState(href: string) {
+    const id = href.split("#")[1];
+    const routeActive =
+      href === pathname ||
+      (!href.includes("#") &&
+        href !== routes.home &&
+        pathname.startsWith(`${href}/`));
+    const sectionActive =
+      pathname === routes.home && id !== undefined && active === id;
+    return { current: routeActive, active: routeActive || sectionActive };
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -37,20 +49,16 @@ export function Header() {
         <nav aria-label="Site navigation" className="flex items-center gap-6">
           <ul className="hidden items-center gap-6 sm:flex">
             {site.nav.map((item) => {
-              const id = item.href.split("#")[1];
-              const isRouteActive =
-                item.href === pathname ||
-                (!item.href.includes("#") &&
-                  item.href !== routes.home &&
-                  pathname.startsWith(`${item.href}/`));
-              const isActive = isRouteActive || (id !== undefined && active === id);
+              const state = navState(item.href);
               return (
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    aria-current={isRouteActive ? "page" : undefined}
+                    aria-current={state.current ? "page" : undefined}
                     className={`text-sm transition-colors ${
-                      isActive ? "text-web-strong" : "text-muted hover:text-ink"
+                      state.active
+                        ? "text-web-strong"
+                        : "text-muted hover:text-ink"
                     }`}
                   >
                     {item.label}
@@ -76,17 +84,25 @@ export function Header() {
         <div id="mobile-nav" className="sm:hidden border-t border-edge bg-canvas">
           <Container className="py-3">
             <ul className="flex flex-col gap-1">
-              {site.nav.map((item) => (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-11 items-center rounded-lg px-2 text-sm text-muted hover:bg-surface hover:text-ink"
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
+              {site.nav.map((item) => {
+                const state = navState(item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={state.current ? "page" : undefined}
+                      onClick={() => setOpen(false)}
+                      className={`flex min-h-11 items-center rounded-lg px-2 text-sm ${
+                        state.active
+                          ? "bg-surface text-web-strong"
+                          : "text-muted hover:bg-surface hover:text-ink"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </Container>
         </div>

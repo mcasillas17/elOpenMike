@@ -41,9 +41,33 @@ describe("CodeBlock", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(
       "Copy failed. Select the code and copy it manually.",
     );
-    expect(screen.getByRole("button", { name: "Copy code" })).toBeInTheDocument();
+    expect(status).not.toHaveClass("sr-only");
+    expect(
+      screen.getByRole("button", { name: "Try copy again" }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["python", "Python"],
+    ["go", "Go"],
+    ["rust", "Rust"],
+    ["java", "Java"],
+    ["cpp", "C++"],
+    ["csharp", "C#"],
+    ["sql", "SQL"],
+    ["yaml", "YAML"],
+    ["diff", "Diff"],
+  ])("labels Notion's %s fence as %s", (language, label) => {
+    render(
+      <CodeBlock>
+        <code data-language={language}>sample</code>
+      </CodeBlock>,
+    );
+
+    expect(screen.getByText(label)).toBeInTheDocument();
   });
 });

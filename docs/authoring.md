@@ -13,6 +13,13 @@ It goes live within ~15 minutes. To publish immediately, open the repo's
 **Actions → Sync content from Notion → Run workflow** button; that cuts it to
 about 5 minutes (the CI and deploy floor).
 
+The site derives an article's **Updated** date from Notion's last-edited time;
+there is no extra property to maintain. It only shows the revision label when
+that day differs from **Published**. The article's related-reading section is
+also automatic: posts sharing the most tags are preferred, with newer matches
+first. Accurate, focused tags therefore improve both topic archives and what a
+reader sees next.
+
 ## Formatting on your phone
 
 You never type markdown. Use Notion's own formatting — these shortcuts convert

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { getAllPosts, getPostSlugs } from "@/lib/blog";
 
 vi.mock("next-mdx-remote/rsc", () => ({
@@ -53,6 +53,19 @@ describe("/blog/[slug] page", () => {
         "min-w-11",
       );
     }
+  });
+
+  it("owns the post header, prose footer, and chronology as one article", async () => {
+    render(await PostPage({ params: Promise.resolve({ slug: sample.slug }) }));
+
+    const article = screen.getByRole("article");
+    expect(
+      within(article).getByRole("heading", { level: 1, name: sample.title }),
+    ).toBeInTheDocument();
+    expect(article.querySelector("footer")).not.toBeNull();
+    expect(
+      within(article).queryByRole("navigation", { name: "More posts" }),
+    ).toBeInTheDocument();
   });
 
   it("calls notFound for an unknown slug (throws)", async () => {

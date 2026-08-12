@@ -31,9 +31,10 @@ describe("Header", () => {
       "/blog",
     );
     expect(screen.queryByRole("link", { name: "Blog" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Writing" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    const writing = screen.getByRole("link", { name: "Writing" });
+    expect(writing).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Experience" })).not.toHaveClass(
+      "text-web-strong",
     );
   });
 
@@ -55,5 +56,18 @@ describe("Header", () => {
     const experienceLinks = screen.getAllByRole("link", { name: "Experience" });
     expect(experienceLinks.length).toBeGreaterThan(1);
     expect(experienceLinks.at(-1)).toHaveClass("min-h-11");
+  });
+
+  it("marks Writing current in both desktop and mobile navigation", () => {
+    pathname = "/blog/an-article";
+    render(<Header />);
+    fireEvent.click(screen.getByRole("button", { name: /menu/i }));
+
+    const links = screen.getAllByRole("link", { name: "Writing" });
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link).toHaveAttribute("aria-current", "page");
+      expect(link).toHaveClass("text-web-strong");
+    }
   });
 });

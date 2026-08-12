@@ -12,8 +12,13 @@ type CopyState = "idle" | "copied" | "error";
 
 const languageLabels: Record<string, string> = {
   bash: "Bash",
+  cpp: "C++",
+  csharp: "C#",
   css: "CSS",
+  diff: "Diff",
+  go: "Go",
   html: "HTML",
+  java: "Java",
   javascript: "JavaScript",
   js: "JavaScript",
   json: "JSON",
@@ -21,12 +26,16 @@ const languageLabels: Record<string, string> = {
   markdown: "Markdown",
   md: "Markdown",
   plaintext: "Plain text",
+  python: "Python",
+  rust: "Rust",
   shell: "Shell",
   sh: "Shell",
   text: "Plain text",
   ts: "TypeScript",
   tsx: "TSX",
   typescript: "TypeScript",
+  sql: "SQL",
+  yaml: "YAML",
 };
 
 function languageFrom(children: ComponentProps<"pre">["children"]) {
@@ -64,7 +73,11 @@ export function CodeBlock({ children, className, ...props }: ComponentProps<"pre
           onClick={copyCode}
           className="inline-flex min-h-11 items-center rounded px-2 text-xs font-semibold text-muted transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
-          {copyState === "copied" ? "Copied" : "Copy code"}
+          {copyState === "copied"
+            ? "Copied"
+            : copyState === "error"
+              ? "Try copy again"
+              : "Copy code"}
         </button>
       </div>
       <pre
@@ -75,7 +88,14 @@ export function CodeBlock({ children, className, ...props }: ComponentProps<"pre
         {children}
       </pre>
       {copyState !== "idle" && (
-        <span className="sr-only" role="status">
+        <span
+          className={
+            copyState === "error"
+              ? "block border-t border-edge px-3 py-2 text-xs text-spidey-strong"
+              : "sr-only"
+          }
+          role="status"
+        >
           {copyState === "copied"
             ? "Code copied"
             : "Copy failed. Select the code and copy it manually."}
