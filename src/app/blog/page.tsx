@@ -33,9 +33,9 @@ export default function BlogPage() {
         <div className="mt-8">
           <FeaturedPost post={posts[0]} />
           <div className="mt-6 flex flex-col">
-          {posts.slice(1).map((p) => (
-            <PostCard key={p.slug} post={p} />
-          ))}
+            {posts.slice(1).map((p) => (
+              <PostCard key={p.slug} post={p} />
+            ))}
           </div>
         </div>
       )}

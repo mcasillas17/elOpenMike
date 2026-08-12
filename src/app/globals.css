@@ -96,21 +96,60 @@ html.js .reveal.is-visible {
   }
 }
 
-/* Heading anchors: hidden until the heading is hovered or the link is focused,
-   so they never clutter the prose but stay keyboard-reachable. */
+/* Keep long-form copy at a comfortable measure and increase it slightly on
+   larger screens without squeezing article headers and footers. */
+.blog-prose {
+  max-width: 68ch;
+}
+
+@media (min-width: 40rem) {
+  .blog-prose {
+    font-size: 1.125rem;
+  }
+}
+
+/* Place section permalinks beside headings so the link glyph is not announced
+   as part of the heading. The full 44px control remains easy to tap. */
+.heading-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.75rem;
+  column-gap: 0.25rem;
+  align-items: baseline;
+}
+
 .heading-anchor {
-  margin-left: 0.35rem;
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
   opacity: 0;
   text-decoration: none;
   color: var(--color-muted);
   transition: opacity 150ms ease;
 }
 
-h2:hover > .heading-anchor,
-h3:hover > .heading-anchor,
-h4:hover > .heading-anchor,
+.heading-group:hover > .heading-anchor,
 .heading-anchor:focus-visible {
   opacity: 1;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .heading-anchor {
+    opacity: 1;
+  }
+}
+
+/* A fixed fade communicates horizontal overflow without obscuring code. */
+.code-block-shell::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1.5rem;
+  height: calc(100% - 2.75rem);
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, #0d1117);
 }
 
 /* Keep a linked heading clear of the sticky header when jumped to. */

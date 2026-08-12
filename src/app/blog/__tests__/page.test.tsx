@@ -30,9 +30,12 @@ const fixture: PostMeta[] = [
 describe("/blog page", () => {
   it("renders the heading and a card per post", () => {
     vi.mocked(blog.getAllPosts).mockReturnValue(fixture);
+    vi.mocked(blog.getAllTags).mockReturnValue([
+      { name: "AI", slug: "ai", count: 1 },
+    ]);
     render(<BlogPage />);
     expect(
-      screen.getByRole("heading", { level: 1, name: "Blog" }),
+      screen.getByRole("heading", { level: 1, name: "Writing" }),
     ).toBeInTheDocument();
     for (const p of fixture) {
       expect(screen.getByRole("link", { name: p.title })).toHaveAttribute(
@@ -44,6 +47,7 @@ describe("/blog page", () => {
 
   it("shows an empty state when there are no posts", () => {
     vi.mocked(blog.getAllPosts).mockReturnValue([]);
+    vi.mocked(blog.getAllTags).mockReturnValue([]);
     render(<BlogPage />);
     expect(screen.getByText(/no posts yet/i)).toBeInTheDocument();
   });

@@ -90,10 +90,16 @@ export default async function PostPage({
           [
             rehypeAutolinkHeadings,
             {
-              behavior: "append",
+              behavior: "after",
+              group: {
+                type: "element",
+                tagName: "div",
+                properties: { className: ["heading-group"] },
+                children: [],
+              },
               properties: {
-                className: "heading-anchor",
-                "aria-label": "Link to this section",
+                className: ["heading-anchor"],
+                ariaLabel: "Link to this section",
               },
               content: { type: "text", value: "#" },
             },
