@@ -14,7 +14,7 @@ export function Writing() {
     <Section id="writing" eyebrow="Writing" title="Latest posts">
       <div className="flex flex-col">
         {posts.map((post) => (
-          <PostCard key={post.slug} post={post} />
+          <PostCard key={post.slug} post={post} headingLevel={3} />
         ))}
       </div>
       <div className="mt-8">

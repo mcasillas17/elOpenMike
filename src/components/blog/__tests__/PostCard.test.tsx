@@ -23,4 +23,14 @@ describe("PostCard", () => {
     expect(screen.getByText("AI")).toBeInTheDocument();
     expect(screen.getByText(/min read/)).toBeInTheDocument();
   });
+
+  it("uses the requested heading level when nested under a section title", () => {
+    render(<PostCard post={post} headingLevel={3} />);
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Demo Post" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { level: 2, name: "Demo Post" }),
+    ).not.toBeInTheDocument();
+  });
 });

@@ -1,6 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Header } from "@/components/layout/Header";
+
+let pathname = "/";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => pathname,
+}));
+
+beforeEach(() => {
+  pathname = "/";
+});
 
 describe("Header", () => {
   it("renders the brand wordmark and a nav link to Experience", () => {
@@ -11,6 +21,20 @@ describe("Header", () => {
     expect(
       screen.getByRole("link", { name: "Experience" }),
     ).toHaveAttribute("href", "/#experience");
+  });
+
+  it("uses one Writing destination for the blog", () => {
+    pathname = "/blog";
+    render(<Header />);
+    expect(screen.getByRole("link", { name: "Writing" })).toHaveAttribute(
+      "href",
+      "/blog",
+    );
+    expect(screen.queryByRole("link", { name: "Blog" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Writing" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("marks the current section's nav link as active", () => {
