@@ -9,7 +9,7 @@ export type About = {
 export const about: About = {
   headline: "Builder, lifter, occasional comedian",
   bio: [
-    "I'm a Software Engineer II at Microsoft in Redmond. I'm passionate about AI-powered systems, distributed systems, data-grounded analytics, and observability — building services that stay fast, scalable, and understandable as they grow. Over six years at Microsoft I've shipped across telemetry SDKs, calendar & scheduling, and large-scale messaging and campaign platforms. Computer Engineering, ITAM.",
+    "I'm a Software Engineer II at Microsoft in Redmond. I'm passionate about AI-powered systems, distributed systems, data-grounded analytics, and observability — building services that stay fast, scalable, and understandable as they grow. Since joining Microsoft in 2018, I've shipped across telemetry SDKs, calendar & scheduling, and large-scale messaging and campaign platforms. Computer Engineering, ITAM.",
     "Off the clock I'm at the gym, deep in a movie or TV rabbit hole, or out at an open mic.",
   ],
   turing: {

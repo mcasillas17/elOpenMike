@@ -48,6 +48,7 @@ export function Experience() {
         <Button href={site.resumeHref} download>
           Download résumé (PDF)
         </Button>
+        <p className="mt-2 text-sm text-muted">Resume updated August 2026</p>
       </div>
     </Section>
   );

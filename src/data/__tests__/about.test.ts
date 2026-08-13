@@ -10,4 +10,9 @@ describe("about data", () => {
     expect(Array.isArray(about.facts)).toBe(true);
     expect(about.facts.length).toBeGreaterThan(0);
   });
+
+  it("describes Microsoft tenure from its factual start year", () => {
+    expect(about.bio.join(" ")).toContain("Since joining Microsoft in 2018");
+    expect(about.bio.join(" ")).not.toContain("Over six years at Microsoft");
+  });
 });
