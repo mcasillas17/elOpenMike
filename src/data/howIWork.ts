@@ -2,6 +2,7 @@ import type { Tint } from "@/lib/projectVisuals";
 
 export type WorkingEvidence = {
   label: string;
+  detail: string;
   href: string;
 };
 
@@ -26,6 +27,8 @@ export const howIWork: readonly WorkingPrinciple[] = [
     evidence: [
       {
         label: "TuringAgent architecture",
+        detail:
+          "TuringAgent splits ownership across the orchestrator, agent runtime, MCP services, and client.",
         href: "https://github.com/mcasillas17/TuringAgent/blob/main/docs/architecture/tech-stack.md",
       },
     ],
@@ -39,6 +42,8 @@ export const howIWork: readonly WorkingPrinciple[] = [
     evidence: [
       {
         label: "Approval-gated file tools",
+        detail:
+          "Sandboxed file changes require approval bound to the requested tool and arguments.",
         href: "https://github.com/mcasillas17/TuringAgent/blob/main/docs/mcp-security-and-integration.md",
       },
     ],
@@ -52,10 +57,12 @@ export const howIWork: readonly WorkingPrinciple[] = [
     evidence: [
       {
         label: "TuringAgent runtime",
+        detail: "The orchestrator owns events and audit records for each run.",
         href: "https://github.com/mcasillas17/TuringAgent",
       },
       {
         label: "Telemetry note",
+        detail: "It starts from error rate by route and slow dependencies.",
         href: "/blog/observability-engineers-read",
       },
     ],
@@ -64,15 +71,19 @@ export const howIWork: readonly WorkingPrinciple[] = [
     number: "04",
     title: "Write things down for the handoff",
     description:
-      "For cross-team platform work, I pair reusable APIs and migrations that avoid disrupting downstream consumers with written architecture, security, and verification guidance.",
+      "In cross-team platform work, I’ve contributed reusable APIs, migrations designed not to disrupt downstream consumers, and partner-facing documentation. Separately, TuringAgent publishes its architecture, security model, and verification steps.",
     tint: "purple",
     evidence: [
       {
-        label: "Platform APIs and migrations",
-        href: "/#experience",
+        label: "Microsoft résumé",
+        detail:
+          "Reusable APIs, large migrations, and partner-facing documentation from Microsoft platform work.",
+        href: "/resume.pdf",
       },
       {
         label: "TuringAgent docs and checks",
+        detail:
+          "Architecture, security, and a test/build/smoke verification matrix live with the project.",
         href: "https://github.com/mcasillas17/TuringAgent#documentation",
       },
     ],

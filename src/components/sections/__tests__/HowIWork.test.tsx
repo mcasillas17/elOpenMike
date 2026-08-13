@@ -16,6 +16,7 @@ describe("HowIWork", () => {
     ).toBeInTheDocument();
 
     for (const principle of howIWork) {
+      expect(principle.evidence.length).toBeGreaterThan(0);
       expect(
         within(section as HTMLElement).getByRole("heading", {
           name: principle.title,
@@ -26,11 +27,22 @@ describe("HowIWork", () => {
       ).toBeInTheDocument();
 
       for (const evidence of principle.evidence) {
+        const external = evidence.href.startsWith("http");
+        const link = within(section as HTMLElement).getByRole("link", {
+          name: external
+            ? `${evidence.label} opens in a new tab`
+            : evidence.label,
+        });
+
+        expect(link).toHaveAttribute("href", evidence.href);
         expect(
-          within(section as HTMLElement).getByRole("link", {
-            name: evidence.label,
-          }),
-        ).toHaveAttribute("href", evidence.href);
+          within(section as HTMLElement).getByText(evidence.detail),
+        ).toBeInTheDocument();
+
+        if (external) {
+          expect(link).toHaveAttribute("target", "_blank");
+          expect(link).toHaveAttribute("rel", "noopener noreferrer");
+        }
       }
     }
   });
@@ -39,7 +51,11 @@ describe("HowIWork", () => {
     render(<HowIWork />);
 
     for (const evidence of howIWork.flatMap((principle) => principle.evidence)) {
-      const link = screen.getByRole("link", { name: evidence.label });
+      const link = screen.getByRole("link", {
+        name: evidence.href.startsWith("http")
+          ? `${evidence.label} opens in a new tab`
+          : evidence.label,
+      });
       expect(link).toHaveClass("min-h-11", "focus-visible:outline");
     }
   });

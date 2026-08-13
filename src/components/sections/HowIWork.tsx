@@ -15,9 +15,12 @@ function EvidenceLink({ href, label }: { href: string; label: string }) {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
+        aria-label={`${label} opens in a new tab`}
         className={EVIDENCE_LINK_CLASS}
       >
-        {label} <span aria-hidden="true">↗</span>
+        {label}
+        <span className="sr-only"> opens in a new tab</span>
+        <span aria-hidden="true"> ↗</span>
       </a>
     );
   }
@@ -66,10 +69,18 @@ export function HowIWork() {
                   <p className="mt-3 max-w-prose text-sm leading-6 text-muted sm:text-base">
                     {principle.description}
                   </p>
-                  <div className="mt-auto flex flex-wrap gap-x-5 gap-y-1 pt-5">
-                    {principle.evidence.map((evidence) => (
-                      <EvidenceLink key={evidence.href} {...evidence} />
-                    ))}
+                  <div className="mt-auto pt-5">
+                    <p className="font-display text-[10px] font-black uppercase tracking-[0.18em] text-ink">
+                      Evidence
+                    </p>
+                    <ul className="mt-1.5 space-y-2">
+                      {principle.evidence.map((evidence) => (
+                        <li key={evidence.href}>
+                          <EvidenceLink {...evidence} />
+                          <p className="text-xs leading-5 text-muted">{evidence.detail}</p>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               </ComicPanel>

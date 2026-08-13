@@ -10,8 +10,11 @@ test("How I work is reachable after projects with usable evidence links", async 
   await expect(section.getByRole("heading", { name: "How I work" })).toBeVisible();
 
   const evidence = section.getByRole("link", {
-    name: "TuringAgent architecture",
+    name: "TuringAgent architecture opens in a new tab",
   });
+  await expect(section.getByText("TuringAgent splits ownership across the orchestrator, agent runtime, MCP services, and client.")).toBeVisible();
+  await expect(evidence).toHaveAttribute("target", "_blank");
+  await expect(evidence).toHaveAttribute("rel", "noopener noreferrer");
   await evidence.focus();
   await expect(evidence).toBeFocused();
 
