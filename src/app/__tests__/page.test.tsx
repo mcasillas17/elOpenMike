@@ -25,4 +25,14 @@ describe("Home page", () => {
     const { container } = render(<Home />);
     expect(container.querySelector("#writing")).not.toBeNull();
   });
+
+  it("places How I work after projects and before the supporting sections", () => {
+    const { container } = render(<Home />);
+    const sections = Array.from(container.querySelectorAll("section"));
+    const ids = sections.map((section) => section.id);
+
+    expect(ids.indexOf("projects")).toBeLessThan(ids.indexOf("how-i-work"));
+    expect(ids.indexOf("how-i-work")).toBeLessThan(ids.indexOf("skills"));
+    expect(ids.indexOf("how-i-work")).toBeLessThan(ids.indexOf("about"));
+  });
 });
