@@ -51,7 +51,7 @@ export const experience: Role[] = [
     highlights: [
       "Contributed to the general-availability release of a scheduling service for enterprise customers.",
       "Decoupled scheduling services to expose reusable APIs for other Outlook products.",
-      "Implemented a time-suggestions API used by Outlook Mobile on iOS and web, including flexible working hours in the Find Meeting Times API.",
+      "Improved algorithms in a time-suggestions API used by Outlook Mobile on iOS and web, and added flexible working-hours support to the Find Meeting Times API.",
     ],
     stack: ["C#", "REST APIs"],
   },

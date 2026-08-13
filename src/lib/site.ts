@@ -55,7 +55,7 @@ export const site = {
     "I build AI-powered, distributed systems — services that stay fast, scalable, and observable as they grow.",
   tagline: "Builder by day, open-mic by night.",
   availability:
-    "Interested in senior backend, platform, or AI-infrastructure opportunities? Let’s talk.",
+    "Open to conversations about senior backend, platform, and AI-infrastructure opportunities.",
   intro:
     "I ship software, lift heavy, and occasionally make rooms laugh. Software Engineer focused on building things that work — and a few that web-sling.",
   resumeHref: routes.resume,

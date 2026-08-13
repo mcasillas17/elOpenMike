@@ -10,6 +10,9 @@ describe("Hero", () => {
     expect(screen.getByText(site.headline)).toBeInTheDocument();
     expect(screen.getByText(site.tagline)).toBeInTheDocument();
     expect(screen.getByText(site.availability)).toBeInTheDocument();
+    expect(site.availability).toBe(
+      "Open to conversations about senior backend, platform, and AI-infrastructure opportunities.",
+    );
   });
 
   it("offers recruiter-ready resume and contact CTAs", () => {
