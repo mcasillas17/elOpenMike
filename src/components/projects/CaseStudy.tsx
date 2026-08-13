@@ -34,6 +34,11 @@ function ItemList({ items }: { items: string[] }) {
   );
 }
 
+function compactStatus(status: string) {
+  const firstSentenceEnd = status.indexOf(". ");
+  return firstSentenceEnd === -1 ? status : status.slice(0, firstSentenceEnd + 1);
+}
+
 export function CaseStudy({ caseStudy }: Props) {
   return (
     <div className="mt-14 space-y-14">
@@ -44,6 +49,18 @@ export function CaseStudy({ caseStudy }: Props) {
             {caseStudy.problem}
           </p>
         </ComicPanel>
+        <aside
+          aria-label="Current status"
+          className="mt-4 border-l-4 border-spidey bg-[#fff4bf] px-4 py-3 text-black"
+          role="note"
+        >
+          <p className="font-display text-xs font-black uppercase tracking-widest">
+            Current status
+          </p>
+          <p className="mt-1 text-sm font-medium leading-relaxed">
+            {compactStatus(caseStudy.status)}
+          </p>
+        </aside>
       </section>
 
       <section aria-labelledby="case-study-what-i-built">
@@ -137,7 +154,7 @@ export function CaseStudy({ caseStudy }: Props) {
               <a
                 href={evidence.href}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="font-display text-lg font-black text-web-strong underline decoration-2 underline-offset-4 hover:text-spidey focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-web"
               >
                 {evidence.label}

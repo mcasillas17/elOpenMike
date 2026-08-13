@@ -149,7 +149,7 @@ export default async function ProjectDetailPage({
           </div>
         )}
 
-        {project.highlights.length > 0 && (
+        {!project.caseStudy && project.highlights.length > 0 && (
           <>
             <div className="mt-10">
               <span

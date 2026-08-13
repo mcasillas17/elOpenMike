@@ -7,6 +7,7 @@ import ProjectDetailPage, {
 import { projects, getAllSlugs } from "@/data/projects";
 
 const sample = projects[0];
+const legacySample = projects.find((project) => !project.caseStudy)!;
 
 describe("/projects/[slug] detail page", () => {
   it("generateStaticParams returns every slug", () => {
@@ -35,12 +36,14 @@ describe("/projects/[slug] detail page", () => {
     ).toHaveAttribute("href", "/projects");
   });
 
-  it("renders each highlight bullet", async () => {
+  it("keeps the legacy highlights for a project without a case study", async () => {
     const ui = await ProjectDetailPage({
-      params: Promise.resolve({ slug: sample.slug }),
+      params: Promise.resolve({ slug: legacySample.slug }),
     });
     render(ui);
-    for (const h of sample.highlights) {
+
+    expect(screen.getByText("What it does", { exact: true })).toBeInTheDocument();
+    for (const h of legacySample.highlights) {
       expect(screen.getByText(h)).toBeInTheDocument();
     }
   });
@@ -62,6 +65,12 @@ describe("/projects/[slug] detail page", () => {
       expect(
         screen.getByRole("figure", { name: /architecture.*data flow/i }),
       ).toBeInTheDocument();
+      expect(
+        screen.getByRole("note", { name: "Current status" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("What it does", { exact: true }),
+      ).not.toBeInTheDocument();
     },
   );
 

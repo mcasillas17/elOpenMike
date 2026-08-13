@@ -44,6 +44,20 @@ describe("CaseStudy", () => {
       "href",
       "https://example.com/source",
     );
+    expect(screen.getByRole("link", { name: "Source evidence" })).toHaveAttribute(
+      "rel",
+      "noopener noreferrer",
+    );
+  });
+
+  it("surfaces a compact current-status signal before the detailed sections", () => {
+    render(<CaseStudy caseStudy={fixture} />);
+
+    const status = screen.getByRole("note", { name: "Current status" });
+    expect(status).toHaveTextContent(fixture.status);
+    expect(status.compareDocumentPosition(screen.getByRole("heading", { name: "What I built" }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it("uses level-two headings so the page h1 remains unique", () => {
