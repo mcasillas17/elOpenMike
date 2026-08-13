@@ -29,4 +29,21 @@ describe("projects data", () => {
   it("getAllSlugs covers every project", () => {
     expect(getAllSlugs().sort()).toEqual(projects.map((p) => p.slug).sort());
   });
+
+  it("gives TuringAgent and Thwiply complete case-study evidence", () => {
+    for (const slug of ["turingagent", "thwiply"]) {
+      const caseStudy = getProject(slug)?.caseStudy;
+
+      expect(caseStudy).toBeDefined();
+      expect(caseStudy?.problem).toBeTruthy();
+      expect(caseStudy?.whatIBuilt.length).toBeGreaterThan(0);
+      expect(caseStudy?.constraints.length).toBeGreaterThan(0);
+      expect(caseStudy?.architecture.nodes.length).toBeGreaterThan(1);
+      expect(caseStudy?.decisions.length).toBeGreaterThan(0);
+      expect(caseStudy?.verification.length).toBeGreaterThan(0);
+      expect(caseStudy?.status).toBeTruthy();
+      expect(caseStudy?.lessons.length).toBeGreaterThan(0);
+      expect(caseStudy?.evidence.length).toBeGreaterThan(0);
+    }
+  });
 });

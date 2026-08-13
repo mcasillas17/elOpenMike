@@ -1,3 +1,31 @@
+export type CaseStudyItem = {
+  title: string;
+  detail: string;
+};
+
+export type CaseStudyEvidence = {
+  label: string;
+  href: string;
+  detail: string;
+};
+
+export type CaseStudyArchitecture = {
+  flowLabel: string;
+  nodes: CaseStudyItem[];
+};
+
+export type CaseStudy = {
+  problem: string;
+  whatIBuilt: string[];
+  constraints: string[];
+  architecture: CaseStudyArchitecture;
+  decisions: CaseStudyItem[];
+  verification: CaseStudyItem[];
+  status: string;
+  lessons: string[];
+  evidence: CaseStudyEvidence[];
+};
+
 export type Project = {
   slug: string; // URL segment + React key
   title: string;
@@ -10,6 +38,7 @@ export type Project = {
   repoUrl?: string;
   youtubeId?: string; // optional trailer/demo embedded on the detail page
   images: string[]; // /images/projects/...; carousel on the detail page only
+  caseStudy?: CaseStudy; // detailed engineering narrative for flagship projects
 };
 
 // Real projects (pulled from github.com/mcasillas17). Array order controls
@@ -22,7 +51,7 @@ export const projects: Project[] = [
     slug: "thwiply",
     title: "Thwiply",
     summary:
-      "A privacy-first Android app that “thwips” useful items out of the noise — an on-device LLM reads notifications and screenshots and surfaces them as actionable tasks, with no backend or telemetry.",
+      "An Android v1 scaffold for downloading a device-held model and trying streamed, on-device LLM inference from a debug screen.",
     year: "2026",
     tags: ["Android", "AI", "Open source"],
     stack: [
@@ -31,16 +60,116 @@ export const projects: Project[] = [
       "LiteRT-LM",
       "Gemma 3",
       "Hilt",
-      "Room",
     ],
     highlights: [
-      "Passive capture of notifications and screenshots in the background.",
-      "On-device Gemma 3 1B inference via LiteRT-LM — no cloud, no account, no telemetry.",
-      "Smart task list that surfaces extracted actions, with optional cleanup of processed screenshots.",
-      "Resumable model download with integrity verification — onboarding is a one-time thing.",
+      "Compose onboarding that downloads a model to the app’s files directory and reports download state.",
+      "LiteRT-LM engine initialization and streamed debug inference after a model is available.",
+      "Hilt-provided app dependencies, Coroutines/Flow state, and an OkHttp download client.",
+      "The public roadmap keeps notification capture, OCR, task extraction, Room persistence, and a Today screen as v2 work.",
     ],
     repoUrl: "https://github.com/mcasillas17/Thwiply",
     images: [],
+    caseStudy: {
+      problem:
+        "Start with a private, device-held model workflow that can be downloaded, initialized, and exercised before building the planned capture-and-task experience.",
+      whatIBuilt: [
+        "A Jetpack Compose Android scaffold with onboarding and debug routes.",
+        "A model manager that streams a model download into app-local storage and exposes download progress through Flow.",
+        "A LiteRT-LM engine manager that initializes a local model and returns streamed inference output to the debug screen.",
+      ],
+      constraints: [
+        "The public README sets Android 12 (API 31) as the minimum and recommends a Pixel 6 or equivalent for smoother inference.",
+        "The Gemma model download may require a Hugging Face read token because the model is gated.",
+        "The v1 source keeps the current product surface to onboarding and debug inference; capture and persistence are not presented as shipped work.",
+      ],
+      architecture: {
+        flowLabel:
+          "Onboarding collects a model URL and optional token, stores the downloaded model locally, then hands it to the on-device inference path.",
+        nodes: [
+          {
+            title: "Compose onboarding",
+            detail:
+              "Starts the download and navigates to the debug screen after success.",
+          },
+          {
+            title: "ModelManager + OkHttp",
+            detail:
+              "Fetches the model and writes model.litertlm under the app’s files directory while emitting progress.",
+          },
+          {
+            title: "LiteRT-LM engine",
+            detail:
+              "Initializes from that local file and exposes streamed generated text.",
+          },
+          {
+            title: "Debug screen",
+            detail:
+              "Collects streamed output for a prompt; this is the current inference surface.",
+          },
+        ],
+      },
+      decisions: [
+        {
+          title: "Prove local inference first",
+          detail:
+            "The implementation routes a downloaded file into LiteRT-LM rather than introducing a backend or cloud inference path.",
+        },
+        {
+          title: "Keep model lifecycle observable",
+          detail:
+            "Download state is represented explicitly as idle, downloading, success, or error and is collected by the onboarding view model.",
+        },
+        {
+          title: "Sequence the product deliberately",
+          detail:
+            "The README separates current v1 scaffolding from the planned v2 capture, OCR, extraction, persistence, and Today-screen work.",
+        },
+      ],
+      verification: [
+        {
+          title: "Unit-test starting state",
+          detail:
+            "The repository includes a ModelManager unit test for the no-model initial state.",
+        },
+        {
+          title: "Build-time proof surface",
+          detail:
+            "The repository documents Android Studio build/run steps and declares JUnit plus Android instrumentation test dependencies.",
+        },
+      ],
+      status:
+        "Current public status: the README labels v1 scaffolding as current. Its checked items are architecture, model management/download, LiteRT-LM integration with streaming inference, and a debug inference UI; the v2 capture pipeline remains unchecked.",
+      lessons: [
+        "A local model path benefits from making download and initialization states visible before asking it to support a larger background workflow.",
+        "The next repository-defined increments are notification and screenshot observation, OCR pre-filtering, task extraction, Room persistence, and a Today screen.",
+      ],
+      evidence: [
+        {
+          label: "README: v1 scope and v2 roadmap",
+          href: "https://github.com/mcasillas17/Thwiply#roadmap",
+          detail:
+            "Documents the current scaffolding milestones, device/model prerequisites, and the explicitly deferred capture pipeline.",
+        },
+        {
+          label: "ModelManager source",
+          href: "https://github.com/mcasillas17/Thwiply/blob/main/app/src/main/java/com/elopenmike/thwiply/llm/model/ModelManager.kt",
+          detail:
+            "Shows app-local model storage, download-state Flow, optional bearer token, and OkHttp download handling.",
+        },
+        {
+          label: "Inference and navigation source",
+          href: "https://github.com/mcasillas17/Thwiply/blob/main/app/src/main/java/com/elopenmike/thwiply/MainActivity.kt",
+          detail:
+            "Shows the onboarding-to-debug navigation route used by the current app surface.",
+        },
+        {
+          label: "ModelManager test",
+          href: "https://github.com/mcasillas17/Thwiply/blob/main/app/src/test/java/com/elopenmike/thwiply/llm/model/ModelManagerTest.kt",
+          detail:
+            "Provides the public unit-test evidence for the model-availability starting state.",
+        },
+      ],
+    },
   },
   {
     slug: "turingagent",
@@ -58,6 +187,112 @@ export const projects: Project[] = [
     ],
     repoUrl: "https://github.com/mcasillas17/TuringAgent",
     images: [],
+    caseStudy: {
+      problem:
+        "Provide a machine-local assistant stack that can coordinate chat, model routing, tool execution, and human approval without exposing MCP services to the host network.",
+      whatIBuilt: [
+        "A Go gRPC orchestration layer for sessions, messages, runs, events, approvals, audit records, and SQLite persistence.",
+        "A Go agent runtime that loads context, calls local or OpenAI-compatible models, executes MCP tools, and streams runtime updates.",
+        "A Flutter client for settings, sessions, chat, streamed responses, and approval cards.",
+      ],
+      constraints: [
+        "Local secrets, data, and sandbox files are kept under the backend directory; initialization rejects root execution and unsafe sandbox conditions.",
+        "The file-tool surface is sandboxed, and mutating operations require a short-lived approval token plus approval consumption.",
+        "MCP services remain on internal Docker networks instead of becoming host-published services.",
+      ],
+      architecture: {
+        flowLabel:
+          "The client sends gRPC work to the orchestrator; the agent runtime loads context, reaches model providers, and calls internal MCP services. Mutating file tools pause for approval before execution.",
+        nodes: [
+          {
+            title: "Flutter client",
+            detail:
+              "Presents settings, session/chat UI, streamed events, model selection, and approval cards.",
+          },
+          {
+            title: "Go orchestrator",
+            detail:
+              "Owns public and internal gRPC APIs, sessions, runs, events, approvals, audit records, and SQLite persistence.",
+          },
+          {
+            title: "Go agent runtime",
+            detail:
+              "Loads session context, calls model providers, executes tools, and streams runtime updates.",
+          },
+          {
+            title: "Model providers & internal MCP",
+            detail:
+              "The runtime reaches Ollama or an OpenAI-compatible provider and calls internal MCP services; file mutations require approval validation.",
+          },
+        ],
+      },
+      decisions: [
+        {
+          title: "Separate public and internal control planes",
+          detail:
+            "Docker Compose publishes the public orchestrator gRPC port while keeping the runtime and MCP services on internal networks.",
+        },
+        {
+          title: "Make file mutation an explicit human decision",
+          detail:
+            "Approval-gated writes use a short-lived JWT bound to the tool and argument hash, then consume approval through internal gRPC before mutation proceeds.",
+        },
+        {
+          title: "Constrain the sandbox at the file-descriptor level",
+          detail:
+            "The file server uses descriptor-relative operations and no-follow flags to reject traversal and symlink escapes rather than relying on path rewriting alone.",
+        },
+      ],
+      verification: [
+        {
+          title: "End-to-end gRPC smoke test",
+          detail:
+            "The repository script starts Compose, checks health, creates a session, sends a deterministic system.time tool message, observes streamed events, and verifies event replay.",
+        },
+        {
+          title: "Model-driven tool-loop check",
+          detail:
+            "An on-demand script asks a real Ollama model to choose system.time and distinguishes a broken exercised loop from an inconclusive setup or model outcome; it is intentionally outside CI.",
+        },
+        {
+          title: "Layered engineering checks",
+          detail:
+            "The documented matrix includes Go race tests, vet/build checks, protobuf validation, MCP-server checks, and Flutter analysis/tests.",
+        },
+      ],
+      status:
+        "Current public status: the repository documents a local development stack with Docker Compose, a Flutter client, a gRPC smoke test, and an on-demand live tool-loop check. This case study does not make a production-deployment or usage claim.",
+      lessons: [
+        "A tool boundary needs both product-level approval and implementation-level confinement; neither replaces the other.",
+        "A useful AI integration check needs a deterministic smoke path and a separately labelled model-driven path whose inconclusive outcomes are not reported as failures.",
+      ],
+      evidence: [
+        {
+          label: "README: local stack and verification",
+          href: "https://github.com/mcasillas17/TuringAgent#verify-the-stack",
+          detail:
+            "Documents the local install, smoke test, model-driven check, and developer command set.",
+        },
+        {
+          label: "Architecture and Compose boundary",
+          href: "https://github.com/mcasillas17/TuringAgent/blob/main/docs/architecture/tech-stack.md",
+          detail:
+            "Documents the runtime responsibilities, public/internal gRPC ports, and Docker-network exposure.",
+        },
+        {
+          label: "MCP approval and sandbox design",
+          href: "https://github.com/mcasillas17/TuringAgent/blob/main/docs/mcp-security-and-integration.md",
+          detail:
+            "Documents approval ordering, token checks, bounded tool behaviour, and descriptor-relative file confinement.",
+        },
+        {
+          label: "Smoke-test implementation",
+          href: "https://github.com/mcasillas17/TuringAgent/blob/main/turing-backend/scripts/smoke-grpc.sh",
+          detail:
+            "Shows the Compose startup, health wait, and gRPC smoke-client execution used for the documented proof path.",
+        },
+      ],
+    },
   },
   {
     slug: "turingcare",

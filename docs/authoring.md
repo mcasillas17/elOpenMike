@@ -218,6 +218,36 @@ Code blocks are painful to author on a phone — touch keyboards fight braces an
 backticks, and setting the language means tapping into a dropdown. Draft prose
 on mobile and add code from a laptop. Pasting copied code works fine on mobile.
 
+## Project case studies
+
+The four-project Casefile is deliberately simple. Project cards continue to
+come from `src/data/projects.ts`; there are no filters or separate project CMS.
+Only a flagship project needs the optional `caseStudy` object. It renders a
+server-side detail-page narrative with these required fields:
+
+- `problem` — the engineering problem, stated without audience, adoption, or
+  performance claims that the public record cannot support.
+- `whatIBuilt` — concrete implementation contributions. Use this neutral label
+  unless public evidence establishes sole authorship.
+- `constraints` — real technical, platform, privacy, safety, or delivery
+  boundaries that shaped the work.
+- `architecture` — a short `flowLabel` plus ordered `nodes`, each with a
+  `title` and `detail`. These power the accessible code-native architecture and
+  data-flow figure.
+- `decisions` and `verification` — titled engineering tradeoffs and proof
+  surfaces, each with a short implementation-grounded explanation.
+- `status` and `lessons` — current state and next steps. Say what the source
+  proves and name unfinished work plainly; do not imply a release, deployment,
+  users, or performance result without public evidence.
+- `evidence` — one or more public repository or documentation links. Each item
+  has a readable `label`, a durable `href`, and a `detail` that identifies what
+  the linked source proves.
+
+The case-study page has one project-title `h1`; all case-study sections use
+`h2`s, and source links remain ordinary keyboard-focusable anchors. Keep the
+content static and data-driven so the detail route stays compatible with its
+build-time `generateStaticParams` generation.
+
 ## Privacy
 
 Three independent gates decide what reaches the site:
