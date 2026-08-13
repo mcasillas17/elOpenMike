@@ -10,6 +10,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "resume:build": "node scripts/build-resume.mjs",
+    "resume:verify": "node scripts/verify-resume.mjs",
     "e2e": "playwright test",
     "sync:notion": "tsx scripts/sync-notion.ts",
     "migrate:to-notion": "tsx scripts/mdx-to-notion.ts"
@@ -43,6 +45,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",
+    "pdfjs-dist": "5.4.624",
     "tailwindcss": "^4",
     "tsx": "^4.23.5",
     "typescript": "^5",

@@ -4,27 +4,27 @@
 
 ## Source and rebuild
 
-The maintainable source is `scripts/build-resume.py`. It deliberately keeps
-the resume to one US Letter page and uses only facts already represented in
-the prior resume and the public site data. The contact endpoints in the
-rendered PDF are clickable as well as visible for ATS readers.
+The maintainable source is `scripts/build-resume.mjs`. It uses the repo's
+pinned Playwright/Chromium dependency to produce a tagged, one-page US Letter
+PDF from semantic HTML. Its claims come only from the prior resume and public
+site data. The visible contact endpoints are clickable for recruiters and
+available as text for ATS readers.
 
 To rebuild it from the repository root:
 
 ```sh
-python3 -m pip install reportlab
-python3 scripts/build-resume.py
+pnpm exec playwright install chromium # only if Chromium is not already installed
+pnpm resume:build
 ```
 
 Then render and inspect the result before committing:
 
 ```sh
-mkdir -p tmp/pdfs
-pdftoppm -png -r 180 -singlefile public/resume.pdf tmp/pdfs/resume
-pdfinfo public/resume.pdf
+pnpm resume:verify
+pdftoppm -png -r 180 -singlefile public/resume.pdf /tmp/elopenmike-resume
 ```
 
-Keep the public name aligned with `src/lib/site.ts`. The builder retains the
-previous full professional name in its source metadata so an editor can use it
-when a formal context requires it. Do not add metrics, responsibilities,
-dates, titles, or URLs without confirming them with Miguel.
+`pnpm resume:verify` checks PDF page count, tagging, semantic-text extraction
+and order, and every required contact/project link with PDF.js and `pdfinfo`.
+Keep the public name aligned with `src/lib/site.ts`. Do not add metrics,
+responsibilities, dates, titles, or URLs without confirming them with Miguel.
