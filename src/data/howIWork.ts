@@ -71,7 +71,7 @@ export const howIWork: readonly WorkingPrinciple[] = [
     number: "04",
     title: "Write things down for the handoff",
     description:
-      "In cross-team platform work, I’ve contributed reusable APIs, migrations designed not to disrupt downstream consumers, and partner-facing documentation. Separately, TuringAgent publishes its architecture, security model, and verification steps.",
+      "In cross-team platform work, I’ve contributed reusable APIs, migrations, and partner-facing documentation. Separately, TuringAgent publishes its architecture, security model, and verification steps.",
     tint: "purple",
     evidence: [
       {
