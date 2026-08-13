@@ -16,7 +16,7 @@ describe("Footer", () => {
     );
     expect(screen.getByRole("link", { name: "Email" })).toHaveAttribute(
       "href",
-      "mailto:micasillm@gmail.com",
+      "mailto:micasillm@gmail.com?subject=Senior%20backend%2C%20platform%2C%20or%20AI-infrastructure%20opportunity",
     );
   });
 

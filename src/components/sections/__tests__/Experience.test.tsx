@@ -23,7 +23,7 @@ describe("Experience", () => {
   it("includes a resume download link", () => {
     render(<Experience />);
     expect(
-      screen.getByRole("link", { name: /resume/i }),
+      screen.getByRole("link", { name: "Download résumé (PDF)" }),
     ).toHaveAttribute("href", "/resume.pdf");
   });
 

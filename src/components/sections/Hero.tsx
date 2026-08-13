@@ -5,6 +5,7 @@ import { WebCorner } from "@/components/ui/WebCorner";
 
 const linkedin = site.socials.find((s) => s.label === "LinkedIn")?.href;
 const email = site.socials.find((s) => s.label === "Email")?.href;
+const github = site.socials.find((s) => s.label === "GitHub")?.href;
 
 export function Hero() {
   return (
@@ -32,11 +33,16 @@ export function Hero() {
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Button href={site.resumeHref} download>
-            Resume
+            Download résumé (PDF)
           </Button>
           {email && (
             <Button href={email} variant="secondary">
               Email
+            </Button>
+          )}
+          {github && (
+            <Button href={github} target="_blank" variant="secondary">
+              GitHub
             </Button>
           )}
           {linkedin && (

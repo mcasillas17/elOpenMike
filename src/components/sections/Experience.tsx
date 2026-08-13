@@ -43,7 +43,7 @@ export function Experience() {
 
       <div className="mt-10">
         <Button href={site.resumeHref} download>
-          Download resume
+          Download résumé (PDF)
         </Button>
       </div>
     </Section>
