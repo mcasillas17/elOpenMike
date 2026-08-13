@@ -119,10 +119,11 @@ describe("the committed posts", () => {
     });
   }
 
-  it("translates their ts fences to typescript", () => {
-    const fences = names.flatMap((name) =>
-      codeBlocks(matter(readFileSync(path.join(dir, name), "utf8")).content),
+  it("translates the TypeScript article's ts fence to typescript", () => {
+    const { content } = matter(
+      readFileSync(path.join(dir, "grounding-agents-with-mcp.mdx"), "utf8"),
     );
+    const fences = codeBlocks(content);
 
     expect(fences.length).toBeGreaterThan(0);
     expect(fences.map((block) => block.code.language)).toEqual(

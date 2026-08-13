@@ -1,0 +1,214 @@
+---
+title: "Approval Is a Capability, Not a Button"
+date: "2026-08-12"
+excerpt: "A local-first agent needs more than a confirm dialog. The approval has to name the exact tool call, survive races, and fail closed at the mutation boundary."
+tags: ["AI", "MCP", "Security", "Systems Design"]
+---
+
+An agent that can read a folder is useful. An agent that can change one is a
+different class of system.
+
+The tempting implementation is a modal: the model asks to write a file, a
+person clicks Approve, and the runtime proceeds. That is a user experience,
+not yet a security boundary. Between the click and the write, the tool name,
+arguments, path, process identity, filesystem, and run state can all be
+different from what the person believed they were approving.
+
+This is a systems-design note about closing that gap. It uses the public
+[TuringAgent repository](https://github.com/mcasillas17/TuringAgent) as a
+concrete reference: a local-first Flutter client, Go gRPC orchestrator, agent
+runtime, and MCP servers. The implementation details below are repository
+facts where linked. The principles I draw from them are general engineering
+interpretation, not a claim that one design solves every agent-security
+problem.
+
+## The threat model: the model is an untrusted planner
+
+Treat the model as capable of proposing a useful action, not as an authority to
+perform it. That stays true even with a local model and a friendly prompt. Tool
+descriptions, retrieved text, a compromised MCP server, accidental ambiguity,
+or a plain model mistake can all influence a proposed call.
+
+For a file-writing tool, the interesting adversarial moves are mundane:
+
+- turn a harmless-looking relative path into an escape through `..`, a symlink,
+  a renamed parent, or a time-of-check/time-of-use race;
+- obtain approval for one call and replay it, or attach it to a different tool,
+  agent, or argument object;
+- make the policy service, approval waiter, or auditing path unavailable and
+  hope the runtime continues anyway;
+- make a mutation succeed, then lose the outcome report and trick a retry into
+  making the side effect twice.
+
+The goal is not to prove the model is safe. It is to make the consequences of a
+bad proposal bounded and reviewable. In TuringAgent's documented split, the
+`mcp-system` server exposes read-only system tools while `mcp-files` exposes
+read/list/search plus approval-required create and update operations. The
+compose deployment keeps those MCP ports on internal networks, runs the
+services as non-root, and makes the files server's sandbox mount the writable
+exception. Those are useful layers, but no one layer should carry the whole
+argument. [The security guide describes the boundary and its limits.](https://github.com/mcasillas17/TuringAgent/blob/main/docs/mcp-security-and-integration.md)
+
+## The request path
+
+The important architectural move is to put policy before the side-effecting
+MCP call, then make the MCP server independently enforce the grant. A client
+card alone is advisory; a runtime check alone is vulnerable to a direct server
+call; a server check alone cannot tell the person what the model proposed in
+context. Together they make a chain of evidence.
+
+```text
+User action
+  → client shows an approval card for (agent, tool, arguments)
+  → runtime posts BEFORE beacon to the orchestrator
+  → policy returns allow | deny | approval_required
+  → on approval_required: orchestrator records pending state
+  → user approves: orchestrator signs a short-lived, bound token
+  → runtime calls MCP with arguments + approval token
+  → MCP validates request, validates and consumes token, then mutates
+  → runtime posts AFTER beacon with outcome or failure
+```
+
+That sequence is deliberately less magical than "the agent has permission."
+It gives each component a narrow job: the client presents intent, the
+orchestrator makes policy and persists state, the runtime sequences the call,
+and the server protects the resource. TuringAgent's runtime posts a before
+beacon, waits rather than calling MCP while approval is pending, and posts an
+after beacon. Its documented policy decisions are `allow`, `deny`, and
+`approval_required`; an unsupported or malformed decision is an error, not an
+implicit allow. [The runner is a useful implementation-level read.](https://github.com/mcasillas17/TuringAgent/blob/main/turing-backend/agent-runtime-go/internal/tools/runner.go)
+
+Two details matter more than the diagram suggests. First, an approval should
+be attached to the call at the actual mutation boundary, not merely to a chat
+turn. Second, the server must be able to reject a request even if a buggy or
+compromised runtime skips the intended choreography.
+
+## Why path checks are not confinement
+
+It is good hygiene to reject absolute paths and `..`. It is not confinement.
+Consider code that checks a string under `/sandbox`, then later opens the path.
+An attacker who can change the filesystem between those steps can replace a
+checked directory with a symlink. The string still looks contained; the later
+open follows a different object.
+
+The stronger pattern is descriptor-relative resolution. Open the trusted root
+directory once. For each path component, use the already-open parent directory
+descriptor to open the next component, with no-follow semantics. Inspect types
+through that descriptor. Create, replace, and remove using descriptor-relative
+operations as well. The authority is then an open handle to a directory object,
+not a path string that has to be reinterpreted later.
+
+Here is the shape, intentionally abbreviated rather than copied from a server:
+
+```go
+root := openDirectory(sandboxRoot)
+parent := root
+for _, component := range parentComponents(userPath) {
+    parent = openAtNoFollow(parent, component)
+}
+target := openAtNoFollow(parent, leaf(userPath))
+requireRegularFile(target)
+```
+
+The real implementation needs more: cancellation, closing descriptors, missing
+parent creation, result limits, and atomic publication. TuringAgent documents
+`openat` with `O_DIRECTORY` and `O_NOFOLLOW` for directories, `fstat`/
+`fstatat` for type and identity checks, and `linkat`, `renameat`, and `unlinkat`
+for mutation. It also describes a bounded descriptor-relative breadth-first
+search that classifies directory entries without following links. That is the
+right level to reason about rename and symlink races. [See the documented descriptor-relative confinement design.](https://github.com/mcasillas17/TuringAgent/blob/main/docs/mcp-security-and-integration.md#descriptor-relative-confinement)
+
+There is a tradeoff: this style is more operating-system-specific and more
+complex than `filepath.Clean`. It also does not replace process permissions,
+container isolation, or careful mount selection. It answers one precise
+question: "can this request be redirected outside the directory authority we
+opened?" Keeping that claim narrow is a feature.
+
+## Approval must bind to the exact call
+
+An approval saying "yes, write files" is too broad. A useful grant binds at
+least the resource server, authenticated principal, tool, canonical arguments,
+unique approval id, and expiry. If any one changes, the grant should be useless.
+
+TuringAgent makes that concrete with a short-lived HS256 JWT passed in MCP
+`params._meta.approvalToken`, rather than in tool arguments. The token is bound
+to issuer, audience (`mcp-files`), agent subject, tool, an argument hash, and a
+`jti`; the server validates those claims and asks the orchestrator to consume
+the `jti` before mutating. That last step turns a signed token from a reusable
+bearer credential into a single-use capability. [The verifier shows the claim checks and consumption call.](https://github.com/mcasillas17/TuringAgent/blob/main/turing-backend/mcp-files/internal/approval/jwt.go)
+
+Keeping the token out of `arguments` matters too. The approved digest can be a
+canonical serialization of the proposed arguments without becoming
+self-referential or accidentally exposing the token in ordinary tool-call
+records. The repository documents Go JSON encoding with deterministic map-key
+ordering, HTML escaping disabled, and the encoder newline removed before the
+SHA-256 digest is formed. A different implementation needs an equally precise
+canonicalization contract; "hash the JSON" is underspecified when multiple
+serializations represent the same object.
+
+Ordering is the defense against a familiar race:
+
+1. validate syntax and perform only non-mutating preconditions;
+2. verify the approval's signature, expiration, identity, tool, and argument
+   digest;
+3. synchronously consume its unique id with an authority that records state;
+4. only then publish the mutation.
+
+That order does mean an approval can be spent and a later write can fail. That
+is usually preferable to restoring the approval automatically: an uncertain
+write result is exactly when replay is most dangerous. Report the uncertainty,
+make retry a new explicit decision, and retain the audit trail.
+
+## Fail closed, then prove the boundary
+
+Fail-closed behavior is not a single `if`. It is the default result of every
+missing dependency and every ambiguous state. No policy response? Do not call
+MCP. Unknown policy? Reject it. No approval waiter? Fail the call. Expired,
+wrong-audience, wrong-subject, wrong-tool, wrong-digest, or previously consumed
+token? Do not mutate. A file server with an empty configured bearer token should
+deny every request instead of becoming accidentally anonymous.
+
+The repository also separates public human approval methods from internal
+runtime methods, persists status transitions, and records lifecycle events.
+That matters when retries, delayed messages, or terminal runs arrive out of
+order: approval is a state machine, not a Boolean held in process memory. [The approval service shows the public/internal split and token signing path.](https://github.com/mcasillas17/TuringAgent/blob/main/turing-backend/orchestrator-go/internal/service/approvals/service.go)
+
+Testing should follow the same boundary. Deterministic checks are where the
+security claims belong: malformed tokens, wrong bindings, expiry, replay,
+symlink escape, rename races, disabled tools, error paths, and atomic create or
+replace behavior. They are repeatable and can make a crisp pass/fail claim.
+
+Model-driven verification is different. The public repository has a live
+script that asks an Ollama model to choose `system.time` and checks whether a
+later answer reflects the returned timestamp. It can report PASS, FAIL, or
+INCONCLUSIVE, and is intentionally not run in CI because tool selection and
+model availability are nondeterministic. That is an honest use of a live check:
+exercise the integration without pretending it proves the deterministic
+security boundary. [Read the verification script and its exit semantics.](https://github.com/mcasillas17/TuringAgent/blob/main/turing-backend/scripts/verify-tool-loop.sh)
+
+The complementary smoke test is deliberately ordinary: bring up the local
+Compose stack, wait for health, and run a gRPC client. It proves a deployable
+slice, not that a model always makes a particular choice. [Its short script is worth reading for that distinction.](https://github.com/mcasillas17/TuringAgent/blob/main/turing-backend/scripts/smoke-grpc.sh)
+
+## What this design does not solve
+
+Approval-gated tools reduce authority; they do not make all downstream content
+safe. A permitted write can still put dangerous text into a workspace. A
+sandbox can still expose sensitive files if the chosen mount is too broad. A
+human can approve a misleading summary. A local deployment can still have a
+weak host account, unsafe Docker mapping, or another process modifying the
+sandbox outside the server's locks.
+
+There are usability costs as well. Short expirations and single-use grants
+create friction. Canonicalization and descriptor walks complicate portability.
+Precondition checks can become stale before a mutation. Atomic replacement may
+not preserve every inode-level attribute. These are not reasons to collapse
+back to a checkbox; they are reasons to document the boundary, narrow the tool
+surface, and keep the approval copy specific enough for a person to assess.
+
+The practical lesson is simple: a safe tool call is a protocol. Make the model
+propose, make the human approve a specific intent, make the runtime wait, make
+the server verify and consume a bounded capability, and make every uncertain
+state stop rather than guess. That gives a local-first agent something more
+valuable than a reassuring dialog: a boundary you can inspect, test, and keep
+honest as the stack grows.

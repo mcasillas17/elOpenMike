@@ -132,7 +132,9 @@ test("a reader can copy a highlighted code block", async ({ context, page }) => 
 
   const codeBlock = page.locator(".code-block-shell").first();
   await expect(codeBlock).toBeVisible();
-  await expect(codeBlock.getByText(/TypeScript|JavaScript|Code/)).toBeVisible();
+  await expect(
+    codeBlock.getByText(/Plain text|TypeScript|JavaScript|Code/),
+  ).toBeVisible();
 
   await codeBlock.getByRole("button", { name: "Copy code" }).click();
   await expect(codeBlock.getByRole("button", { name: "Copied" })).toBeVisible();

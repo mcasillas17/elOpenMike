@@ -101,6 +101,48 @@ context. Wide tables and long code lines scroll inside their own containers on
 small screens instead of widening the page. Task-list checkboxes publish as a
 read-only snapshot of their Notion state.
 
+## Technical diagrams and source excerpts
+
+For a compact architecture or request-flow diagram, use a **plain-text code
+block** (`/code` → Plain text) directly under a descriptive section heading.
+Introduce it with a sentence that says what flows through it; the text block is
+then both the visual representation and the accessible, copyable description.
+Keep lines short enough to fit a phone without forcing the reader to scroll
+horizontally. Prefer arrows and named boundaries over decorative box art.
+
+For code quoted from a public source, link to the source in the surrounding
+prose and keep the excerpt to the smallest useful shape. Explain whether it is
+an exact excerpt or illustrative pseudocode. Do not put secrets, tokens,
+private paths, or a whole third-party implementation in a post.
+
+## Repository-authored handoff (rare)
+
+Notion remains canonical. Occasionally an engineering change may stage a
+checked-in MDX post so it can be reviewed with its tests, as with a technical
+article that uses a text sequence. That file is **not** published content until
+it has been migrated into the Blog database. Until then,
+`pnpm sync:notion --check` correctly reports drift; do not edit the generated
+file to make the check pass.
+
+After the reviewed change is merged, a maintainer with the normal Notion
+credentials should:
+
+1. Pause the scheduled content-sync workflow so it cannot remove the staged
+   MDX while migration is in progress.
+2. From the reviewed checkout, run `pnpm migrate:to-notion`. It creates the
+   page as a Draft, writes the body, and promotes it only after the complete
+   content is present. Never add credentials to the repository or CI output.
+3. Confirm the new page has the intended title, excerpt, publication date,
+   tags, headings, links, and text diagram in Notion. Its Status should be
+   **Published**.
+4. Run `pnpm sync:notion`, commit the sync result if it changes anything, then
+   run `pnpm sync:notion --check` with the same authorized environment.
+5. Re-enable the scheduled workflow.
+
+The migration is safe to re-run and deliberately refuses ambiguous or edited
+drafts rather than overwriting them. Read the migration and failure-handling
+sections below before using it.
+
 ## What to avoid
 
 These have no blog equivalent and are **skipped with a warning** — their
