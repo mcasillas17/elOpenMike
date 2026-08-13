@@ -25,6 +25,7 @@ describe("Experience", () => {
     expect(
       screen.getByRole("link", { name: /resume/i }),
     ).toHaveAttribute("href", "/resume.pdf");
+    expect(screen.getByText("Resume updated August 2026")).toBeInTheDocument();
   });
 
   it("renders each role's highlights and tech stack", () => {
