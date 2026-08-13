@@ -29,9 +29,9 @@ vi.mock("@/lib/blog", async (importOriginal) => {
 import { Writing } from "@/components/sections/Writing";
 import { getAllPosts } from "@/lib/blog";
 
-// Scoped to the cards: the section's own "Latest posts" heading is an h2 too.
+// Post titles sit one level below the section's "Latest posts" h2.
 const titles = (container: HTMLElement) =>
-  [...container.querySelectorAll("article h2")].map((h) => h.textContent);
+  [...container.querySelectorAll("article h3")].map((h) => h.textContent);
 
 describe("Writing section with more posts than it shows", () => {
   it("renders exactly three cards", () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
 import { getAllPosts, getPostSlugs } from "@/lib/blog";
 
 vi.mock("next-mdx-remote/rsc", () => ({
@@ -27,6 +28,44 @@ describe("/blog/[slug] page", () => {
     });
     expect(meta.title).toBe(sample.title);
     expect(meta.description).toBe(sample.excerpt);
+  });
+
+  it("shows the excerpt and publication context before the article body", async () => {
+    render(await PostPage({ params: Promise.resolve({ slug: sample.slug }) }));
+
+    expect(screen.getByText(sample.excerpt)).toBeInTheDocument();
+    expect(screen.getByText(/Published/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${sample.readingMinutes} min read`, "i"))).toBeInTheDocument();
+    if (sample.updated && sample.updated !== sample.date) {
+      expect(screen.getByText(/Updated/i)).toBeInTheDocument();
+    }
+  });
+
+  it("keeps back and topic links touch-sized", async () => {
+    render(await PostPage({ params: Promise.resolve({ slug: sample.slug }) }));
+
+    expect(screen.getByRole("link", { name: /back to blog/i })).toHaveClass(
+      "min-h-11",
+    );
+    if (sample.tags.length > 0) {
+      expect(screen.getByRole("link", { name: sample.tags[0] })).toHaveClass(
+        "min-h-11",
+        "min-w-11",
+      );
+    }
+  });
+
+  it("owns the post header, prose footer, and chronology as one article", async () => {
+    render(await PostPage({ params: Promise.resolve({ slug: sample.slug }) }));
+
+    const article = screen.getByRole("article");
+    expect(
+      within(article).getByRole("heading", { level: 1, name: sample.title }),
+    ).toBeInTheDocument();
+    expect(article.querySelector("footer")).not.toBeNull();
+    expect(
+      within(article).queryByRole("navigation", { name: "More posts" }),
+    ).toBeInTheDocument();
   });
 
   it("calls notFound for an unknown slug (throws)", async () => {

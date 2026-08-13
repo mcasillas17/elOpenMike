@@ -13,6 +13,13 @@ It goes live within ~15 minutes. To publish immediately, open the repo's
 **Actions → Sync content from Notion → Run workflow** button; that cuts it to
 about 5 minutes (the CI and deploy floor).
 
+The site derives an article's **Updated** date from Notion's last-edited time;
+there is no extra property to maintain. It only shows the revision label when
+that day differs from **Published**. The article's related-reading section is
+also automatic: posts sharing the most tags are preferred, with newer matches
+first. Accurate, focused tags therefore improve both topic archives and what a
+reader sees next.
+
 ## Formatting on your phone
 
 You never type markdown. Use Notion's own formatting — these shortcuts convert
@@ -28,9 +35,11 @@ as you type.
 | *Italic* | `*text*` | select → toolbar |
 | `inline code` | `` `text` `` | select → toolbar → code |
 | Code block | ` ``` ` | `/code` |
+| Task list | `[] ` + space | `/to-do` |
 | Quote | `> ` + space | `/quote` |
 | Divider | `---` | `/divider` |
 | Image | — | `/image`, or paste from the camera roll |
+| Table | — | `/table` |
 | Link | paste a URL over selected text | select → toolbar → link |
 
 Notion's Heading 1/2/3 render on the site as h2/h3/h4 — the post title is
@@ -80,7 +89,17 @@ const hits = await index.search(q, { topK: 5 });
 ````
 
 Properties become frontmatter; blocks become the body. Notion's code-block
-language becomes the fence language, so syntax highlighting is automatic.
+language becomes the fence language, so syntax highlighting and the reader's
+language label are automatic. Every code block also gets a copy button on the
+site. Set the most specific language Notion offers so highlighting and the
+label are useful.
+
+Section headings receive a permalink beside them, so keep headings short and
+descriptive enough to make sense when somebody follows a deep link. Images
+scale to the article width; add meaningful captions or surrounding prose for
+context. Wide tables and long code lines scroll inside their own containers on
+small screens instead of widening the page. Task-list checkboxes publish as a
+read-only snapshot of their Notion state.
 
 ## What to avoid
 

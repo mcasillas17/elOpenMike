@@ -40,7 +40,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${sora.variable} ${inter.variable}`}>
+    <html
+      lang="en"
+      className={`${sora.variable} ${inter.variable}`}
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+    >
       <body className="font-body antialiased">
         <script
           dangerouslySetInnerHTML={{

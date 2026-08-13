@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { PostCard } from "@/components/blog/PostCard";
-import { getAllTags, getPostsByTag } from "@/lib/blog";
+import { BlogTopicNav } from "@/components/blog/BlogTopicNav";
+import { getAllPosts, getAllTags, getPostsByTag } from "@/lib/blog";
 import { routes, alternatesFor } from "@/lib/site";
 
 export const dynamicParams = false;
@@ -59,6 +60,7 @@ export default async function TagPage({
       <p className="mt-3 text-muted">
         {posts.length} {posts.length === 1 ? "post" : "posts"}
       </p>
+      <BlogTopicNav currentSlug={slug} totalPosts={getAllPosts().length} />
       <div className="mt-8 flex flex-col">
         {posts.map((post) => (
           <PostCard key={post.slug} post={post} />

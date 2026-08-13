@@ -11,7 +11,9 @@ describe("Writing section", () => {
     const shown = getAllPosts().slice(0, 3);
     expect(shown.length).toBeGreaterThan(0);
     for (const post of shown) {
-      expect(screen.getByText(post.title)).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { level: 3, name: post.title }),
+      ).toBeInTheDocument();
     }
     for (const post of getAllPosts().slice(3)) {
       expect(screen.queryByText(post.title)).not.toBeInTheDocument();

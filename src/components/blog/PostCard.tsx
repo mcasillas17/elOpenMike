@@ -4,7 +4,14 @@ import { tagSlug } from "@/lib/blog";
 import { Tag } from "@/components/ui/Tag";
 import { routes } from "@/lib/site";
 
-export function PostCard({ post }: { post: PostMeta }) {
+export function PostCard({
+  post,
+  headingLevel = 2,
+}: {
+  post: PostMeta;
+  headingLevel?: 2 | 3;
+}) {
+  const Heading: "h2" | "h3" = headingLevel === 3 ? "h3" : "h2";
   const dateLabel = new Date(post.date).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -16,14 +23,14 @@ export function PostCard({ post }: { post: PostMeta }) {
       <p className="text-xs text-muted">
         {dateLabel} · {post.readingMinutes} min read
       </p>
-      <h2 className="mt-1 font-display text-xl font-bold text-ink">
+      <Heading className="mt-1 font-display text-xl font-bold text-ink">
         <Link
           href={routes.blogPost(post.slug)}
           className="after:absolute after:inset-0 after:content-[''] hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
         >
           {post.title}
         </Link>
-      </h2>
+      </Heading>
       <p className="mt-1.5 text-sm text-muted">{post.excerpt}</p>
       {post.tags.length > 0 && (
         <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
@@ -31,7 +38,7 @@ export function PostCard({ post }: { post: PostMeta }) {
             <Link
               key={t}
               href={routes.blogTag(tagSlug(t))}
-              className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
             >
               <Tag>{t}</Tag>
             </Link>

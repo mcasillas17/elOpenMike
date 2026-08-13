@@ -95,8 +95,34 @@ export function getPostsByTag(slug: string): PostMeta[] {
   return getAllPosts().filter((post) => post.tags.map(tagSlug).includes(slug));
 }
 
-// Posts are newest-first, so `prev` is the newer neighbour and `next` the older
-// one — matching "← Previous / Next →" reading order.
+export function getRelatedPosts(slug: string, limit = 3): PostMeta[] {
+  if (limit <= 0) return [];
+
+  const posts = getAllPosts();
+  const current = posts.find((post) => post.slug === slug);
+  if (!current) return [];
+
+  const currentTags = new Set(current.tags.map(tagSlug));
+  return posts
+    .filter((post) => post.slug !== slug)
+    .map((post) => ({
+      post,
+      shared: post.tags
+        .map(tagSlug)
+        .filter((tag) => currentTags.has(tag)).length,
+    }))
+    .filter(({ shared }) => shared > 0)
+    .sort(
+      (a, b) =>
+        b.shared - a.shared ||
+        timestamp(b.post.date) - timestamp(a.post.date) ||
+        a.post.slug.localeCompare(b.post.slug),
+    )
+    .slice(0, Math.floor(limit))
+    .map(({ post }) => post);
+}
+
+// Posts are newest-first, so `prev` is the newer neighbour and `next` the older.
 export function getAdjacentPosts(slug: string): {
   prev?: PostMeta;
   next?: PostMeta;

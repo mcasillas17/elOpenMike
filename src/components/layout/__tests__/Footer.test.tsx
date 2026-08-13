@@ -29,4 +29,14 @@ describe("Footer", () => {
     const email = screen.getByRole("link", { name: "Email" });
     expect(email).not.toHaveAttribute("target");
   });
+
+  it("gives every footer action a touch-sized target", () => {
+    render(<Footer />);
+    for (const link of screen.getAllByRole("link")) {
+      expect(link).toHaveClass("min-h-11", "min-w-11");
+    }
+    expect(
+      screen.getByRole("button", { name: "Toggle web-slinger mode" }),
+    ).toHaveClass("min-h-11", "min-w-11");
+  });
 });

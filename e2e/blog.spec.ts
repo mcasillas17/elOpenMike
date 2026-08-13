@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { devices, test, expect } from "@playwright/test";
 
 test("serves an RSS feed with at least one item", async ({ request }) => {
   const response = await request.get("/feed.xml");
@@ -8,6 +8,22 @@ test("serves an RSS feed with at least one item", async ({ request }) => {
   const body = await response.text();
   expect(body).toContain('<rss version="2.0"');
   expect(body).toContain("<item>");
+});
+
+test("the writing archive leads with the latest post and topic navigation", async ({
+  page,
+}) => {
+  await page.goto("/blog");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Writing" }),
+  ).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Blog topics" })).toBeVisible();
+
+  const posts = page.locator("article");
+  expect(await posts.count()).toBeGreaterThan(0);
+  await expect(posts.first().getByText("Latest", { exact: true })).toBeVisible();
+  await expect(posts.first().getByRole("heading", { level: 2 })).toBeVisible();
 });
 
 // A post with no tags is a post, not a broken one: Notion's Tags column is
@@ -83,14 +99,17 @@ test("a heading anchor deep-links into the section it labels", async ({
   await expect(page).toHaveURL(/\/blog\/[^/]+$/);
   const postUrl = page.url();
 
-  // The anchor rehype-autolink-headings appends: a child of the slugged
-  // heading itself, not the card link that got us here.
+  // The anchor is a sibling so its hash glyph is not announced as part of the
+  // heading's accessible name.
   const heading = page.locator("h2[id]").first();
-  const anchor = heading.locator("> a.heading-anchor");
+  const group = heading.locator("..");
+  const anchor = group.locator(":scope > h2 + a.heading-anchor");
   await expect(anchor).toHaveCount(1);
 
   const id = await heading.getAttribute("id");
+  const label = (await heading.innerText()).trim();
   expect(id).toBeTruthy();
+  await expect(heading).toHaveAccessibleName(label);
   await expect(anchor).toHaveAttribute("href", `#${id}`);
   await expect(anchor).toHaveAccessibleName("Link to this section");
 
@@ -104,6 +123,72 @@ test("a heading anchor deep-links into the section it labels", async ({
   // The hash comes from following the anchor, not from building a URL here.
   await expect(page).toHaveURL(`${postUrl}#${id}`);
   await expect(heading).toBeInViewport();
+});
+
+test("a reader can copy a highlighted code block", async ({ context, page }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/blog");
+  await page.locator("article h2 a").first().click();
+
+  const codeBlock = page.locator(".code-block-shell").first();
+  await expect(codeBlock).toBeVisible();
+  await expect(codeBlock.getByText(/TypeScript|JavaScript|Code/)).toBeVisible();
+
+  await codeBlock.getByRole("button", { name: "Copy code" }).click();
+  await expect(codeBlock.getByRole("button", { name: "Copied" })).toBeVisible();
+  await expect(codeBlock.getByRole("status")).toHaveText("Code copied");
+});
+
+test.describe("touch reader", () => {
+  const iPhone = devices["iPhone 13"];
+  test.use({
+    viewport: iPhone.viewport,
+    deviceScaleFactor: iPhone.deviceScaleFactor,
+    hasTouch: iPhone.hasTouch,
+    isMobile: iPhone.isMobile,
+    userAgent: iPhone.userAgent,
+  });
+
+  test("mobile controls meet the 44px target without widening the page", async ({
+    page,
+  }) => {
+    await page.goto("/blog");
+
+    const targets = [
+      page.getByRole("button", { name: "Menu" }),
+      page.getByRole("link", { name: /All posts/ }),
+      page.locator('article a[href^="/blog/tag/"]').first(),
+    ];
+
+    for (const target of targets) {
+      const box = await target.boundingBox();
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+    }
+
+    await page.locator("article h2 a").first().click();
+    const permalink = page
+      .getByRole("link", { name: "Link to this section" })
+      .first();
+    await expect(permalink).toBeVisible();
+    await expect(permalink).toHaveCSS("opacity", "1");
+
+    for (const target of [
+      page.getByRole("link", { name: /Back to blog/i }),
+      page.getByRole("button", { name: "Copy code" }).first(),
+      permalink,
+    ]) {
+      const box = await target.boundingBox();
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+    }
+
+    const pageWidths = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(pageWidths.scroll).toBeLessThanOrEqual(pageWidths.client);
+  });
 });
 
 test("the homepage links to the blog from the writing section", async ({

@@ -24,6 +24,7 @@ import {
   getAdjacentPosts,
   getPostsByTag,
   getPostSlugs,
+  getRelatedPosts,
 } from "@/lib/blog";
 import { buildFeedXml } from "@/app/feed.xml/route";
 
@@ -119,5 +120,33 @@ describe("posts sharing a date", () => {
 
     const xml = buildFeedXml(getAllPosts());
     expect(xml.indexOf("Title alpha")).toBeLessThan(xml.indexOf("Title zeta"));
+  });
+});
+
+describe("related posts", () => {
+  it("ranks shared topics before recency and excludes unrelated posts", () => {
+    post("current", "2026-06-01", ["AI", "Distributed Systems"]);
+    post("two-topics", "2026-01-01", ["AI", "Distributed Systems"]);
+    post("newer-one-topic", "2026-05-20", ["AI"]);
+    post("older-one-topic", "2026-04-20", ["Distributed Systems"]);
+    post("unrelated", "2026-06-02", ["Observability"]);
+
+    expect(getRelatedPosts("current").map((candidate) => candidate.slug)).toEqual([
+      "two-topics",
+      "newer-one-topic",
+      "older-one-topic",
+    ]);
+  });
+
+  it("honours its limit and returns empty for unknown posts or zero work", () => {
+    post("current", "2026-06-01", ["AI"]);
+    post("alpha", "2026-05-20", ["AI"]);
+    post("beta", "2026-04-20", ["AI"]);
+
+    expect(getRelatedPosts("current", 1).map((candidate) => candidate.slug)).toEqual([
+      "alpha",
+    ]);
+    expect(getRelatedPosts("current", 0)).toEqual([]);
+    expect(getRelatedPosts("missing")).toEqual([]);
   });
 });
