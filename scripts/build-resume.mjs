@@ -84,7 +84,7 @@ const html = `<!doctype html>
           </article>
           <article class="project">
             <h3>Thwiply <a class="project-link" href="https://github.com/mcasillas17/Thwiply">github.com/mcasillas17/Thwiply</a></h3>
-            <p>A privacy-first Android app that uses on-device LLMs to turn notifications and screenshots into actionable tasks, with no backend or telemetry.</p>
+            <p>An Android scaffold for device-held model downloads and streamed, on-device LLM inference; its capture-and-task workflow remains planned.</p>
           </article>
         </div>
       </section>

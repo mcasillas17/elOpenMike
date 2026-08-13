@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -7,11 +6,14 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const resumePath = fileURLToPath(new URL("../public/resume.pdf", import.meta.url));
 
-const pdfInfo = execFileSync("pdfinfo", [resumePath], { encoding: "utf8" });
-assert.match(pdfInfo, /^Pages:\s+1$/m, "resume must be one page");
-assert.match(pdfInfo, /^Tagged:\s+yes$/m, "resume must be a tagged PDF");
+const pdfBytes = readFileSync(resumePath);
+assert.match(
+  pdfBytes.toString("latin1"),
+  /\/StructTreeRoot\b/,
+  "raw PDF must contain a structure tree marker",
+);
 
-const document = await getDocument({ data: new Uint8Array(readFileSync(resumePath)) }).promise;
+const document = await getDocument({ data: new Uint8Array(pdfBytes) }).promise;
 assert.equal(document.numPages, 1, "PDF.js must read one page");
 
 const page = await document.getPage(1);
@@ -43,6 +45,16 @@ assert.doesNotMatch(
   /\+\d[\d\s()-]{7,}/,
   "public resume must not expose a phone number",
 );
+assert.match(
+  extractedText,
+  /An Android scaffold for device-held model downloads and streamed, on-device LLM inference; its capture-and-task workflow remains planned\./,
+  "Thwiply description must reflect the current shipped scope",
+);
+assert.doesNotMatch(
+  extractedText,
+  /turn notifications and screenshots into actionable tasks/,
+  "Thwiply description must not claim the planned capture-and-task workflow is shipped",
+);
 
 const links = new Set(
   (await page.getAnnotations())
@@ -60,4 +72,4 @@ for (const url of [
   assert.ok(links.has(url), `PDF must include link ${url}`);
 }
 
-console.log("Resume verified: one page, tagged, extractable in reading order, and linked.");
+console.log("Resume verified: one page, tagged structure, extractable reading order, and links.");
