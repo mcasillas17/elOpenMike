@@ -220,6 +220,10 @@ on mobile and add code from a laptop. Pasting copied code works fine on mobile.
 
 ## Privacy
 
+Video previews are local code-native facades. They do not contact YouTube or
+load a remote thumbnail until a visitor explicitly selects **Play**; the
+resulting privacy-enhanced player is lazy and sends no referrer.
+
 Three independent gates decide what reaches the site:
 
 1. **The integration connection.** The token can only read pages explicitly

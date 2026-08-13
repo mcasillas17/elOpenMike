@@ -23,6 +23,26 @@ describe("Carousel", () => {
     ).toHaveAttribute("aria-current", "true");
   });
 
+  it("exposes a current-slide status and 44px controls while keeping dots compact", () => {
+    render(<Carousel images={["/a.jpg", "/b.jpg", "/c.jpg"]} altPrefix="Pic" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Pic photo 1 of 3");
+    expect(screen.getByRole("button", { name: "Previous photo" })).toHaveClass(
+      "h-11",
+      "w-11",
+    );
+    expect(screen.getByRole("button", { name: "Previous photo" })).toHaveAttribute(
+      "aria-describedby",
+      screen.getByRole("status").id,
+    );
+    const firstDot = screen.getAllByRole("button", { name: /go to photo/i })[0];
+    expect(firstDot).toHaveClass("h-11", "w-11");
+    expect(firstDot.querySelector("span")).toHaveClass("h-2", "w-2");
+
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Pic photo 2 of 3");
+  });
+
   it("renders nothing for an empty image list", () => {
     const { container } = render(<Carousel images={[]} />);
     expect(container).toBeEmptyDOMElement();

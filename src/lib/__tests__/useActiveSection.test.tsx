@@ -6,6 +6,7 @@ import { useActiveSection } from "@/lib/useActiveSection";
 let ioCallback: (entries: Array<Partial<IntersectionObserverEntry>>) => void;
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   vi.stubGlobal(
     "IntersectionObserver",
     class {
@@ -25,6 +26,23 @@ function Probe() {
 }
 
 describe("useActiveSection", () => {
+  it("starts without an active section before an observed section enters view", () => {
+    document.body.innerHTML =
+      '<div id="experience"></div><div id="projects"></div>';
+    render(<Probe />);
+
+    expect(screen.getByTestId("active")).toBeEmptyDOMElement();
+  });
+
+  it("uses a matching location hash as the initial active section", () => {
+    window.history.replaceState(null, "", "#projects");
+    document.body.innerHTML =
+      '<div id="experience"></div><div id="projects"></div>';
+    render(<Probe />);
+
+    expect(screen.getByTestId("active")).toHaveTextContent("projects");
+  });
+
   it("reports the id of the intersecting section", () => {
     document.body.innerHTML =
       '<div id="experience"></div><div id="projects"></div>';

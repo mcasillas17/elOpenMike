@@ -37,6 +37,7 @@ export function Projects() {
               index={i}
               variant={HOME_VARIANTS[i] ?? "small"}
               issueNumber={String(total - i).padStart(2, "0")}
+              headingLevel={3}
             />
           </div>
         ))}

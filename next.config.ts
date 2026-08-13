@@ -8,22 +8,15 @@ import type { NextConfig } from "next";
 // page, so neither a fixed hash nor 'self' alone can cover them. The only
 // external script we load is the Cloudflare Web Analytics beacon.
 //
-// The comedy page is the only page that reaches off-site for content, and it
-// reaches to exactly two hosts (src/components/comedy/YouTubeEmbed.tsx): the
-// thumbnail at https://img.youtube.com/vi/<id>/hqdefault.jpg, and — only once
-// somebody clicks it — the player at https://www.youtube-nocookie.com/embed/.
-// Both are named in full. `https://*.youtube.com` or the bare `youtube.com`
-// would license every host Google puts behind that name, tracking endpoints
-// included, which is the thing the nocookie embed is chosen to avoid; and
-// neither is needed to name one thumbnail host and one player host.
+// Video facades render entirely from local HTML/CSS. A YouTube player is only
+// inserted after an explicit Play action, so the frame source is the sole
+// YouTube allowance this static site needs.
 export const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
   // next/font and React inline style props require inline styles.
   "style-src 'self' 'unsafe-inline'",
-  // The facade thumbnail. No other YouTube host is drawn from: the player's own
-  // images load inside its frame, under its own origin and its own policy.
-  "img-src 'self' data: blob: https://img.youtube.com",
+  "img-src 'self' data: blob:",
   "font-src 'self' data:",
   // Cloudflare analytics beacon reports to cloudflareinsights.com.
   "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com",

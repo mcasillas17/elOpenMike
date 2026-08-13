@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Image from "next/image";
 
 // A minimal, dependency-free image carousel: one slide visible, prev/next
@@ -18,6 +18,7 @@ export function Carousel({
   aspectClassName?: string;
 }) {
   const [index, setIndex] = useState(0);
+  const statusId = useId();
   const count = images.length;
   if (count === 0) return null;
 
@@ -30,6 +31,9 @@ export function Carousel({
       aria-roledescription="carousel"
       aria-label={`${altPrefix} photos`}
     >
+      <p id={statusId} className="sr-only" role="status" aria-live="polite">
+        {altPrefix} photo {index + 1} of {count}
+      </p>
       <div className={`relative ${aspectClassName} overflow-hidden`}>
         <div
           className="flex h-full motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out"
@@ -59,19 +63,21 @@ export function Carousel({
             type="button"
             onClick={() => go(index - 1)}
             aria-label="Previous photo"
-            className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-canvas/70 text-ink backdrop-blur transition-colors hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+            aria-describedby={statusId}
+            className="absolute left-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
           >
-            <span aria-hidden="true">‹</span>
+            <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full border border-edge bg-canvas/70 text-ink backdrop-blur transition-colors hover:bg-surface">‹</span>
           </button>
           <button
             type="button"
             onClick={() => go(index + 1)}
             aria-label="Next photo"
-            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-canvas/70 text-ink backdrop-blur transition-colors hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+            aria-describedby={statusId}
+            className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
           >
-            <span aria-hidden="true">›</span>
+            <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full border border-edge bg-canvas/70 text-ink backdrop-blur transition-colors hover:bg-surface">›</span>
           </button>
-          <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
+          <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1">
             {images.map((src, i) => (
               <button
                 key={src}
@@ -79,10 +85,13 @@ export function Carousel({
                 onClick={() => setIndex(i)}
                 aria-label={`Go to photo ${i + 1}`}
                 aria-current={i === index}
-                className={`h-2 w-2 rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web ${
-                  i === index ? "bg-web-strong" : "bg-ink/40 hover:bg-ink/70"
-                }`}
-              />
+                aria-describedby={statusId}
+                className="group flex h-11 w-11 items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
+              >
+                <span aria-hidden="true" className={`h-2 w-2 rounded-full transition-colors ${
+                  i === index ? "bg-web-strong" : "bg-ink/40 group-hover:bg-ink/70"
+                }`} />
+              </button>
             ))}
           </div>
         </>
