@@ -39,6 +39,7 @@ export default function ProjectsPage() {
                 index={0}
                 variant="feature"
                 issueNumber={String(total).padStart(2, "0")}
+                headingLevel={2}
               />
             </div>
           )}
@@ -49,6 +50,7 @@ export default function ProjectsPage() {
                 index={1}
                 variant="aux"
                 issueNumber={String(total - 1).padStart(2, "0")}
+                headingLevel={2}
               />
             </div>
           )}
@@ -66,6 +68,7 @@ export default function ProjectsPage() {
                   index={i}
                   variant="uniform"
                   issueNumber={String(total - i).padStart(2, "0")}
+                  headingLevel={2}
                 />
               </div>
             );

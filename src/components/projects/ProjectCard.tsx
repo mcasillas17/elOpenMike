@@ -15,11 +15,14 @@ export type ProjectCardVariant =
   | "aux"
   | "uniform";
 
+export type ProjectCardHeadingLevel = 2 | 3;
+
 type Props = {
   project: Project;
   index: number;
   variant: ProjectCardVariant;
   issueNumber: string;
+  headingLevel: ProjectCardHeadingLevel;
   className?: string;
 };
 
@@ -51,6 +54,7 @@ export function ProjectCard({
   index,
   variant,
   issueNumber,
+  headingLevel,
   className = "",
 }: Props) {
   const tint = getTint(project, index);
@@ -61,6 +65,7 @@ export function ProjectCard({
     ISSUE_ROTATE_BY_INDEX[index % ISSUE_ROTATE_BY_INDEX.length];
   const isFeatured = variant === "large" || variant === "feature";
   const label = index === 0 && isFeatured ? "NEW" : undefined;
+  const Heading = headingLevel === 2 ? "h2" : "h3";
 
   return (
     <ComicPanel tint={tint} className={`h-full w-full ${className}`}>
@@ -78,7 +83,7 @@ export function ProjectCard({
         />
       )}
       <div className="absolute inset-x-4 bottom-3 z-10">
-        <h3
+        <Heading
           className={`font-display font-black leading-none ${TITLE_SIZE[variant]}`}
           style={{ textShadow: "var(--text-shadow-card-title)" }}
         >
@@ -88,7 +93,7 @@ export function ProjectCard({
           >
             {project.title}
           </Link>
-        </h3>
+        </Heading>
         {SHOW_SUMMARY[variant] && (
           <p
             className={`mt-1.5 max-w-[90%] ${

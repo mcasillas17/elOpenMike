@@ -38,12 +38,17 @@ describe("Header", () => {
     );
   });
 
-  it("marks the current section's nav link as active", () => {
+  it("does not mark a section active while the home hero is in view", () => {
     render(<Header />);
-    // Experience is ids[0], so it is active on initial render.
-    expect(screen.getByRole("link", { name: "Experience" })).toHaveClass(
+    expect(screen.getByRole("link", { name: "Experience" })).not.toHaveClass(
       "text-web-strong",
     );
+  });
+
+  it("gives each desktop navigation link a 44px target and visible keyboard focus", () => {
+    render(<Header />);
+    const experience = screen.getByRole("link", { name: "Experience" });
+    expect(experience).toHaveClass("min-h-11", "focus-visible:outline");
   });
 
   it("toggles a mobile menu exposing the nav links", () => {

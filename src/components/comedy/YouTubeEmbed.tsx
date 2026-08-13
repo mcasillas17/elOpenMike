@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-// Lightweight YouTube facade: shows the thumbnail + a red play button, and only
-// loads the (privacy-friendly) iframe after the user clicks. No upfront scripts.
+// Lightweight YouTube facade: local graphic treatment + a red play button.
+// It only loads the privacy-friendly iframe after the user clicks.
 export function YouTubeEmbed({
   youtubeId,
   title,
@@ -20,6 +20,8 @@ export function YouTubeEmbed({
           className="absolute inset-0 h-full w-full"
           src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`}
           title={title}
+          loading="lazy"
+          referrerPolicy="no-referrer"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
         />
@@ -34,13 +36,8 @@ export function YouTubeEmbed({
       aria-label={`Play: ${title}`}
       className="group relative block aspect-video w-full overflow-hidden rounded-xl border border-edge bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
-        alt=""
-        loading="lazy"
-        className="absolute inset-0 h-full w-full object-cover"
-      />
+      <span aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,rgba(27,111,227,0.7),transparent_35%),radial-gradient(circle_at_75%_70%,rgba(230,36,41,0.65),transparent_40%),linear-gradient(135deg,#0e1320,#171c28)]" />
+      <span aria-hidden="true" className="absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(255,255,255,0.35)_1px,transparent_1.5px)] [background-size:8px_8px]" />
       <span className="absolute inset-0 flex items-center justify-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-spidey text-white shadow-lg transition-transform group-hover:scale-110">
           ▶

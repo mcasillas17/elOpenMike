@@ -55,7 +55,7 @@ export function Header() {
                   <Link
                     href={item.href}
                     aria-current={state.current ? "page" : undefined}
-                    className={`text-sm transition-colors ${
+                    className={`inline-flex min-h-11 items-center rounded px-1 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web ${
                       state.active
                         ? "text-web-strong"
                         : "text-muted hover:text-ink"
