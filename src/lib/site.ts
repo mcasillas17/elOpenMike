@@ -41,6 +41,10 @@ export function alternatesFor(canonical: string) {
   };
 }
 
+const recruitingEmailSubject =
+  "Senior backend, platform, or AI-infrastructure opportunity";
+const recruitingEmailHref = `mailto:micasillm@gmail.com?subject=${encodeURIComponent(recruitingEmailSubject)}`;
+
 export const site = {
   name: "Miguel Casillas",
   firstName: "Miguel",
@@ -50,10 +54,15 @@ export const site = {
   headline:
     "I build AI-powered, distributed systems — services that stay fast, scalable, and observable as they grow.",
   tagline: "Builder by day, open-mic by night.",
-  availability: "Open to interesting opportunities",
+  availability:
+    "Open to conversations about senior backend, platform, and AI-infrastructure opportunities.",
   intro:
     "I ship software, lift heavy, and occasionally make rooms laugh. Software Engineer focused on building things that work — and a few that web-sling.",
   resumeHref: routes.resume,
+  recruitingContact: {
+    emailHref: recruitingEmailHref,
+    emailSubject: recruitingEmailSubject,
+  },
   // Only sections that exist in Plan 1. Grow this as later plans land.
   nav: [
     { label: "Experience", href: "/#experience" },

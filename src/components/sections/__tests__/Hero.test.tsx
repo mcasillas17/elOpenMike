@@ -10,14 +10,26 @@ describe("Hero", () => {
     expect(screen.getByText(site.headline)).toBeInTheDocument();
     expect(screen.getByText(site.tagline)).toBeInTheDocument();
     expect(screen.getByText(site.availability)).toBeInTheDocument();
+    expect(site.availability).toBe(
+      "Open to conversations about senior backend, platform, and AI-infrastructure opportunities.",
+    );
   });
 
-  it("renders Resume, Email, and LinkedIn CTAs", () => {
+  it("offers recruiter-ready resume and contact CTAs", () => {
     render(<Hero />);
     expect(
-      screen.getByRole("link", { name: /resume/i }),
+      screen.getByRole("link", { name: "Download résumé (PDF)" }),
     ).toHaveAttribute("href", site.resumeHref);
-    expect(screen.getByRole("link", { name: "Email" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Download résumé (PDF)" }),
+    ).toHaveAttribute("download");
+    expect(screen.getByRole("link", { name: "Email" })).toHaveAttribute(
+      "href",
+      site.recruitingContact.emailHref,
+    );
     expect(screen.getByRole("link", { name: "LinkedIn" })).toBeInTheDocument();
+    const github = screen.getByRole("link", { name: "GitHub" });
+    expect(github).toHaveAttribute("href", "https://github.com/mcasillas17");
+    expect(github).toHaveAttribute("target", "_blank");
   });
 });
