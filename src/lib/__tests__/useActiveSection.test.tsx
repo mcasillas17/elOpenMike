@@ -59,4 +59,91 @@ describe("useActiveSection", () => {
 
     expect(screen.getByTestId("active")).toHaveTextContent("projects");
   });
+
+  it("clears the active section after every tracked section leaves the viewport", () => {
+    document.body.innerHTML =
+      '<div id="experience"></div><div id="projects"></div>';
+    render(<Probe />);
+
+    act(() => {
+      ioCallback([
+        {
+          isIntersecting: true,
+          target: document.getElementById("experience")!,
+        },
+      ]);
+    });
+    expect(screen.getByTestId("active")).toHaveTextContent("experience");
+
+    act(() => {
+      ioCallback([
+        {
+          isIntersecting: false,
+          target: document.getElementById("experience")!,
+        },
+      ]);
+    });
+    expect(screen.getByTestId("active")).toBeEmptyDOMElement();
+  });
+
+  it("does not clear the active section when another tracked section intersects", () => {
+    document.body.innerHTML =
+      '<div id="experience"></div><div id="projects"></div>';
+    render(<Probe />);
+
+    act(() => {
+      ioCallback([
+        {
+          isIntersecting: true,
+          target: document.getElementById("experience")!,
+        },
+      ]);
+    });
+    act(() => {
+      ioCallback([
+        {
+          isIntersecting: false,
+          target: document.getElementById("experience")!,
+        },
+        {
+          isIntersecting: true,
+          target: document.getElementById("projects")!,
+        },
+      ]);
+    });
+
+    expect(screen.getByTestId("active")).toHaveTextContent("projects");
+  });
+
+  it("clears stale state for empty or untracked hash changes", () => {
+    document.body.innerHTML =
+      '<div id="experience"></div><div id="projects"></div>';
+    render(<Probe />);
+    act(() => {
+      ioCallback([
+        {
+          isIntersecting: true,
+          target: document.getElementById("experience")!,
+        },
+      ]);
+    });
+
+    act(() => {
+      window.history.replaceState(null, "", "#projects");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByTestId("active")).toHaveTextContent("projects");
+
+    act(() => {
+      window.history.replaceState(null, "", "/");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByTestId("active")).toBeEmptyDOMElement();
+
+    act(() => {
+      window.history.replaceState(null, "", "#untracked");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByTestId("active")).toBeEmptyDOMElement();
+  });
 });

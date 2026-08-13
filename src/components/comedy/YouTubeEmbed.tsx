@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-// Lightweight YouTube facade: shows the thumbnail + a red play button, and only
-// loads the (privacy-friendly) iframe after the user clicks. No upfront scripts.
+// Lightweight YouTube facade: local graphic treatment + a red play button.
+// It only loads the privacy-friendly iframe after the user clicks.
 export function YouTubeEmbed({
   youtubeId,
   title,

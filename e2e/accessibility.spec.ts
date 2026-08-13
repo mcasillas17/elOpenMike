@@ -10,7 +10,7 @@ async function expectMinimumTarget(locator: ReturnType<import("@playwright/test"
 test.describe("desktop accessibility", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("hero starts with no active section, then navigation tracks Experience", async ({ page }) => {
+  test("hero clears navigation state after scrolling back from Experience", async ({ page }) => {
     await page.goto("/");
     const experience = page.getByRole("link", { name: "Experience" }).first();
     await expect(experience).not.toHaveClass(/text-web-strong/);
@@ -18,6 +18,9 @@ test.describe("desktop accessibility", () => {
 
     await page.locator("#experience").scrollIntoViewIfNeeded();
     await expect(experience).toHaveClass(/text-web-strong/);
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(experience).not.toHaveClass(/text-web-strong/);
 
     await page.goto("/#experience");
     await expect(page.getByRole("link", { name: "Experience" }).first()).toHaveClass(
