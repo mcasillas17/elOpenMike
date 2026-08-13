@@ -124,20 +124,24 @@ it has been migrated into the Blog database. Until then,
 `pnpm sync:notion --check` correctly reports drift; do not edit the generated
 file to make the check pass.
 
-After the reviewed change is merged, a maintainer with the normal Notion
-credentials should:
+Keep the PR **draft/blocked and unmerged** until a maintainer with the normal
+Notion credentials completes this checklist on the reviewed branch. The
+scheduled sync must be paused first: it runs frequently enough to remove the
+staged MDX before migration if it remains enabled.
 
-1. Pause the scheduled content-sync workflow so it cannot remove the staged
-   MDX while migration is in progress.
-2. From the reviewed checkout, run `pnpm migrate:to-notion`. It creates the
+1. Pause the scheduled content-sync workflow. Do not change the workflow file
+   or add credentials to the repository or CI output.
+2. From the reviewed branch, run `pnpm migrate:to-notion`. It creates the
    page as a Draft, writes the body, and promotes it only after the complete
-   content is present. Never add credentials to the repository or CI output.
+   content is present.
 3. Confirm the new page has the intended title, excerpt, publication date,
    tags, headings, links, and text diagram in Notion. Its Status should be
    **Published**.
-4. Run `pnpm sync:notion`, commit the sync result if it changes anything, then
-   run `pnpm sync:notion --check` with the same authorized environment.
-5. Re-enable the scheduled workflow.
+4. Still on that branch, run `pnpm sync:notion`. Commit any canonical sync-back
+   changes into the PR, then run `pnpm sync:notion --check` with the same
+   authorized environment.
+5. Only after the check passes may the PR be merged. Re-enable the scheduled
+   workflow after the merge.
 
 The migration is safe to re-run and deliberately refuses ambiguous or edited
 drafts rather than overwriting them. Read the migration and failure-handling
