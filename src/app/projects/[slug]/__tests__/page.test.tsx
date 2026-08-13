@@ -45,6 +45,26 @@ describe("/projects/[slug] detail page", () => {
     }
   });
 
+  it.each(["turingagent", "thwiply"])(
+    "renders the evidence-rich case-study sections for %s",
+    async (slug) => {
+      const ui = await ProjectDetailPage({
+        params: Promise.resolve({ slug }),
+      });
+      render(ui);
+
+      expect(
+        screen.getByRole("heading", { level: 2, name: "Architecture & data flow" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { level: 2, name: "Evidence & current status" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("figure", { name: /architecture.*data flow/i }),
+      ).toBeInTheDocument();
+    },
+  );
+
   it("sets metadata title and description from the project", async () => {
     const meta = await generateMetadata({
       params: Promise.resolve({ slug: sample.slug }),

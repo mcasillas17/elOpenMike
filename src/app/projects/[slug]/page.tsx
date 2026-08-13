@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/comic/ComicButton";
 import { Carousel } from "@/components/ui/Carousel";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
+import { CaseStudy } from "@/components/projects/CaseStudy";
 import { getProject, getAllSlugs, projects } from "@/data/projects";
 import { getTint } from "@/lib/projectVisuals";
 import { routes, alternatesFor } from "@/lib/site";
@@ -174,6 +175,8 @@ export default async function ProjectDetailPage({
             </div>
           </>
         )}
+
+        {project.caseStudy && <CaseStudy caseStudy={project.caseStudy} />}
       </div>
     </Container>
   );
