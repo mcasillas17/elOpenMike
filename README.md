@@ -161,6 +161,7 @@ than passing it.
 
 - `src/data/experience.ts` — your roles and accomplishments.
 - `src/data/projects.ts` — your projects (slug, summary, tags, stack, links). Tags drive panel tint on listings (AI/Full-stack → blue, Web app → red, Game/Unity → green, Open source → purple). Add screenshots under `public/images/projects/` and reference them in each project's `images` array — they appear in the detail-page carousel; listing cards are styled as comic panels and don't render screenshots.
+- `src/data/howIWork.ts` — evidence-backed engineering principles for the homepage. Keep each claim tied to a public project, document, article, or current experience summary.
 - `public/resume.pdf` — your real résumé (replace the placeholder).
 - `src/lib/site.ts` — name, tagline, role, and social links (incl. the LinkedIn URL placeholder).
 - `content/blog/*.mdx` — **generated from Notion; do not hand-edit** (the next
