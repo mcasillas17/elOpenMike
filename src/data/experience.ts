@@ -1,6 +1,7 @@
 export type Role = {
   company: string;
   title: string;
+  focus: string;
   start: string; // e.g. "2023"
   end: string; // e.g. "Present"
   location?: string;
@@ -15,11 +16,12 @@ export const experience: Role[] = [
   {
     company: "Microsoft",
     title: "Software Engineer II",
+    focus: "AI Messaging & Campaign Insights",
     start: "2024",
     end: "Present",
     location: "Redmond, WA",
     highlights: [
-      "Built an MCP server that enables agentic workflows to use content-suggestion and campaign-insight scenarios across multiple data sources and APIs.",
+      "Built an MCP server that gives agentic solutions access to content suggestions and campaign insights across multiple data sources and APIs.",
       "Delivered explainability pipelines for model-driven content insights and campaign diagnostics, with end-to-end telemetry, dashboards, and partner-facing documentation.",
       "Modernized CI/CD to YAML pipelines with artifact signing, secret scanning, production-branch triggers, gated approvals, and compliance checks.",
     ],
@@ -28,12 +30,13 @@ export const experience: Role[] = [
   {
     company: "Microsoft",
     title: "Software Engineer",
+    focus: "Campaign Platform",
     start: "2022",
     end: "2024",
     location: "Redmond, WA",
     highlights: [
-      "Completed a migration for a campaign-metadata portal used by Microsoft products to create campaign IDs.",
-      "Integrated Exchange email delivery for commercial campaign scenarios involving Microsoft and external partners.",
+      "Completed a migration for a campaign-metadata portal that supports campaign-ID creation across Microsoft products.",
+      "Integrated Exchange email delivery for commercial campaigns with Microsoft and external partners.",
       "Automated creation and updates of data consumed by the campaign-metadata portal.",
     ],
     stack: ["C#", "Azure", "Exchange"],
@@ -41,6 +44,7 @@ export const experience: Role[] = [
   {
     company: "Microsoft",
     title: "Software Engineer",
+    focus: "Outlook Scheduling",
     start: "2019",
     end: "2022",
     location: "Redmond, WA",
@@ -54,6 +58,7 @@ export const experience: Role[] = [
   {
     company: "Microsoft",
     title: "Software Engineer",
+    focus: "Telemetry SDKs",
     start: "2018",
     end: "2019",
     location: "Redmond, WA",

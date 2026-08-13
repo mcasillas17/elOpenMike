@@ -23,6 +23,9 @@ export function Experience() {
                   {" · "}
                   <span>{role.company}</span>
                 </span>
+                <span className="block text-base font-medium text-web-strong">
+                  {role.focus}
+                </span>
               </h3>
               <span className="text-sm text-muted">
                 {role.start} – {role.end}

@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/Button";
 import { WebCorner } from "@/components/ui/WebCorner";
 
 const linkedin = site.socials.find((s) => s.label === "LinkedIn")?.href;
-const email = site.socials.find((s) => s.label === "Email")?.href;
 const github = site.socials.find((s) => s.label === "GitHub")?.href;
 
 export function Hero() {
@@ -35,11 +34,9 @@ export function Hero() {
           <Button href={site.resumeHref} download>
             Download résumé (PDF)
           </Button>
-          {email && (
-            <Button href={email} variant="secondary">
-              Email
-            </Button>
-          )}
+          <Button href={site.recruitingContact.emailHref} variant="secondary">
+            Email
+          </Button>
           {github && (
             <Button href={github} target="_blank" variant="secondary">
               GitHub

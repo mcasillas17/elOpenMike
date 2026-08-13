@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PostFooter } from "@/components/blog/PostFooter";
 import type { PostMeta } from "@/lib/blog";
-import { site } from "@/lib/site";
 
 const related: PostMeta = {
   slug: "related-post",
@@ -29,7 +28,7 @@ describe("PostFooter", () => {
     );
     expect(screen.getByRole("link", { name: /send an email/i })).toHaveAttribute(
       "href",
-      site.contact.emailHref,
+      "mailto:micasillm@gmail.com",
     );
   });
 

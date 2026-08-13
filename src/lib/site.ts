@@ -41,9 +41,9 @@ export function alternatesFor(canonical: string) {
   };
 }
 
-const recruiterEmailSubject =
+const recruitingEmailSubject =
   "Senior backend, platform, or AI-infrastructure opportunity";
-const recruiterEmailHref = `mailto:micasillm@gmail.com?subject=${encodeURIComponent(recruiterEmailSubject)}`;
+const recruitingEmailHref = `mailto:micasillm@gmail.com?subject=${encodeURIComponent(recruitingEmailSubject)}`;
 
 export const site = {
   name: "Miguel Casillas",
@@ -59,9 +59,9 @@ export const site = {
   intro:
     "I ship software, lift heavy, and occasionally make rooms laugh. Software Engineer focused on building things that work — and a few that web-sling.",
   resumeHref: routes.resume,
-  contact: {
-    emailHref: recruiterEmailHref,
-    emailSubject: recruiterEmailSubject,
+  recruitingContact: {
+    emailHref: recruitingEmailHref,
+    emailSubject: recruitingEmailSubject,
   },
   // Only sections that exist in Plan 1. Grow this as later plans land.
   nav: [
@@ -75,6 +75,6 @@ export const site = {
   socials: [
     { label: "GitHub", href: "https://github.com/mcasillas17" },
     { label: "LinkedIn", href: "https://www.linkedin.com/in/mcasillas17/" },
-    { label: "Email", href: recruiterEmailHref },
+    { label: "Email", href: "mailto:micasillm@gmail.com" },
   ],
 } as const;

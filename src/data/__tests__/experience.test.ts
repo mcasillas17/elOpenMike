@@ -7,6 +7,7 @@ describe("experience data", () => {
     for (const role of experience) {
       expect(role.company).toBeTruthy();
       expect(role.title).toBeTruthy();
+      expect(role.focus).toBeTruthy();
       expect(role.start).toBeTruthy();
       expect(Array.isArray(role.highlights)).toBe(true);
     }

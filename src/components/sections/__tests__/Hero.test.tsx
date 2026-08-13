@@ -22,7 +22,7 @@ describe("Hero", () => {
     ).toHaveAttribute("download");
     expect(screen.getByRole("link", { name: "Email" })).toHaveAttribute(
       "href",
-      site.contact.emailHref,
+      site.recruitingContact.emailHref,
     );
     expect(screen.getByRole("link", { name: "LinkedIn" })).toBeInTheDocument();
     const github = screen.getByRole("link", { name: "GitHub" });
