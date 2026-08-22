@@ -52,7 +52,7 @@ it("includes Mexican Mom as the newest source-only project", () => {
 Run:
 
 ```bash
-pnpm test -- src/data/__tests__/projects.test.ts
+pnpm exec vitest run src/data/__tests__/projects.test.ts
 ```
 
 Expected: FAIL because `getProject("mexican-mom")` returns `undefined`.
@@ -86,7 +86,7 @@ Insert this object at the start of `projects` in `src/data/projects.ts`:
 Run:
 
 ```bash
-pnpm test -- src/data/__tests__/projects.test.ts src/components/sections/__tests__/Projects.test.tsx src/app/projects/__tests__/page.test.tsx 'src/app/projects/[slug]/__tests__/page.test.tsx'
+pnpm exec vitest run src/data/__tests__/projects.test.ts src/components/sections/__tests__/Projects.test.tsx src/app/projects/__tests__/page.test.tsx 'src/app/projects/[slug]/__tests__/page.test.tsx'
 ```
 
 Expected: all selected Vitest files pass, proving the entry is valid, appears in listing data, and generates a working detail route.

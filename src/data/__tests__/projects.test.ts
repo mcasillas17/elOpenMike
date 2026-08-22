@@ -21,6 +21,29 @@ describe("projects data", () => {
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
+  it("includes Mexican Mom as the newest source-only project", () => {
+    const project = getProject("mexican-mom");
+
+    expect(project).toBeDefined();
+    expect(projects[0]).toBe(project);
+    expect(project).toMatchObject({
+      title: "Mexican Mom",
+      year: "2026",
+      tags: ["AI", "Developer tools", "Open source"],
+      stack: [
+        "Agent Skills",
+        "Markdown",
+        "Node.js",
+        "YAML",
+        "GitHub Actions",
+      ],
+      repoUrl: "https://github.com/mcasillas17/mexican-mom",
+      images: [],
+    });
+    expect(project?.liveUrl).toBeUndefined();
+    expect(project?.caseStudy).toBeUndefined();
+  });
+
   it("getProject returns the matching project or undefined", () => {
     expect(getProject(projects[0].slug)?.slug).toBe(projects[0].slug);
     expect(getProject("definitely-not-a-slug")).toBeUndefined();
