@@ -147,6 +147,6 @@ git --no-pager diff --stat origin/main...HEAD
 
 Expected: no whitespace errors; only the design spec, implementation plan, project data, and focused data test are changed relative to `main`; the worktree is clean.
 
-- [ ] **Step 5: Push and open the pull request**
+- [x] **Step 5: Push and open the pull request**
 
 Push the current branch and create a pull request titled `Add Mexican Mom to projects`. The body should summarize the newest-first project entry, repository-backed copy, source-only detail treatment, and successful project-focused tests, lint, build, and end-to-end navigation checks.
