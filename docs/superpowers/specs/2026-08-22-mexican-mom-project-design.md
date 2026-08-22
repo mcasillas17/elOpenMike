@@ -1,7 +1,7 @@
 # Mexican Mom Portfolio Project Design
 
-**Date:** 2026-08-22  
-**Owner:** Miguel Casillas (`mcasillas17`)  
+**Date:** 2026-08-22
+**Owner:** Miguel Casillas (`mcasillas17`)
 **Status:** Approved for implementation from the explicit request and existing project-entry conventions
 
 ## Purpose
