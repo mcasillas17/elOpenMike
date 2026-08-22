@@ -140,9 +140,9 @@ Expected: all project-navigation tests pass, including navigation from the first
 Run:
 
 ```bash
-git diff --check main...HEAD
+git diff --check origin/main...HEAD
 git status --short
-git --no-pager diff --stat main...HEAD
+git --no-pager diff --stat origin/main...HEAD
 ```
 
 Expected: no whitespace errors; only the design spec, implementation plan, project data, and focused data test are changed relative to `main`; the worktree is clean.
