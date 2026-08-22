@@ -24,7 +24,7 @@
 - Modify: `src/data/__tests__/projects.test.ts:19-31`
 - Modify: `src/data/projects.ts:49-50`
 
-- [ ] **Step 1: Write the failing project-data test**
+- [x] **Step 1: Write the failing project-data test**
 
 Add this test after the unique-slugs test in `src/data/__tests__/projects.test.ts`:
 
@@ -47,7 +47,7 @@ it("includes Mexican Mom as the newest source-only project", () => {
 });
 ```
 
-- [ ] **Step 2: Run the data test to verify it fails**
+- [x] **Step 2: Run the data test to verify it fails**
 
 Run:
 
@@ -57,7 +57,7 @@ pnpm exec vitest run src/data/__tests__/projects.test.ts
 
 Expected: FAIL because `getProject("mexican-mom")` returns `undefined`.
 
-- [ ] **Step 3: Add the minimal typed project entry**
+- [x] **Step 3: Add the minimal typed project entry**
 
 Insert this object at the start of `projects` in `src/data/projects.ts`:
 
@@ -81,7 +81,7 @@ Insert this object at the start of `projects` in `src/data/projects.ts`:
 },
 ```
 
-- [ ] **Step 4: Run the focused project-surface tests**
+- [x] **Step 4: Run the focused project-surface tests**
 
 Run:
 
@@ -91,7 +91,7 @@ pnpm exec vitest run src/data/__tests__/projects.test.ts src/components/sections
 
 Expected: all selected Vitest files pass, proving the entry is valid, appears in listing data, and generates a working detail route.
 
-- [ ] **Step 5: Commit the implementation**
+- [x] **Step 5: Commit the implementation**
 
 ```bash
 git add src/data/projects.ts src/data/__tests__/projects.test.ts
@@ -105,7 +105,7 @@ git commit -m "feat(projects): add Mexican Mom"
 - Verify: `src/data/__tests__/projects.test.ts`
 - Verify: `e2e/projects.spec.ts`
 
-- [ ] **Step 1: Run lint**
+- [x] **Step 1: Run lint**
 
 Run:
 
@@ -115,7 +115,7 @@ pnpm lint
 
 Expected: exits successfully with no lint errors.
 
-- [ ] **Step 2: Build all static project routes**
+- [x] **Step 2: Build all static project routes**
 
 Run:
 
@@ -125,7 +125,7 @@ pnpm build
 
 Expected: exits successfully and includes the project detail route without type, metadata, or prerender failures.
 
-- [ ] **Step 3: Exercise project navigation end to end**
+- [x] **Step 3: Exercise project navigation end to end**
 
 Run:
 
@@ -135,7 +135,7 @@ pnpm e2e e2e/projects.spec.ts
 
 Expected: all project-navigation tests pass, including navigation from the first home card, which is now Mexican Mom.
 
-- [ ] **Step 4: Inspect the final diff**
+- [x] **Step 4: Inspect the final diff**
 
 Run:
 
