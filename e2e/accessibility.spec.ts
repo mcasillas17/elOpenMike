@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { projects } from "../src/data/projects";
 
 async function expectMinimumTarget(locator: ReturnType<import("@playwright/test").Page["locator"]>) {
   const box = await locator.boundingBox();
@@ -36,7 +37,7 @@ test.describe("desktop accessibility", () => {
 
     await page.goto("/projects");
     await expect(page.getByRole("heading", { level: 1, name: /Casefile/ })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2 })).toHaveCount(4);
+    await expect(page.getByRole("heading", { level: 2 })).toHaveCount(projects.length);
   });
 
   test("carousel controls announce the active slide and offer 44px hit areas", async ({ page }) => {
