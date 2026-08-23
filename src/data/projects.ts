@@ -48,6 +48,23 @@ export type Project = {
 // screenshots — `images` shows up on the detail page carousel only.
 export const projects: Project[] = [
   {
+    slug: "mexican-mom",
+    title: "Mexican Mom",
+    summary:
+      "A cross-platform Agent Skills plugin that gives coding agents a rigorously tested engineering-discipline layer with a distinct Mexican-mom voice.",
+    year: "2026",
+    tags: ["AI", "Developer tools", "Open source"],
+    stack: ["Agent Skills", "Markdown", "Node.js", "YAML", "GitHub Actions"],
+    highlights: [
+      "Twenty-three focused engineering-discipline skills plus a manual router keep each intervention narrow and explicit.",
+      "One shared Agent Skills tree installs across Claude Code, GitHub Copilot CLI, and OpenAI Codex.",
+      "Node.js validation and GitHub Actions enforce frontmatter, cross-skill routing, listing-size, packaging, and version contracts.",
+      "Rules target false success claims, premature “not found” reports, swallowed failures, unsafe destructive actions, and prompt-injection attempts.",
+    ],
+    repoUrl: "https://github.com/mcasillas17/mexican-mom",
+    images: [],
+  },
+  {
     slug: "thwiply",
     title: "Thwiply",
     summary:
