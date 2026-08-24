@@ -10,11 +10,11 @@ Add `mcasillas17/WebSnag` to the website's Projects surfaces as the newest featu
 
 ## Source findings
 
-WebSnag is an MIT-licensed, local-first Android application for intentional distraction blocking. Users create blocklist or allowlist profiles, bind profiles to physical NFC tags, and activate or deactivate focus sessions by tapping those tags. A remote press-and-hold action can also start a session without a tag.
+WebSnag is an MIT-licensed, local-first Android application for intentional distraction blocking. Users create blocklist or allowlist profiles, bind profiles to physical NFC tags, automate focus sessions with recurring schedules, and review activity history. A remote press-and-hold action can also start a session without a tag.
 
 The current Android 8+ app is built with Kotlin, Jetpack Compose, Material 3, Coroutines and Flow, DataStore, NFC ReaderMode, and an Accessibility Service. The enforcement path reacts to foreground-window changes rather than polling: an in-memory engine checks the active profile in constant time, sends blocked apps back to the launcher, and opens a Compose blocker overlay. Emergency unlocking uses a cooldown and intention phrase so users retain a recovery path without making impulsive bypasses frictionless.
 
-The repository includes screenshots and focused unit tests for enforcement activation, blocklist and allowlist behavior, emergency cooldowns, session tracking, NFC activation and deactivation, rejected tags, and unknown tags.
+The repository includes screenshots and focused unit tests for enforcement activation, blocklist and allowlist behavior, schedule windows, activity summaries, emergency cooldowns, session tracking, NFC activation and deactivation, rejected tags, and unknown tags.
 
 ## Upstream snapshot
 
@@ -41,15 +41,15 @@ Use:
 - Live URL: none
 - Case study: enabled
 
-The summary will describe WebSnag as a local-first Android focus app that turns NFC tags, app-blocking profiles, and deliberate unlock friction into context-aware digital self-control.
+The summary will describe WebSnag as a local-first Android focus app that combines NFC locks, recurring schedules, allowlist profiles, and deliberate unlock friction to make distractions harder to reach.
 
 The case study will cover:
 
 1. The need to make clear-headed intentions stronger than later impulses without requiring device-owner or MDM control.
-2. Compose surfaces for focus sessions, profile editing, NFC enrollment, setup, and blocking feedback.
-3. The NFC resolver, profile repository, enforcement engine, Accessibility Service, and blocker overlay data flow.
-4. Local-first storage, event-driven interception, constant-time package checks, system-package exemptions, and a deliberate emergency recovery path.
-5. Unit-test evidence and an explicit distinction between shipped NFC behavior and roadmap-only contextual triggers.
+2. Compose surfaces for focus sessions, recurring schedules, activity history, profile editing, NFC enrollment, setup, and blocking feedback.
+3. The NFC and schedule coordinators, profile repository, enforcement engine, Accessibility Service, and blocker overlay data flow.
+4. Local-first storage, event-driven interception, constant-time package checks, system-package exemptions, activity tracking, and a deliberate emergency recovery path.
+5. Immutable snapshot evidence from the pinned README, schedule manager, enforcement engine, and test suite.
 
 ## Media
 
@@ -78,4 +78,4 @@ Run the focused project data, carousel, Projects section, Projects index, and pr
 
 ## Scope
 
-This change does not add an APK download, Play Store link, live demo, custom project route, new filtering, or a broader Projects redesign. It does not claim that roadmap triggers are implemented.
+This change does not add an APK download, Play Store link, live demo, custom project route, new filtering, or a broader Projects redesign. This entry publishes no roadmap claim.

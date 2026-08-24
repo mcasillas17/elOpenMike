@@ -2,10 +2,6 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-## Upstream snapshot override
-
-> **Pinned upstream supersedes older snippets below:** use commit `db40858` as the operative source snapshot. Use the asset names `websnag-dashboard.png`, `websnag-schedules.png`, `websnag-activity.png`, and `websnag-nfc-enrollment.png`; treat recurring schedules as shipped behavior; and publish no roadmap claim. Any earlier references in this plan to profile/blocker screenshots or roadmap-only schedule status are historical, not operative.
-
 **Goal:** Add WebSnag as the website's newest featured project with repository-backed copy, a full engineering case study, and a portrait screenshot carousel.
 
 **Architecture:** Extend the existing static `Project` data model with one optional portrait-media flag and pass that flag through the existing project detail page to the shared carousel. Keep all project content in `src/data/projects.ts`, all screenshots in `public/images/projects/`, and reuse the existing project listing, metadata, static-route, and case-study components.
@@ -206,27 +202,19 @@ git commit -m "feat: support portrait project media" -m "Co-authored-by: Copilot
 
 **Files:**
 - Create: `public/images/projects/websnag-dashboard.png`
-- Create: `public/images/projects/websnag-profiles.png`
+- Create: `public/images/projects/websnag-schedules.png`
+- Create: `public/images/projects/websnag-activity.png`
 - Create: `public/images/projects/websnag-nfc-enrollment.png`
-- Create: `public/images/projects/websnag-blocker.png`
 
-- [ ] **Step 1: Download the repository-owned screenshots**
+- [ ] **Step 1: Download the repository-owned screenshots from the pinned snapshot**
 
 Run:
 
 ```bash
-curl --fail --location \
-  https://raw.githubusercontent.com/mcasillas17/WebSnag/main/docs/screenshots/01_dashboard_hold_to_lock.png \
-  --output public/images/projects/websnag-dashboard.png
-curl --fail --location \
-  https://raw.githubusercontent.com/mcasillas17/WebSnag/main/docs/screenshots/02_profiles_allowlist_badge.png \
-  --output public/images/projects/websnag-profiles.png
-curl --fail --location \
-  https://raw.githubusercontent.com/mcasillas17/WebSnag/main/docs/screenshots/05_nfc_enroll.png \
-  --output public/images/projects/websnag-nfc-enrollment.png
-curl --fail --location \
-  https://raw.githubusercontent.com/mcasillas17/WebSnag/main/docs/screenshots/07_blocker_overlay_allowlist.png \
-  --output public/images/projects/websnag-blocker.png
+curl --fail --location   https://raw.githubusercontent.com/mcasillas17/WebSnag/db40858329c6a236550009d5aa0ba52a6d1056e1/docs/screenshots/01_dashboard_wordmark_idle.png   --output public/images/projects/websnag-dashboard.png
+curl --fail --location   https://raw.githubusercontent.com/mcasillas17/WebSnag/db40858329c6a236550009d5aa0ba52a6d1056e1/docs/screenshots/02_schedules_overview.png   --output public/images/projects/websnag-schedules.png
+curl --fail --location   https://raw.githubusercontent.com/mcasillas17/WebSnag/db40858329c6a236550009d5aa0ba52a6d1056e1/docs/screenshots/03_activity_overview.png   --output public/images/projects/websnag-activity.png
+curl --fail --location   https://raw.githubusercontent.com/mcasillas17/WebSnag/db40858329c6a236550009d5aa0ba52a6d1056e1/docs/screenshots/05_enroll_tag_screen.png   --output public/images/projects/websnag-nfc-enrollment.png
 ```
 
 Expected: all four commands exit successfully.
@@ -236,8 +224,8 @@ Expected: all four commands exit successfully.
 Run:
 
 ```bash
-file public/images/projects/websnag-*.png
-sips -g pixelWidth -g pixelHeight public/images/projects/websnag-*.png
+file   public/images/projects/websnag-dashboard.png   public/images/projects/websnag-schedules.png   public/images/projects/websnag-activity.png   public/images/projects/websnag-nfc-enrollment.png
+sips -g pixelWidth -g pixelHeight   public/images/projects/websnag-dashboard.png   public/images/projects/websnag-schedules.png   public/images/projects/websnag-activity.png   public/images/projects/websnag-nfc-enrollment.png
 ```
 
 Expected: every file reports PNG data and a height greater than its width.
@@ -245,16 +233,17 @@ Expected: every file reports PNG data and a height greater than its width.
 - [ ] **Step 3: Commit the screenshots**
 
 ```bash
-git add public/images/projects/websnag-*.png
+git add   public/images/projects/websnag-dashboard.png   public/images/projects/websnag-schedules.png   public/images/projects/websnag-activity.png   public/images/projects/websnag-nfc-enrollment.png
 git commit -m "assets: add WebSnag project screenshots" -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
+
 
 ### Task 4: Add the WebSnag project and case study
 
 **Files:**
 - Modify: `src/data/__tests__/projects.test.ts`
 - Modify: `src/data/projects.ts:29-42`
-- Modify: `src/data/projects.ts:49`
+- Modify: `src/data/projects.ts:50-185`
 - Modify: `src/app/projects/[slug]/__tests__/page.test.tsx`
 
 - [ ] **Step 1: Replace the stale newest-project assertion with a failing WebSnag contract**
@@ -269,6 +258,8 @@ it("includes WebSnag as the newest portrait case study", () => {
   expect(projects[0]).toBe(project);
   expect(project).toMatchObject({
     title: "WebSnag",
+    summary:
+      "A local-first Android focus app that combines NFC locks, recurring schedules, allowlist profiles, and deliberate unlock friction to make distractions harder to reach.",
     year: "2026",
     tags: ["Android", "Productivity", "Open source"],
     stack: [
@@ -278,17 +269,89 @@ it("includes WebSnag as the newest portrait case study", () => {
       "AccessibilityService",
       "DataStore",
     ],
+    highlights: [
+      "Physical NFC tags and a tactile hold-to-lock action activate focused profiles without cloud accounts or dedicated hardware.",
+      "Recurring schedules automate blocklist or allowlist profiles for workdays, bedtime, and other routines.",
+      "An event-driven Accessibility Service intercepts blocked foreground apps and presents a calm Compose overlay.",
+      "Local activity history tracks focused time and blocked attempts, while emergency unlocks preserve a deliberate recovery path.",
+    ],
     repoUrl: "https://github.com/mcasillas17/WebSnag",
     mediaLayout: "portrait",
     images: [
       "/images/projects/websnag-dashboard.png",
-      "/images/projects/websnag-profiles.png",
+      "/images/projects/websnag-schedules.png",
+      "/images/projects/websnag-activity.png",
       "/images/projects/websnag-nfc-enrollment.png",
-      "/images/projects/websnag-blocker.png",
     ],
+    caseStudy: {
+      whatIBuilt: [
+        "A Jetpack Compose app for focus sessions, recurring schedules, blocklist and allowlist profiles, activity history, NFC enrollment, setup, and blocking feedback.",
+        "A local persistence and domain layer for profiles, schedules, NFC tags, focus-session history, unlock conditions, and reactive enforcement state.",
+        "An event-driven enforcement path that checks foreground packages, returns blocked launches to the home screen, and opens a focused blocker overlay.",
+      ],
+      constraints: [
+        "The app targets standard consumer Android 8+ rather than Device Owner or MDM APIs, so it creates deliberate friction instead of claiming an irreversible lock.",
+        "Foreground interception requires the user to enable WebSnag's Accessibility Service during setup.",
+        "NFC remains optional for activation because the dashboard hold action and recurring schedules can start profiles; enrolled tags provide the stronger physical unlock boundary.",
+      ],
+      architecture: {
+        flowLabel:
+          "Compose screens persist profiles and enrolled tags locally. A scanned tag resolves to a profile transition, the enforcement engine caches the active rule set, and the Accessibility Service sends blocked launches to the overlay.",
+        nodes: [
+          {
+            title: "Compose UI & repositories",
+            detail:
+              "Dashboard, profile, tag, setup, and overlay surfaces read and update locally persisted domain state through Flow-backed repositories.",
+          },
+          {
+            title: "NFC & schedule coordinators",
+            detail:
+              "Tag taps resolve activation and release actions, while recurring schedules evaluate time windows and coordinate automatic profile transitions.",
+          },
+          {
+            title: "Enforcement engine",
+            detail:
+              "The engine observes the active profile and maintains a constant-time package cache, filter mode, timer state, exemptions, and interception count.",
+          },
+          {
+            title: "Accessibility service & overlay",
+            detail:
+              "Window-state events are checked without polling; blocked launches return home and open the Compose overlay with current focus context.",
+          },
+        ],
+      },
+      verification: [
+        {
+          title: "Enforcement state tests",
+          detail:
+            "Unit tests cover activation, deactivation, blocklist checks, allowlist checks, system exemptions, blocked-attempt recording, session timing, and emergency cooldown completion.",
+        },
+        {
+          title: "NFC and schedule tests",
+          detail:
+            "Tests cover tag-based activation and release plus schedule formatting, same-day and overnight windows, Wi-Fi conditions, disabled routines, and overlap detection.",
+        },
+        {
+          title: "Buildable Android surface",
+          detail:
+            "The repository defines JDK 17, Android API 26 minimum support, Gradle test and debug APK commands, and separate local and instrumented test dependencies.",
+        },
+      ],
+      status:
+        "Public repository snapshot reviewed at commit db40858 implements NFC and scheduled profile activation, blocklist and allowlist enforcement, remote hold-to-lock activation, session history, theme controls, setup, blocker feedback, and emergency unlock friction.",
+      evidence: [
+        {
+          href: "https://github.com/mcasillas17/WebSnag/blob/db40858329c6a236550009d5aa0ba52a6d1056e1/README.md",
+        },
+        {
+          href: "https://github.com/mcasillas17/WebSnag/tree/db40858329c6a236550009d5aa0ba52a6d1056e1/app/src/test/java/org/websnag",
+        },
+      ],
+    },
   });
   expect(project?.liveUrl).toBeUndefined();
   expect(project?.caseStudy).toBeDefined();
+  expect(project?.caseStudy?.evidence).toHaveLength(4);
 });
 
 it("keeps Mexican Mom as a source-only project", () => {
@@ -326,7 +389,7 @@ pnpm exec vitest run src/data/__tests__/projects.test.ts 'src/app/projects/[slug
 
 Expected: FAIL because WebSnag has not been added.
 
-- [ ] **Step 3: Add the typed media field and complete WebSnag project record**
+- [ ] **Step 3: Add the typed media field and exact WebSnag project record**
 
 Add this field to `Project`:
 
@@ -334,14 +397,14 @@ Add this field to `Project`:
 mediaLayout?: "portrait"; // defaults to the existing landscape carousel
 ```
 
-Insert this record at the start of `projects`:
+Insert the exact WebSnag object at the start of `projects`, matching the current production record in `src/data/projects.ts`:
 
 ```ts
 {
   slug: "websnag",
   title: "WebSnag",
   summary:
-    "A local-first Android focus app that turns NFC tags, app-blocking profiles, and deliberate unlock friction into context-aware digital self-control.",
+    "A local-first Android focus app that combines NFC locks, recurring schedules, allowlist profiles, and deliberate unlock friction to make distractions harder to reach.",
   year: "2026",
   tags: ["Android", "Productivity", "Open source"],
   stack: [
@@ -352,31 +415,31 @@ Insert this record at the start of `projects`:
     "DataStore",
   ],
   highlights: [
-    "NFC tags activate and release focused app-blocking profiles without a cloud account or dedicated hardware.",
-    "Blocklist and allowlist modes support both targeted distraction blocking and a stricter dumbphone-style setup.",
+    "Physical NFC tags and a tactile hold-to-lock action activate focused profiles without cloud accounts or dedicated hardware.",
+    "Recurring schedules automate blocklist or allowlist profiles for workdays, bedtime, and other routines.",
     "An event-driven Accessibility Service intercepts blocked foreground apps and presents a calm Compose overlay.",
-    "Emergency unlocks add a cooldown and typed intention so recovery stays possible without becoming an impulsive bypass.",
+    "Local activity history tracks focused time and blocked attempts, while emergency unlocks preserve a deliberate recovery path.",
   ],
   repoUrl: "https://github.com/mcasillas17/WebSnag",
   images: [
     "/images/projects/websnag-dashboard.png",
-    "/images/projects/websnag-profiles.png",
+    "/images/projects/websnag-schedules.png",
+    "/images/projects/websnag-activity.png",
     "/images/projects/websnag-nfc-enrollment.png",
-    "/images/projects/websnag-blocker.png",
   ],
   mediaLayout: "portrait",
   caseStudy: {
     problem:
       "Make clear-headed decisions about distracting apps enforceable later on an ordinary Android phone, without requiring a cloud account, telemetry, dedicated hardware, or device-owner privileges.",
     whatIBuilt: [
-      "A Jetpack Compose app for focus sessions, blocklist and allowlist profiles, installed-app selection, NFC enrollment, setup, and blocking feedback.",
-      "A local persistence and domain layer for profiles, NFC tags, focus-session history, triggers, unlock conditions, and reactive enforcement state.",
+      "A Jetpack Compose app for focus sessions, recurring schedules, blocklist and allowlist profiles, activity history, NFC enrollment, setup, and blocking feedback.",
+      "A local persistence and domain layer for profiles, schedules, NFC tags, focus-session history, unlock conditions, and reactive enforcement state.",
       "An event-driven enforcement path that checks foreground packages, returns blocked launches to the home screen, and opens a focused blocker overlay.",
     ],
     constraints: [
       "The app targets standard consumer Android 8+ rather than Device Owner or MDM APIs, so it creates deliberate friction instead of claiming an irreversible lock.",
       "Foreground interception requires the user to enable WebSnag's Accessibility Service during setup.",
-      "NFC remains optional for activation because the dashboard also provides a press-and-hold remote action; enrolled tags provide the stronger physical unlock boundary.",
+      "NFC remains optional for activation because the dashboard hold action and recurring schedules can start profiles; enrolled tags provide the stronger physical unlock boundary.",
     ],
     architecture: {
       flowLabel:
@@ -388,9 +451,9 @@ Insert this record at the start of `projects`:
             "Dashboard, profile, tag, setup, and overlay surfaces read and update locally persisted domain state through Flow-backed repositories.",
         },
         {
-          title: "NFC action resolver",
+          title: "NFC & schedule coordinators",
           detail:
-            "A tag tap activates a linked inactive profile, unlocks an authorized active profile, rejects the wrong tag, or routes an unknown tag into enrollment.",
+            "Tag taps resolve activation and release actions, while recurring schedules evaluate time windows and coordinate automatic profile transitions.",
         },
         {
           title: "Enforcement engine",
@@ -428,9 +491,9 @@ Insert this record at the start of `projects`:
           "Unit tests cover activation, deactivation, blocklist checks, allowlist checks, system exemptions, blocked-attempt recording, session timing, and emergency cooldown completion.",
       },
       {
-        title: "NFC resolution tests",
+        title: "NFC and schedule tests",
         detail:
-          "Resolver tests cover linked-tag activation, authorized deactivation, wrong-tag rejection, enrolled unlinked tags, and unknown tags.",
+          "Tests cover tag-based activation and release plus schedule formatting, same-day and overnight windows, Wi-Fi conditions, disabled routines, and overlap detection.",
       },
       {
         title: "Buildable Android surface",
@@ -439,40 +502,24 @@ Insert this record at the start of `projects`:
       },
     ],
     status:
-      "Current public status: version 0.1.0 implements NFC enrollment and profile toggling, blocklist and allowlist enforcement, remote hold-to-lock activation, focus timing and activity, setup, blocker feedback, and emergency unlock friction. Time, location, Wi-Fi, strict-mode, and optional companion integrations remain roadmap items.",
+      "Public repository snapshot reviewed at commit db40858 implements NFC and scheduled profile activation, blocklist and allowlist enforcement, remote hold-to-lock activation, session history, theme controls, setup, blocker feedback, and emergency unlock friction.",
     lessons: [
       "A physical trigger can turn an abstract intention into an environmental boundary while still letting the app work without proprietary hardware.",
       "Consumer self-control software needs both fast enforcement and an explicit recovery path; friction is safer and more credible than pretending bypass is impossible.",
     ],
     evidence: [
       {
-        label: "README: product, architecture, and roadmap",
-        href: "https://github.com/mcasillas17/WebSnag#readme",
-        detail:
-          "Documents the shipped NFC and blocking experience, local-first principles, Android requirements, screenshots, and deferred contextual triggers.",
+        href: "https://github.com/mcasillas17/WebSnag/blob/db40858329c6a236550009d5aa0ba52a6d1056e1/README.md",
       },
       {
-        label: "Enforcement engine source",
-        href: "https://github.com/mcasillas17/WebSnag/blob/main/app/src/main/java/org/websnag/core/enforcement/EnforcementEngine.kt",
-        detail:
-          "Shows active-profile observation, package caches, blocklist and allowlist decisions, system exemptions, session records, and emergency cooldown behavior.",
-      },
-      {
-        label: "Accessibility interception source",
-        href: "https://github.com/mcasillas17/WebSnag/blob/main/app/src/main/java/org/websnag/service/WebSnagAccessibilityService.kt",
-        detail:
-          "Shows event-driven foreground checks, self and system exemptions, interception debouncing, launcher return, and overlay launch.",
-      },
-      {
-        label: "Enforcement and NFC tests",
-        href: "https://github.com/mcasillas17/WebSnag/tree/main/app/src/test/java/org/websnag",
-        detail:
-          "Provides focused unit-test evidence for enforcement state, filter modes, recovery timing, session tracking, and NFC action resolution.",
+        href: "https://github.com/mcasillas17/WebSnag/tree/db40858329c6a236550009d5aa0ba52a6d1056e1/app/src/test/java/org/websnag",
       },
     ],
   },
 },
 ```
+
+Expand `evidence` to the exact four-item array from Appendix A, then copy the matching labels and `detail` strings from the same production object so the final array stays byte-for-byte aligned with `src/data/projects.ts`.
 
 - [ ] **Step 4: Run the focused project tests**
 
@@ -490,6 +537,7 @@ Expected: PASS with WebSnag first on listing surfaces, a generated detail route,
 git add src/data/projects.ts src/data/__tests__/projects.test.ts 'src/app/projects/[slug]/__tests__/page.test.tsx'
 git commit -m "feat: add WebSnag project case study" -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
+
 
 ### Task 5: Verify the complete project addition
 
@@ -547,3 +595,17 @@ git --no-pager log --oneline main..HEAD
 ```
 
 Expected: only the design/plan docs, WebSnag screenshots, project data/tests, carousel/tests, and project-detail page/tests appear.
+
+
+## Appendix A: Immutable WebSnag evidence hrefs
+
+Use these exact `href` values when completing Task 4's `evidence` array:
+
+```ts
+[
+  "https://github.com/mcasillas17/WebSnag/blob/db40858329c6a236550009d5aa0ba52a6d1056e1/README.md",
+  "https://github.com/mcasillas17/WebSnag/blob/db40858329c6a236550009d5aa0ba52a6d1056e1/app/src/main/java/org/websnag/core/enforcement/EnforcementEngine.kt",
+  "https://github.com/mcasillas17/WebSnag/blob/db40858329c6a236550009d5aa0ba52a6d1056e1/app/src/main/java/org/websnag/core/schedule/ScheduleManager.kt",
+  "https://github.com/mcasillas17/WebSnag/tree/db40858329c6a236550009d5aa0ba52a6d1056e1/app/src/test/java/org/websnag",
+]
+```
