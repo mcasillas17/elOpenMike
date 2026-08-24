@@ -150,7 +150,7 @@ export const projects: Project[] = [
         },
       ],
       status:
-        "Current public status: version 0.1.0 implements NFC enrollment and profile toggling, blocklist and allowlist enforcement, remote hold-to-lock activation, focus timing and activity, setup, blocker feedback, and emergency unlock friction. Time, location, Wi-Fi, strict-mode, and optional companion integrations remain roadmap items.",
+        "Current public status: version 0.1.0 implements NFC enrollment and profile toggling, blocklist and allowlist enforcement, remote hold-to-lock activation, focus timing and activity, setup, blocker feedback, and emergency unlock friction. Time, location, Wi-Fi, uninstall-protection strict mode, and optional companion integrations remain roadmap items.",
       lessons: [
         "A physical trigger can turn an abstract intention into an environmental boundary while still letting the app work without proprietary hardware.",
         "Consumer self-control software needs both fast enforcement and an explicit recovery path; friction is safer and more credible than pretending bypass is impossible.",
