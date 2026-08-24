@@ -74,6 +74,24 @@ describe("/projects/[slug] detail page", () => {
     },
   );
 
+  it("renders WebSnag screenshots in a contained portrait carousel", async () => {
+    const ui = await ProjectDetailPage({
+      params: Promise.resolve({ slug: "websnag" }),
+    });
+    render(ui);
+
+    const carousel = screen.getByRole("group", {
+      name: "WebSnag screenshot photos",
+    });
+    expect(carousel.parentElement).toHaveClass("max-w-sm");
+    expect(carousel.querySelector(".aspect-\\[9\\/16\\]")).toHaveClass(
+      "aspect-[9/16]",
+    );
+    expect(
+      screen.getAllByRole("img", { name: /websnag screenshot/i })[0],
+    ).toHaveClass("object-contain");
+  });
+
   it("sets metadata title and description from the project", async () => {
     const meta = await generateMetadata({
       params: Promise.resolve({ slug: sample.slug }),

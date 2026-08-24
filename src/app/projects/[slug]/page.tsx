@@ -58,6 +58,7 @@ export default async function ProjectDetailPage({
   const index = projects.findIndex((p) => p.slug === slug);
   const issueNumber = String(projects.length - index).padStart(2, "0");
   const tint = getTint(project, index);
+  const usesPortraitMedia = project.mediaLayout === "portrait";
 
   return (
     <Container className="py-16">
@@ -140,11 +141,19 @@ export default async function ProjectDetailPage({
         )}
 
         {!project.youtubeId && project.images.length > 0 && (
-          <div className="mt-8 border-[3px] border-panel-border overflow-hidden" style={{ boxShadow: "var(--shadow-panel-lg)" }}>
+          <div
+            className={`mt-8 overflow-hidden border-[3px] border-panel-border ${
+              usesPortraitMedia ? "mx-auto max-w-sm" : ""
+            }`}
+            style={{ boxShadow: "var(--shadow-panel-lg)" }}
+          >
             <Carousel
               images={project.images}
               altPrefix={`${project.title} screenshot`}
-              aspectClassName="aspect-video"
+              aspectClassName={
+                usesPortraitMedia ? "aspect-[9/16]" : "aspect-video"
+              }
+              imageFit={usesPortraitMedia ? "contain" : "cover"}
             />
           </div>
         )}
