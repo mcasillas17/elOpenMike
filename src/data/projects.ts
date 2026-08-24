@@ -38,6 +38,7 @@ export type Project = {
   repoUrl?: string;
   youtubeId?: string; // optional trailer/demo embedded on the detail page
   images: string[]; // /images/projects/...; carousel on the detail page only
+  mediaLayout?: "portrait"; // defaults to the existing landscape carousel
   caseStudy?: CaseStudy; // detailed engineering narrative for flagship projects
 };
 
@@ -47,6 +48,141 @@ export type Project = {
 // headline the /projects featured row. Listing surfaces don't render
 // screenshots — `images` shows up on the detail page carousel only.
 export const projects: Project[] = [
+  {
+    slug: "websnag",
+    title: "WebSnag",
+    summary:
+      "A local-first Android focus app that turns NFC tags, app-blocking profiles, and deliberate unlock friction into context-aware digital self-control.",
+    year: "2026",
+    tags: ["Android", "Productivity", "Open source"],
+    stack: [
+      "Kotlin",
+      "Jetpack Compose",
+      "NFC",
+      "AccessibilityService",
+      "DataStore",
+    ],
+    highlights: [
+      "NFC tags activate and release focused app-blocking profiles without a cloud account or dedicated hardware.",
+      "Blocklist and allowlist modes support both targeted distraction blocking and a stricter dumbphone-style setup.",
+      "An event-driven Accessibility Service intercepts blocked foreground apps and presents a calm Compose overlay.",
+      "Emergency unlocks add a cooldown and typed intention so recovery stays possible without becoming an impulsive bypass.",
+    ],
+    repoUrl: "https://github.com/mcasillas17/WebSnag",
+    images: [
+      "/images/projects/websnag-dashboard.png",
+      "/images/projects/websnag-profiles.png",
+      "/images/projects/websnag-nfc-enrollment.png",
+      "/images/projects/websnag-blocker.png",
+    ],
+    mediaLayout: "portrait",
+    caseStudy: {
+      problem:
+        "Make clear-headed decisions about distracting apps enforceable later on an ordinary Android phone, without requiring a cloud account, telemetry, dedicated hardware, or device-owner privileges.",
+      whatIBuilt: [
+        "A Jetpack Compose app for focus sessions, blocklist and allowlist profiles, installed-app selection, NFC enrollment, setup, and blocking feedback.",
+        "A local persistence and domain layer for profiles, NFC tags, focus-session history, triggers, unlock conditions, and reactive enforcement state.",
+        "An event-driven enforcement path that checks foreground packages, returns blocked launches to the home screen, and opens a focused blocker overlay.",
+      ],
+      constraints: [
+        "The app targets standard consumer Android 8+ rather than Device Owner or MDM APIs, so it creates deliberate friction instead of claiming an irreversible lock.",
+        "Foreground interception requires the user to enable WebSnag's Accessibility Service during setup.",
+        "NFC remains optional for activation because the dashboard also provides a press-and-hold remote action; enrolled tags provide the stronger physical unlock boundary.",
+      ],
+      architecture: {
+        flowLabel:
+          "Compose screens persist profiles and enrolled tags locally. A scanned tag resolves to a profile transition, the enforcement engine caches the active rule set, and the Accessibility Service sends blocked launches to the overlay.",
+        nodes: [
+          {
+            title: "Compose UI & repositories",
+            detail:
+              "Dashboard, profile, tag, setup, and overlay surfaces read and update locally persisted domain state through Flow-backed repositories.",
+          },
+          {
+            title: "NFC action resolver",
+            detail:
+              "A tag tap activates a linked inactive profile, unlocks an authorized active profile, rejects the wrong tag, or routes an unknown tag into enrollment.",
+          },
+          {
+            title: "Enforcement engine",
+            detail:
+              "The engine observes the active profile and maintains a constant-time package cache, filter mode, timer state, exemptions, and interception count.",
+          },
+          {
+            title: "Accessibility service & overlay",
+            detail:
+              "Window-state events are checked without polling; blocked launches return home and open the Compose overlay with current focus context.",
+          },
+        ],
+      },
+      decisions: [
+        {
+          title: "Keep focus data local",
+          detail:
+            "Profiles, tags, activity, and enforcement state stay on-device, with no backend, account, telemetry, or network dependency in the enforcement loop.",
+        },
+        {
+          title: "React to windows instead of polling",
+          detail:
+            "The Accessibility Service listens for foreground window changes and delegates package decisions to an in-memory cache, reducing latency and battery work.",
+        },
+        {
+          title: "Design a safe but inconvenient escape hatch",
+          detail:
+            "The app pairs tag-based unlocking with a timed emergency path and intention phrase so users cannot be permanently stranded but must pause before bypassing a session.",
+        },
+      ],
+      verification: [
+        {
+          title: "Enforcement state tests",
+          detail:
+            "Unit tests cover activation, deactivation, blocklist checks, allowlist checks, system exemptions, blocked-attempt recording, session timing, and emergency cooldown completion.",
+        },
+        {
+          title: "NFC resolution tests",
+          detail:
+            "Resolver tests cover linked-tag activation, authorized deactivation, wrong-tag rejection, enrolled unlinked tags, and unknown tags.",
+        },
+        {
+          title: "Buildable Android surface",
+          detail:
+            "The repository defines JDK 17, Android API 26 minimum support, Gradle test and debug APK commands, and separate local and instrumented test dependencies.",
+        },
+      ],
+      status:
+        "Current public status: version 0.1.0 implements NFC enrollment and profile toggling, blocklist and allowlist enforcement, remote hold-to-lock activation, focus timing and activity, setup, blocker feedback, and emergency unlock friction. Time, location, Wi-Fi, strict-mode, and optional companion integrations remain roadmap items.",
+      lessons: [
+        "A physical trigger can turn an abstract intention into an environmental boundary while still letting the app work without proprietary hardware.",
+        "Consumer self-control software needs both fast enforcement and an explicit recovery path; friction is safer and more credible than pretending bypass is impossible.",
+      ],
+      evidence: [
+        {
+          label: "README: product, architecture, and roadmap",
+          href: "https://github.com/mcasillas17/WebSnag#readme",
+          detail:
+            "Documents the shipped NFC and blocking experience, local-first principles, Android requirements, screenshots, and deferred contextual triggers.",
+        },
+        {
+          label: "Enforcement engine source",
+          href: "https://github.com/mcasillas17/WebSnag/blob/main/app/src/main/java/org/websnag/core/enforcement/EnforcementEngine.kt",
+          detail:
+            "Shows active-profile observation, package caches, blocklist and allowlist decisions, system exemptions, session records, and emergency cooldown behavior.",
+        },
+        {
+          label: "Accessibility interception source",
+          href: "https://github.com/mcasillas17/WebSnag/blob/main/app/src/main/java/org/websnag/service/WebSnagAccessibilityService.kt",
+          detail:
+            "Shows event-driven foreground checks, self and system exemptions, interception debouncing, launcher return, and overlay launch.",
+        },
+        {
+          label: "Enforcement and NFC tests",
+          href: "https://github.com/mcasillas17/WebSnag/tree/main/app/src/test/java/org/websnag",
+          detail:
+            "Provides focused unit-test evidence for enforcement state, filter modes, recovery timing, session tracking, and NFC action resolution.",
+        },
+      ],
+    },
+  },
   {
     slug: "mexican-mom",
     title: "Mexican Mom",

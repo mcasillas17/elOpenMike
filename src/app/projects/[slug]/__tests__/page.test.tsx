@@ -48,7 +48,7 @@ describe("/projects/[slug] detail page", () => {
     }
   });
 
-  it.each(["turingagent", "thwiply"])(
+  it.each(["websnag", "turingagent", "thwiply"])(
     "renders the evidence-rich case-study sections for %s",
     async (slug) => {
       const ui = await ProjectDetailPage({

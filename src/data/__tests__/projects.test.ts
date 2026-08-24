@@ -21,25 +21,43 @@ describe("projects data", () => {
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
-  it("includes Mexican Mom as the newest source-only project", () => {
-    const project = getProject("mexican-mom");
+  it("includes WebSnag as the newest portrait case study", () => {
+    const project = getProject("websnag");
 
     expect(project).toBeDefined();
     expect(projects[0]).toBe(project);
     expect(project).toMatchObject({
-      title: "Mexican Mom",
+      title: "WebSnag",
       year: "2026",
-      tags: ["AI", "Developer tools", "Open source"],
+      tags: ["Android", "Productivity", "Open source"],
       stack: [
-        "Agent Skills",
-        "Markdown",
-        "Node.js",
-        "YAML",
-        "GitHub Actions",
+        "Kotlin",
+        "Jetpack Compose",
+        "NFC",
+        "AccessibilityService",
+        "DataStore",
       ],
-      repoUrl: "https://github.com/mcasillas17/mexican-mom",
-      images: [],
+      repoUrl: "https://github.com/mcasillas17/WebSnag",
+      mediaLayout: "portrait",
+      images: [
+        "/images/projects/websnag-dashboard.png",
+        "/images/projects/websnag-profiles.png",
+        "/images/projects/websnag-nfc-enrollment.png",
+        "/images/projects/websnag-blocker.png",
+      ],
     });
+    expect(project?.liveUrl).toBeUndefined();
+    expect(project?.caseStudy).toBeDefined();
+  });
+
+  it("keeps Mexican Mom as a source-only project", () => {
+    const project = getProject("mexican-mom");
+
+    expect(project).toBeDefined();
+    expect(project?.repoUrl).toBe(
+      "https://github.com/mcasillas17/mexican-mom",
+    );
+    expect(project?.images).toEqual([]);
     expect(project?.liveUrl).toBeUndefined();
     expect(project?.caseStudy).toBeUndefined();
   });
@@ -53,8 +71,8 @@ describe("projects data", () => {
     expect(getAllSlugs().sort()).toEqual(projects.map((p) => p.slug).sort());
   });
 
-  it("gives TuringAgent and Thwiply complete case-study evidence", () => {
-    for (const slug of ["turingagent", "thwiply"]) {
+  it("gives the flagship case studies complete evidence", () => {
+    for (const slug of ["websnag", "turingagent", "thwiply"]) {
       const caseStudy = getProject(slug)?.caseStudy;
 
       expect(caseStudy).toBeDefined();
