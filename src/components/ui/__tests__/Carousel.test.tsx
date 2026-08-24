@@ -47,4 +47,24 @@ describe("Carousel", () => {
     const { container } = render(<Carousel images={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it("keeps cover as the default and supports contained screenshots", () => {
+    const { rerender } = render(
+      <Carousel images={["/a.jpg"]} altPrefix="App screen" />,
+    );
+    expect(screen.getByRole("img", { name: /app screen/i })).toHaveClass(
+      "object-cover",
+    );
+
+    rerender(
+      <Carousel
+        images={["/a.jpg"]}
+        altPrefix="App screen"
+        imageFit="contain"
+      />,
+    );
+    expect(screen.getByRole("img", { name: /app screen/i })).toHaveClass(
+      "object-contain",
+    );
+  });
 });

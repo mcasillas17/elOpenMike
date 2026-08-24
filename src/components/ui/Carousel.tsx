@@ -11,11 +11,13 @@ export function Carousel({
   altPrefix = "Photo",
   className = "",
   aspectClassName = "aspect-[4/3]",
+  imageFit = "cover",
 }: {
   images: string[];
   altPrefix?: string;
   className?: string;
   aspectClassName?: string;
+  imageFit?: "cover" | "contain";
 }) {
   const [index, setIndex] = useState(0);
   const statusId = useId();
@@ -50,7 +52,11 @@ export function Carousel({
                 alt={`${altPrefix} — photo ${i + 1} of ${count}`}
                 fill
                 sizes="(max-width: 640px) 100vw, 40vw"
-                className="object-cover"
+                className={
+                  imageFit === "contain"
+                    ? "bg-[#0e1320] object-contain"
+                    : "object-cover"
+                }
               />
             </div>
           ))}
