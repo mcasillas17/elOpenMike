@@ -48,6 +48,11 @@ describe("projects data", () => {
     });
     expect(project?.liveUrl).toBeUndefined();
     expect(project?.caseStudy).toBeDefined();
+    expect(project?.caseStudy?.status).toContain(
+      "Time scheduling remains marked as roadmap in the current README.",
+    );
+    expect(project?.caseStudy?.status).not.toMatch(/strict mode/i);
+    expect(project?.caseStudy?.status).not.toMatch(/companion integrations/i);
   });
 
   it("keeps Mexican Mom as a source-only project", () => {
