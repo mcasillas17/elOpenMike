@@ -20,6 +20,8 @@
 - `src/app/projects/[slug]/__tests__/page.test.tsx`: prove WebSnag uses the case-study and portrait-media paths.
 - `public/images/projects/websnag-*.png`: local copies of four WebSnag repository screenshots.
 
+Execute the tasks in this dependency order: Task 1, Task 3, Task 4, Task 2, Task 5. Task 2's page-level red test needs the WebSnag record and screenshots from Tasks 3 and 4.
+
 ### Task 1: Add contained-image support to the carousel
 
 **Files:**
@@ -111,8 +113,9 @@ git commit -m "feat: support contained project screenshots" -m "Co-authored-by: 
 
 ### Task 2: Add portrait project media wiring
 
+**Execution dependency:** Complete Tasks 3 and 4 first.
+
 **Files:**
-- Modify: `src/data/projects.ts:29-42`
 - Modify: `src/app/projects/[slug]/__tests__/page.test.tsx`
 - Modify: `src/app/projects/[slug]/page.tsx:142-150`
 
@@ -146,17 +149,9 @@ Run:
 pnpm exec vitest run 'src/app/projects/[slug]/__tests__/page.test.tsx'
 ```
 
-Expected: FAIL because `getProject("websnag")` returns `undefined`.
+Expected: FAIL because WebSnag still uses the default unconstrained 16:9 cover carousel.
 
-- [ ] **Step 3: Add the typed media field**
-
-Add this field to `Project`:
-
-```ts
-mediaLayout?: "portrait"; // defaults to the existing landscape carousel
-```
-
-- [ ] **Step 4: Wire portrait media into the detail page**
+- [ ] **Step 3: Wire portrait media into the detail page**
 
 After the `tint` assignment, add:
 
@@ -186,12 +181,20 @@ Replace the image-carousel block with:
 )}
 ```
 
-The page test remains red until the WebSnag data is added in Task 4.
+- [ ] **Step 4: Run the project-detail tests**
+
+Run:
+
+```bash
+pnpm exec vitest run 'src/app/projects/[slug]/__tests__/page.test.tsx'
+```
+
+Expected: PASS with 9 tests.
 
 - [ ] **Step 5: Commit the portrait-media wiring**
 
 ```bash
-git add src/data/projects.ts 'src/app/projects/[slug]/page.tsx' 'src/app/projects/[slug]/__tests__/page.test.tsx'
+git add 'src/app/projects/[slug]/page.tsx' 'src/app/projects/[slug]/__tests__/page.test.tsx'
 git commit -m "feat: support portrait project media" -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
 
@@ -246,6 +249,7 @@ git commit -m "assets: add WebSnag project screenshots" -m "Co-authored-by: Copi
 
 **Files:**
 - Modify: `src/data/__tests__/projects.test.ts`
+- Modify: `src/data/projects.ts:29-42`
 - Modify: `src/data/projects.ts:49`
 - Modify: `src/app/projects/[slug]/__tests__/page.test.tsx`
 
@@ -318,7 +322,13 @@ pnpm exec vitest run src/data/__tests__/projects.test.ts 'src/app/projects/[slug
 
 Expected: FAIL because WebSnag has not been added.
 
-- [ ] **Step 3: Add the complete WebSnag project record**
+- [ ] **Step 3: Add the typed media field and complete WebSnag project record**
+
+Add this field to `Project`:
+
+```ts
+mediaLayout?: "portrait"; // defaults to the existing landscape carousel
+```
 
 Insert this record at the start of `projects`:
 
