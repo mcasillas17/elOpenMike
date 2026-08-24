@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Upstream snapshot override
+
+> **Pinned upstream supersedes older snippets below:** use commit `db40858` as the operative source snapshot. Use the asset names `websnag-dashboard.png`, `websnag-schedules.png`, `websnag-activity.png`, and `websnag-nfc-enrollment.png`; treat recurring schedules as shipped behavior; and publish no roadmap claim. Any earlier references in this plan to profile/blocker screenshots or roadmap-only schedule status are historical, not operative.
+
 **Goal:** Add WebSnag as the website's newest featured project with repository-backed copy, a full engineering case study, and a portrait screenshot carousel.
 
 **Architecture:** Extend the existing static `Project` data model with one optional portrait-media flag and pass that flag through the existing project detail page to the shared carousel. Keep all project content in `src/data/projects.ts`, all screenshots in `public/images/projects/`, and reuse the existing project listing, metadata, static-route, and case-study components.

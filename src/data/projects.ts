@@ -52,7 +52,7 @@ export const projects: Project[] = [
     slug: "websnag",
     title: "WebSnag",
     summary:
-      "A local-first Android focus app that turns NFC tags, app-blocking profiles, and deliberate unlock friction into context-aware digital self-control.",
+      "A local-first Android focus app that combines NFC locks, recurring schedules, allowlist profiles, and deliberate unlock friction to make distractions harder to reach.",
     year: "2026",
     tags: ["Android", "Productivity", "Open source"],
     stack: [
@@ -63,31 +63,31 @@ export const projects: Project[] = [
       "DataStore",
     ],
     highlights: [
-      "NFC tags activate and release focused app-blocking profiles without a cloud account or dedicated hardware.",
-      "Blocklist and allowlist modes support both targeted distraction blocking and a stricter dumbphone-style setup.",
+      "Physical NFC tags and a tactile hold-to-lock action activate focused profiles without cloud accounts or dedicated hardware.",
+      "Recurring schedules automate blocklist or allowlist profiles for workdays, bedtime, and other routines.",
       "An event-driven Accessibility Service intercepts blocked foreground apps and presents a calm Compose overlay.",
-      "Emergency unlocks add a cooldown and typed intention so recovery stays possible without becoming an impulsive bypass.",
+      "Local activity history tracks focused time and blocked attempts, while emergency unlocks preserve a deliberate recovery path.",
     ],
     repoUrl: "https://github.com/mcasillas17/WebSnag",
     images: [
       "/images/projects/websnag-dashboard.png",
-      "/images/projects/websnag-profiles.png",
+      "/images/projects/websnag-schedules.png",
+      "/images/projects/websnag-activity.png",
       "/images/projects/websnag-nfc-enrollment.png",
-      "/images/projects/websnag-blocker.png",
     ],
     mediaLayout: "portrait",
     caseStudy: {
       problem:
         "Make clear-headed decisions about distracting apps enforceable later on an ordinary Android phone, without requiring a cloud account, telemetry, dedicated hardware, or device-owner privileges.",
       whatIBuilt: [
-        "A Jetpack Compose app for focus sessions, blocklist and allowlist profiles, installed-app selection, NFC enrollment, setup, and blocking feedback.",
-        "A local persistence and domain layer for profiles, NFC tags, focus-session history, triggers, unlock conditions, and reactive enforcement state.",
+        "A Jetpack Compose app for focus sessions, recurring schedules, blocklist and allowlist profiles, activity history, NFC enrollment, setup, and blocking feedback.",
+        "A local persistence and domain layer for profiles, schedules, NFC tags, focus-session history, unlock conditions, and reactive enforcement state.",
         "An event-driven enforcement path that checks foreground packages, returns blocked launches to the home screen, and opens a focused blocker overlay.",
       ],
       constraints: [
         "The app targets standard consumer Android 8+ rather than Device Owner or MDM APIs, so it creates deliberate friction instead of claiming an irreversible lock.",
         "Foreground interception requires the user to enable WebSnag's Accessibility Service during setup.",
-        "NFC remains optional for activation because the dashboard also provides a press-and-hold remote action; enrolled tags provide the stronger physical unlock boundary.",
+        "NFC remains optional for activation because the dashboard hold action and recurring schedules can start profiles; enrolled tags provide the stronger physical unlock boundary.",
       ],
       architecture: {
         flowLabel:
@@ -99,9 +99,9 @@ export const projects: Project[] = [
               "Dashboard, profile, tag, setup, and overlay surfaces read and update locally persisted domain state through Flow-backed repositories.",
           },
           {
-            title: "NFC action resolver",
+            title: "NFC & schedule coordinators",
             detail:
-              "A tag tap activates a linked inactive profile, unlocks an authorized active profile, rejects the wrong tag, or routes an unknown tag into enrollment.",
+              "Tag taps resolve activation and release actions, while recurring schedules evaluate time windows and coordinate automatic profile transitions.",
           },
           {
             title: "Enforcement engine",
@@ -139,9 +139,9 @@ export const projects: Project[] = [
             "Unit tests cover activation, deactivation, blocklist checks, allowlist checks, system exemptions, blocked-attempt recording, session timing, and emergency cooldown completion.",
         },
         {
-          title: "NFC resolution tests",
+          title: "NFC and schedule tests",
           detail:
-            "Resolver tests cover linked-tag activation, authorized deactivation, wrong-tag rejection, enrolled unlinked tags, and unknown tags.",
+            "Tests cover tag-based activation and release plus schedule formatting, same-day and overnight windows, Wi-Fi conditions, disabled routines, and overlap detection.",
         },
         {
           title: "Buildable Android surface",
@@ -150,7 +150,7 @@ export const projects: Project[] = [
         },
       ],
       status:
-        "Current public status: version 0.1.0 implements NFC enrollment and profile toggling, blocklist and allowlist enforcement, remote hold-to-lock activation, focus timing and activity, setup, blocker feedback, and emergency unlock friction. Time scheduling remains marked as roadmap in the current README.",
+        "Public repository snapshot reviewed at commit db40858 implements NFC and scheduled profile activation, blocklist and allowlist enforcement, remote hold-to-lock activation, session history, theme controls, setup, blocker feedback, and emergency unlock friction.",
       lessons: [
         "A physical trigger can turn an abstract intention into an environmental boundary while still letting the app work without proprietary hardware.",
         "Consumer self-control software needs both fast enforcement and an explicit recovery path; friction is safer and more credible than pretending bypass is impossible.",
@@ -158,27 +158,27 @@ export const projects: Project[] = [
       evidence: [
         {
           label: "README: product, architecture, and roadmap",
-          href: "https://github.com/mcasillas17/WebSnag#readme",
+          href: "https://github.com/mcasillas17/WebSnag/blob/db40858329c6a236550009d5aa0ba52a6d1056e1/README.md",
           detail:
-            "Documents the shipped NFC and blocking experience, local-first principles, Android requirements, screenshots, and deferred contextual triggers.",
+            "Documents the current NFC, schedules, filtering, activity, themes, screenshots, and Android requirements.",
         },
         {
           label: "Enforcement engine source",
-          href: "https://github.com/mcasillas17/WebSnag/blob/main/app/src/main/java/org/websnag/core/enforcement/EnforcementEngine.kt",
+          href: "https://github.com/mcasillas17/WebSnag/blob/db40858329c6a236550009d5aa0ba52a6d1056e1/app/src/main/java/org/websnag/core/enforcement/EnforcementEngine.kt",
           detail:
             "Shows active-profile observation, package caches, blocklist and allowlist decisions, system exemptions, session records, and emergency cooldown behavior.",
         },
         {
-          label: "Accessibility interception source",
-          href: "https://github.com/mcasillas17/WebSnag/blob/main/app/src/main/java/org/websnag/service/WebSnagAccessibilityService.kt",
+          label: "Schedule manager source",
+          href: "https://github.com/mcasillas17/WebSnag/blob/db40858329c6a236550009d5aa0ba52a6d1056e1/app/src/main/java/org/websnag/core/schedule/ScheduleManager.kt",
           detail:
-            "Shows event-driven foreground checks, self and system exemptions, interception debouncing, launcher return, and overlay launch.",
+            "Shows periodic schedule evaluation, automatic profile activation, and deactivation when an automatically started window ends.",
         },
         {
           label: "Enforcement and NFC tests",
-          href: "https://github.com/mcasillas17/WebSnag/tree/main/app/src/test/java/org/websnag",
+          href: "https://github.com/mcasillas17/WebSnag/tree/db40858329c6a236550009d5aa0ba52a6d1056e1/app/src/test/java/org/websnag",
           detail:
-            "Provides focused unit-test evidence for enforcement state, filter modes, recovery timing, session tracking, and NFC action resolution.",
+            "Covers enforcement, NFC resolution, schedule windows, Wi-Fi conditions, overlap detection, and activity summaries.",
         },
       ],
     },

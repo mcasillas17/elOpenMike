@@ -28,6 +28,8 @@ describe("projects data", () => {
     expect(projects[0]).toBe(project);
     expect(project).toMatchObject({
       title: "WebSnag",
+      summary:
+        "A local-first Android focus app that combines NFC locks, recurring schedules, allowlist profiles, and deliberate unlock friction to make distractions harder to reach.",
       year: "2026",
       tags: ["Android", "Productivity", "Open source"],
       stack: [
@@ -41,17 +43,23 @@ describe("projects data", () => {
       mediaLayout: "portrait",
       images: [
         "/images/projects/websnag-dashboard.png",
-        "/images/projects/websnag-profiles.png",
+        "/images/projects/websnag-schedules.png",
+        "/images/projects/websnag-activity.png",
         "/images/projects/websnag-nfc-enrollment.png",
-        "/images/projects/websnag-blocker.png",
       ],
     });
     expect(project?.liveUrl).toBeUndefined();
     expect(project?.caseStudy).toBeDefined();
+    expect(project?.caseStudy?.status).toContain("db40858");
     expect(project?.caseStudy?.status).toContain(
-      "Time scheduling remains marked as roadmap in the current README.",
+      "scheduled profile activation",
     );
-    expect(project?.caseStudy?.status).not.toMatch(/strict mode/i);
+    expect(
+      project?.highlights.some((highlight) =>
+        highlight.includes("Recurring schedules"),
+      ),
+    ).toBe(true);
+    expect(project?.caseStudy?.status).not.toMatch(/roadmap|strict mode/i);
     expect(project?.caseStudy?.status).not.toMatch(/companion integrations/i);
   });
 

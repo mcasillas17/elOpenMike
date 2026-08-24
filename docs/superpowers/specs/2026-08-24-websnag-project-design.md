@@ -14,7 +14,11 @@ WebSnag is an MIT-licensed, local-first Android application for intentional dist
 
 The current Android 8+ app is built with Kotlin, Jetpack Compose, Material 3, Coroutines and Flow, DataStore, NFC ReaderMode, and an Accessibility Service. The enforcement path reacts to foreground-window changes rather than polling: an in-memory engine checks the active profile in constant time, sends blocked apps back to the launcher, and opens a Compose blocker overlay. Emergency unlocking uses a cooldown and intention phrase so users retain a recovery path without making impulsive bypasses frictionless.
 
-The repository includes screenshots and focused unit tests for enforcement activation, blocklist and allowlist behavior, emergency cooldowns, session tracking, NFC activation and deactivation, rejected tags, and unknown tags. Time, location, and Wi-Fi triggers plus stricter uninstall friction remain roadmap items and will not be presented as shipped.
+The repository includes screenshots and focused unit tests for enforcement activation, blocklist and allowlist behavior, emergency cooldowns, session tracking, NFC activation and deactivation, rejected tags, and unknown tags.
+
+## Upstream snapshot
+
+Implementation references for this portfolio entry are pinned to commit `db40858`. Recurring schedules are shipped in that snapshot and will be presented as implemented behavior. No roadmap claim will be published in the refreshed project entry.
 
 ## Approaches considered
 
@@ -52,9 +56,9 @@ The case study will cover:
 Copy four screenshots from the WebSnag repository into `public/images/projects/`:
 
 1. Hold-to-lock dashboard.
-2. Allowlist profile overview.
-3. NFC enrollment scanner.
-4. Allowlist blocker overlay.
+2. Schedules overview.
+3. Activity overview.
+4. NFC enrollment scanner.
 
 Add an optional portrait media layout to the project model and detail page. WebSnag's carousel will use a constrained phone-shaped viewport and `object-contain`; existing landscape project media will keep the current 16:9 `object-cover` behavior.
 
