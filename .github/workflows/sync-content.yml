@@ -13,7 +13,7 @@ jobs:
     name: Pull published posts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # A push made with the default GITHUB_TOKEN does NOT trigger other
           # workflows, so deploy.yml would never run. Use a fine-grained PAT
