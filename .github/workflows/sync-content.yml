@@ -20,7 +20,7 @@ jobs:
           # scoped to this repo with contents:write.
           token: ${{ secrets.CONTENT_SYNC_TOKEN }}
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
