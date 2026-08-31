@@ -3,10 +3,7 @@
 # Build a lean Next.js (standalone) image and run it with the real Next server.
 
 FROM node:26-alpine AS base
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-RUN corepack enable
+RUN npm install --global pnpm@11.1.2
 WORKDIR /app
 
 # --- Dependencies (includes devDependencies; needed for the build) ---
