@@ -19,7 +19,7 @@ jobs:
           # workflows, so deploy.yml would never run. Use a fine-grained PAT
           # scoped to this repo with contents:write.
           token: ${{ secrets.CONTENT_SYNC_TOKEN }}
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 24
