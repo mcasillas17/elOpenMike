@@ -8,7 +8,7 @@ test("home Projects section opens a project detail", async ({ page }) => {
   const section = page.locator("#projects");
   await expect(section).toBeVisible();
 
-  // The first card title links to its detail page; the "View All Issues" link
+  // The first card title links to its detail page; the "All projects" link
   // points at /projects (the index), so scope to links with a slug segment.
   const firstCard = section.locator('a[href^="/projects/"]').first();
   await firstCard.click();
@@ -17,9 +17,9 @@ test("home Projects section opens a project detail", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
-test('"View All Issues" navigates to the projects index', async ({ page }) => {
+test('"All projects" navigates to the projects index', async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: /View All Issues/i }).click();
+  await page.getByRole("link", { name: /All projects/i }).click();
 
   await expect(page).toHaveURL(/\/projects$/);
   await expect(

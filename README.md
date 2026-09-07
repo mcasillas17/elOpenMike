@@ -35,6 +35,29 @@ are optional; the site builds and runs without any of them.
   client-side token). Forwarded to the Docker build via `fly.toml` →
   `[build.args]` so Next bakes it into the client bundle. Unset = analytics off.
 
+## Portfolio presentation
+
+The homepage leads with selected work, followed by career history, engineering
+approach, skills, writing, personal context, comedy, and contact. Earlier career
+roles use native expandable disclosures; their full highlights remain available
+without JavaScript.
+
+`featuredProjects` in `src/data/projects.ts` controls homepage curation independently
+of the chronological project archive and issue numbers. Cards use local product
+screenshots or labelled conceptual previews, with shorter `cardSummary` copy.
+Full project descriptions and source evidence remain on the detail pages.
+
+The portrait at `public/images/about/miguel.jpg` is a local copy of Miguel's
+[public GitHub profile image](https://github.com/mcasillas17). Halftone texture
+is reserved for the hero, contact, and comic panels rather than long-form prose.
+The existing article content and Notion publishing workflow are unchanged.
+
+Comedy posters are local copies of each video's original YouTube thumbnail,
+referenced by `posterSrc` in `src/data/comedy.ts`. The player still makes no
+YouTube request until Play. A direct watch link remains available after the
+iframe opens; the iframe sends only the site's origin as its cross-site referrer
+to satisfy YouTube's player-identification requirement.
+
 ## Blog content sync
 
 Posts are written in Notion and synced into `content/blog/` by
@@ -47,8 +70,22 @@ topic counts link into filtered archives, and each article provides updated and
 reading-time context, section permalinks, copyable syntax-highlighted code,
 related reading, chronological navigation, RSS, and email follow-up. Rich
 Notion content is rendered responsively, including images, tables, and task
-lists. Search, pagination, a table of contents, and reading progress are
-deliberately deferred until the archive or article length makes them useful.
+lists. Callouts, captioned figures/code, toggles, and reference blocks retain their
+editorial meaning through sync. Adjacent code blocks captioned Before and After
+become responsive comparisons. Articles with four or more eligible headings get
+an adaptive reading guide and progress indicator; short notes stay lightweight.
+Search and pagination remain deferred until the archive needs them.
+
+For a local, non-published specimen of the rich article pipeline, run
+`ARTICLE_PREVIEW=1 pnpm dev` and visit `/preview/article`. The route is disabled
+unless explicitly enabled and is excluded from the blog, RSS, and sitemap.
+See [`docs/authoring.md`](docs/authoring.md) for the native Notion authoring rules.
+
+Article routes intentionally have no inherited `loading.tsx` boundary. With the
+async MDX compiler, a root loading boundary put even prerendered article bodies in
+hidden streamed segments that needed JavaScript to reveal them. Loading UI is
+scoped to projects and comedy instead, so article text and native disclosures are
+available in the initial HTML; JavaScript adds navigation tracking, copy, and zoom.
 
 Required GitHub secrets:
 

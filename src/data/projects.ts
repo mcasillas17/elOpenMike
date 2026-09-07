@@ -30,6 +30,10 @@ export type Project = {
   slug: string; // URL segment + React key
   title: string;
   summary: string; // one-liner (card + detail)
+  cardSummary?: string;
+  preview?:
+    | { kind: "flow"; label: string; steps: string[] }
+    | { kind: "quote"; quote: string; caption: string };
   year: string; // e.g. "2025"
   tags: string[]; // chips
   stack: string[]; // tech list
@@ -43,16 +47,16 @@ export type Project = {
 };
 
 // Real projects (pulled from github.com/mcasillas17). Array order controls
-// display order: the first four appear in the home Projects section as a
-// hybrid comic-panel grid (large + tall + wide + small); the first two also
-// headline the /projects featured row. Listing surfaces don't render
-// screenshots — `images` shows up on the detail page carousel only.
+// archive order and issue numbers. The homepage selects its featured projects
+// separately; screenshots and conceptual previews also appear on the covers.
 export const projects: Project[] = [
   {
     slug: "websnag",
     title: "WebSnag",
     summary:
       "A local-first Android focus app that combines NFC locks, recurring schedules, allowlist profiles, and deliberate unlock friction to make distractions harder to reach.",
+    cardSummary:
+      "A local-first Android focus app. NFC locks, schedules, and a little deliberate friction between you and your distractions.",
     year: "2026",
     tags: ["Android", "Productivity", "Open source"],
     stack: [
@@ -188,6 +192,13 @@ export const projects: Project[] = [
     title: "Mexican Mom",
     summary:
       "A cross-platform Agent Skills plugin that gives coding agents a rigorously tested engineering-discipline layer with a distinct Mexican-mom voice.",
+    cardSummary:
+      "Engineering discipline for coding agents, delivered with a distinctly Mexican-mom voice.",
+    preview: {
+      kind: "quote",
+      quote: "A ver, enséñame.",
+      caption: "Evidence before confidence.",
+    },
     year: "2026",
     tags: ["AI", "Developer tools", "Open source"],
     stack: ["Agent Skills", "Markdown", "Node.js", "YAML", "GitHub Actions"],
@@ -205,6 +216,13 @@ export const projects: Project[] = [
     title: "Thwiply",
     summary:
       "An Android v1 scaffold for downloading a device-held model and trying streamed, on-device LLM inference from a debug screen.",
+    cardSummary:
+      "An Android experiment in on-device AI: download a model, initialize it, and stream a response. Currently a v1 scaffold.",
+    preview: {
+      kind: "flow",
+      label: "On-device inference",
+      steps: ["Download", "Initialize", "Stream"],
+    },
     year: "2026",
     tags: ["Android", "AI", "Open source"],
     stack: [
@@ -327,6 +345,13 @@ export const projects: Project[] = [
   {
     slug: "turingagent",
     title: "TuringAgent",
+    cardSummary:
+      "A private assistant stack with a Go backend, Flutter client, model routing, and human-approved MCP actions.",
+    preview: {
+      kind: "flow",
+      label: "TuringAgent architecture",
+      steps: ["Flutter client", "Go backend", "Models + MCP"],
+    },
     summary:
       "A local-first AI orchestration platform — a Flutter client and Go gRPC backend that run a private assistant stack with model routing, streaming, MCP tools, and approval-gated actions.",
     year: "2026",
@@ -450,6 +475,13 @@ export const projects: Project[] = [
   {
     slug: "turingcare",
     title: "TuringCare",
+    cardSummary:
+      "A behavior journal and shareable brief that help dog owners work with force-free trainers.",
+    preview: {
+      kind: "flow",
+      label: "From observation to support",
+      steps: ["Journal", "Behavior brief", "Trainer"],
+    },
     summary:
       "A humane, force-free dog-training support platform — owners keep a structured behavior journal, find science-based trainers, and export a shareable “Behavior Brief” PDF.",
     year: "2026",
@@ -493,3 +525,11 @@ export function getProject(slug: string): Project | undefined {
 export function getAllSlugs(): string[] {
   return projects.map((p) => p.slug);
 }
+
+export const featuredProjects = ["websnag", "turingagent", "mexican-mom", "thwiply"].map(
+  (slug) => {
+    const project = getProject(slug);
+    if (!project) throw new Error(`Featured project not found: ${slug}`);
+    return project;
+  },
+);

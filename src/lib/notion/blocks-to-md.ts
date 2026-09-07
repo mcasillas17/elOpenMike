@@ -8,6 +8,7 @@ import {
 import { markdownDestination } from "./link-destination";
 import { describeUrlSafely } from "./safe-url";
 import { codeFence } from "./code-span";
+import { articleContainer, calloutColor, calloutTone } from "./article-markup";
 import type { MdBlock, RichText } from "./types";
 
 export type BlocksToMarkdownContext = {
@@ -158,7 +159,7 @@ function renderBlock(block: MdBlock, outer: RenderContext, options: RenderOption
       // item's content column is the same as a plain bullet's.
       return renderListItem(data.checked === true ? "- [x]" : "- [ ]", "-", data.rich_text, block.children, context, options.indent);
     case "code":
-      return renderCode(data);
+      return renderCode(data, context);
     case "image":
       return renderImage(block, data, context);
     case "table":
@@ -179,7 +180,7 @@ function renderBlock(block: MdBlock, outer: RenderContext, options: RenderOption
 // They were fetched and then dropped, so a section written as a collapsible
 // heading published as its title and nothing else. Markdown has no toggle, but
 // a heading followed by content is what a toggleable heading is once you take
-// the folding away — the same trade the `toggle` block already makes — so the
+// the folding away, so the
 // children are written after it as the siblings they render as.
 function renderHeading(
   marker: string,
@@ -233,12 +234,15 @@ function renderQuote(value: unknown, children: MdBlock[], context: RenderContext
 }
 
 function renderCallout(data: Record<string, unknown>, children: MdBlock[], context: RenderContext): string {
-  const text = renderRichText(data.rich_text, true, context);
+  const text = renderFlowText(data.rich_text, context);
   const emoji = readEmoji(data.icon);
-  const summary = [emoji, text].filter(Boolean).join(" ");
+  const color = calloutColor(data.color);
   const renderedChildren = renderSequence(children, context, "", "\n\n");
-  const content = [isBlank(summary) ? "" : summary, renderedChildren].filter(Boolean).join("\n\n");
-  return isBlank(content) ? "" : renderBlockquote(content);
+  return articleContainer("ArticleCallout", [text, renderedChildren], {
+    tone: calloutTone(color),
+    ...(emoji ? { icon: emoji } : {}),
+    ...(color ? { color } : {}),
+  });
 }
 
 function renderListItem(
@@ -285,14 +289,17 @@ function indentContinuation(text: string, indent: string): string {
     .join("\n");
 }
 
-function renderCode(data: Record<string, unknown>): string {
+function renderCode(data: Record<string, unknown>, context: RenderContext): string {
   const language = normalizeLanguage(data.language);
   const code = readPlainText(data.rich_text);
   // Rehype Pretty Code/Shiki falls back by fence language, so unknown Notion languages become text.
   // Fenced code uses raw plain_text so MDX-like snippets such as <T>{} are not escaped.
   // The fence outgrows any backtick run inside, or a code block quoting Markdown would close itself early.
   const fence = codeFence(code);
-  return `${fence}${language}\n${code}\n${fence}`;
+  const fenced = `${fence}${language}\n${code}\n${fence}`;
+  const caption = renderInlineComponent("ArticleCaption", data.caption, context);
+  return readPlainText(data.caption) === "" ? fenced
+    : articleContainer("ArticleCode", [caption, fenced]);
 }
 
 function renderImage(block: MdBlock, data: Record<string, unknown>, context: RenderContext): string {
@@ -304,7 +311,11 @@ function renderImage(block: MdBlock, data: Record<string, unknown>, context: Ren
   // so the line endings are written as the references they render as.
   const alt = referenceLineEndings(renderRichText(data.caption, false, context));
   // The converter stays pure by receiving already-resolved image paths from the caller.
-  return `![${alt}](${context.imagePath(block.id)})`;
+  const image = `![${alt}](${context.imagePath(block.id)})`;
+  return readPlainText(data.caption) === "" ? image
+    : articleContainer("ArticleFigure", [
+      image, `<ArticleCaption>${alt}</ArticleCaption>`,
+    ]);
 }
 
 function renderTable(block: MdBlock, context: RenderContext): string {
@@ -374,11 +385,24 @@ function renderLinkBlock(
   );
   const label =
     caption === "" ? referenceLineEndings(escapeMarkdown(data.url, false)) : caption;
-  return `[${label}](${destination})`;
+  return articleContainer("ArticleReference", [`[${label}](${destination})`]);
 }
 
 function renderToggle(data: Record<string, unknown>, children: MdBlock[], context: RenderContext): string {
-  return withChildren(renderFlowText(data.rich_text, context), children, context);
+  return articleContainer("ArticleToggle", [
+    renderInlineComponent("ArticleSummary", data.rich_text, context),
+    renderSequence(children, context, "", "\n\n"),
+  ]);
+}
+
+function renderInlineComponent(
+  name: "ArticleCaption" | "ArticleSummary",
+  value: unknown,
+  context: RenderContext,
+): string {
+  // Keeping the wrapper on one logical line makes its children inline MDX:
+  // a summary never acquires a paragraph, even with author-entered blank lines.
+  return `<${name}>${referenceLineEndings(renderRichText(value, false, context))}</${name}>`;
 }
 
 // Notion indents blocks under a paragraph the same way it does under a heading,

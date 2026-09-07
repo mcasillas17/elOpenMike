@@ -11,6 +11,7 @@ import {
 import { Carousel } from "@/components/ui/Carousel";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
 import { CaseStudy } from "@/components/projects/CaseStudy";
+import { ProjectPreview } from "@/components/projects/ProjectPreview";
 import { getProject, getAllSlugs, projects } from "@/data/projects";
 import { getTint } from "@/lib/projectVisuals";
 import { routes, alternatesFor } from "@/lib/site";
@@ -62,7 +63,7 @@ export default async function ProjectDetailPage({
 
   return (
     <Container className="py-16">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-4xl">
         <Link
           href={routes.projects}
           className="inline-flex min-h-11 items-center rounded px-1 text-sm text-muted hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web"
@@ -70,91 +71,75 @@ export default async function ProjectDetailPage({
           ← Back to The Casefile
         </Link>
 
-        {/* Cover panel */}
-        <ComicPanel tint={tint} className="mt-6 border-[4px] p-7 sm:p-8">
-          <IssueTag
-            number={issueNumber}
-            label={project.year}
-            variant="red"
-            rotate={-2}
-          />
-          <div className="relative z-10">
-            <h1
-              className="mt-6 font-display text-4xl font-black leading-none sm:text-5xl"
-              style={{ textShadow: "var(--text-shadow-cover-title)" }}
-            >
-              {accentedTitle(project.title)}
-            </h1>
-            <p className="mt-3 max-w-prose text-base text-ink">
-              {project.summary}
-            </p>
-            {project.tags.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {project.tags.map((t) => (
-                  <span
-                    key={t}
-                    className="inline-block rounded border border-white/20 bg-black/55 px-2 py-0.5 text-xs text-ink"
-                  >
-                    {t}
-                  </span>
-                ))}
+        <div className={`mt-6 ${usesPortraitMedia ? "grid items-start gap-7 md:grid-cols-[1.2fr_0.8fr]" : ""}`}>
+          <div>
+            <ComicPanel tint={tint} className="border-[4px] p-5 sm:p-7">
+              <IssueTag number={issueNumber} label={project.year} variant="red" rotate={-2} />
+              <div className="relative z-10">
+                <h1
+                  className="mt-6 font-display text-4xl font-black leading-none sm:text-5xl"
+                  style={{ textShadow: "var(--text-shadow-cover-title)" }}
+                >
+                  {accentedTitle(project.title)}
+                </h1>
+                <p className="mt-3 max-w-prose text-base text-ink">{project.summary}</p>
+                {project.tags.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {project.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-block rounded border border-white/20 bg-black/55 px-2 py-0.5 text-xs text-ink"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {project.stack.length > 0 && (
+                  <p className="mt-3 text-sm text-web-strong">{project.stack.join(" · ")}</p>
+                )}
+              </div>
+            </ComicPanel>
+            {(project.liveUrl || project.repoUrl) && (
+              <div className="mt-6 flex flex-wrap gap-3">
+                {project.liveUrl && (
+                  <ComicButton href={project.liveUrl} target="_blank" variant="primary">
+                    Live demo
+                  </ComicButton>
+                )}
+                {project.repoUrl && (
+                  <ComicButton href={project.repoUrl} target="_blank" variant="ghost">
+                    View Source
+                  </ComicButton>
+                )}
               </div>
             )}
-            {project.stack.length > 0 && (
-              <p className="mt-3 text-sm text-web-strong">
-                {project.stack.join(" · ")}
-              </p>
-            )}
           </div>
-        </ComicPanel>
 
-        {(project.liveUrl || project.repoUrl) && (
-          <div className="mt-6 flex flex-wrap gap-3">
-            {project.liveUrl && (
-              <ComicButton
-                href={project.liveUrl}
-                target="_blank"
-                variant="primary"
-              >
-                Live demo
-              </ComicButton>
-            )}
-            {project.repoUrl && (
-              <ComicButton
-                href={project.repoUrl}
-                target="_blank"
-                variant="ghost"
-              >
-                View Source
-              </ComicButton>
-            )}
-          </div>
-        )}
+          {project.youtubeId && (
+            <div className="mt-8 border-[3px] border-panel-border shadow-panel-lg">
+              <YouTubeEmbed youtubeId={project.youtubeId} title={`${project.title} — trailer`} />
+            </div>
+          )}
+          {!project.youtubeId && project.images.length > 0 && (
+            <div
+              className={`overflow-hidden border-[3px] border-panel-border shadow-panel-lg ${
+                usesPortraitMedia ? "mx-auto w-full max-w-sm" : "mt-8"
+              }`}
+            >
+              <Carousel
+                images={project.images}
+                altPrefix={`${project.title} screenshot`}
+                aspectClassName={usesPortraitMedia ? "aspect-[9/16]" : "aspect-video"}
+                imageFit={usesPortraitMedia ? "contain" : "cover"}
+              />
+            </div>
+          )}
+        </div>
 
-        {project.youtubeId && (
-          <div className="mt-8 border-[3px] border-panel-border" style={{ boxShadow: "var(--shadow-panel-lg)" }}>
-            <YouTubeEmbed
-              youtubeId={project.youtubeId}
-              title={`${project.title} — trailer`}
-            />
-          </div>
-        )}
-
-        {!project.youtubeId && project.images.length > 0 && (
-          <div
-            className={`mt-8 overflow-hidden border-[3px] border-panel-border ${
-              usesPortraitMedia ? "mx-auto max-w-sm" : ""
-            }`}
-            style={{ boxShadow: "var(--shadow-panel-lg)" }}
-          >
-            <Carousel
-              images={project.images}
-              altPrefix={`${project.title} screenshot`}
-              aspectClassName={
-                usesPortraitMedia ? "aspect-[9/16]" : "aspect-video"
-              }
-              imageFit={usesPortraitMedia ? "contain" : "cover"}
-            />
+        {!project.youtubeId && project.images.length === 0 && project.preview && (
+          <div className="mt-7 h-56 overflow-hidden border border-edge bg-surface/50">
+            <ProjectPreview project={project} />
           </div>
         )}
 

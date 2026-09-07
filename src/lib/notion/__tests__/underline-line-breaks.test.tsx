@@ -9,6 +9,7 @@ import { richTextToMarkdown } from "../rich-text";
 import { inlineToRichText } from "../md-to-rich-text";
 import type { MdBlock, RichText } from "../types";
 import { block, rt } from "./fixtures/blocks";
+import { articleComponents } from "./fixtures/article-components";
 
 // Underline has no Markdown delimiter, so rich-text.ts writes the run as
 // `<u>` — and an element is the one wrapper that cannot survive a blank line.
@@ -45,6 +46,7 @@ const paragraph = (...runs: Parameters<typeof rt>[]) =>
 async function renderMdx(source: string): Promise<HTMLElement> {
   const { content } = await compileMDX({
     source,
+    components: articleComponents,
     options: { mdxOptions: { remarkPlugins: [remarkGfm] } },
   });
   return render(content as ReactElement).container;

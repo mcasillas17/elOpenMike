@@ -7,6 +7,7 @@ import { HowIWork } from "@/components/sections/HowIWork";
 import { Writing } from "@/components/sections/Writing";
 import { About } from "@/components/sections/About";
 import { Comedy } from "@/components/sections/Comedy";
+import { Contact } from "@/components/sections/Contact";
 import { routes, alternatesFor } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -17,13 +18,14 @@ export default function Home() {
   return (
     <>
       <Hero />
-      <Experience />
       <Projects />
+      <Experience />
       <HowIWork />
       <Skills />
       <Writing />
       <About />
       <Comedy />
+      <Contact />
     </>
   );
 }

@@ -14,9 +14,6 @@ export const metadata: Metadata = {
 
 export default function ProjectsPage() {
   const total = projects.length;
-  const feature = projects[0];
-  const aux = projects[1];
-  const rest = projects.slice(2);
 
   return (
     <Container className="py-20">
@@ -30,51 +27,18 @@ export default function ProjectsPage() {
         A few things I&rsquo;ve designed and built &mdash; newest first.
       </p>
 
-      {(feature || aux) && (
-        <div className="mt-10 grid grid-cols-1 gap-3 md:grid-cols-3 md:grid-rows-[220px] md:gap-2">
-          {feature && (
-            <div className="md:col-span-2 min-h-[200px] md:min-h-0">
-              <ProjectCard
-                project={feature}
-                index={0}
-                variant="feature"
-                issueNumber={String(total).padStart(2, "0")}
-                headingLevel={2}
-              />
-            </div>
-          )}
-          {aux && (
-            <div className="md:col-span-1 min-h-[160px] md:min-h-0">
-              <ProjectCard
-                project={aux}
-                index={1}
-                variant="aux"
-                issueNumber={String(total - 1).padStart(2, "0")}
-                headingLevel={2}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {rest.length > 0 && (
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 md:gap-2">
-          {rest.map((p, idx) => {
-            const i = idx + 2;
-            return (
-              <div key={p.slug} className="aspect-[4/3]">
-                <ProjectCard
-                  project={p}
-                  index={i}
-                  variant="uniform"
-                  issueNumber={String(total - i).padStart(2, "0")}
-                  headingLevel={2}
-                />
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {projects.map((project, index) => (
+          <ProjectCard
+            key={project.slug}
+            project={project}
+            index={index}
+            variant={index < 2 ? "feature" : "uniform"}
+            issueNumber={String(total - index).padStart(2, "0")}
+            headingLevel={2}
+          />
+        ))}
+      </div>
     </Container>
   );
 }

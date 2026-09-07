@@ -42,4 +42,15 @@ describe("Experience", () => {
       }
     }
   });
+
+  it("keeps the current role open and earlier roles available on demand", () => {
+    render(<Experience />);
+    expect(screen.getByText(experience[0].highlights[0]).closest("details")).toBeNull();
+    for (const role of experience.slice(1)) {
+      const details = screen.getByText(role.highlights[0]).closest("details");
+      expect(details).not.toBeNull();
+      expect(details).not.toHaveAttribute("open");
+      expect(details?.querySelector("summary")).toHaveTextContent(role.focus);
+    }
+  });
 });

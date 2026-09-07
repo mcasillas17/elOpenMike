@@ -52,7 +52,7 @@ export const howIWork: readonly WorkingPrinciple[] = [
     number: "03",
     title: "Treat operational clarity as a feature",
     description:
-      "I give runtime state a place to be inspected. TuringAgent records events and audit state; my telemetry note starts with the error and dependency questions an engineer needs answered.",
+      "TuringAgent records events and audit state. My telemetry notes start with the questions an engineer needs answered during an incident.",
     tint: "green",
     evidence: [
       {
@@ -71,7 +71,7 @@ export const howIWork: readonly WorkingPrinciple[] = [
     number: "04",
     title: "Write things down for the handoff",
     description:
-      "In cross-team platform work, I’ve contributed reusable APIs, migrations, and partner-facing documentation. Separately, TuringAgent publishes its architecture, security model, and verification steps.",
+      "Reusable APIs need useful handoffs. My Microsoft work includes partner-facing documentation; TuringAgent publishes its architecture, security model, and verification steps.",
     tint: "purple",
     evidence: [
       {

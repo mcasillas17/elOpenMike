@@ -1,10 +1,20 @@
-export type Clip = { youtubeId: string; title: string };
+export type Clip = { youtubeId: string; title: string; posterSrc: string };
 export type Photo = { src: string; alt: string }; // src under /images/comedy/
 
 // Stand-up clips. youtubeId is the value after `youtu.be/` (or `v=`) in the URL.
+// Local posters are the original https://i.ytimg.com/vi/{youtubeId}/maxresdefault.jpg
+// thumbnails, downloaded September 2026; no thumbnail request reaches YouTube.
 export const clips: Clip[] = [
-  { youtubeId: "n-AgoNbE7Ms", title: "Laughs Comedy Club, Seattle (Jul 2023)" },
-  { youtubeId: "aVqjFdhp5a8", title: "Comedy/Bar, Seattle (Jul 2023)" },
+  {
+    youtubeId: "n-AgoNbE7Ms",
+    title: "Laughs Comedy Club, Seattle (Jul 2023)",
+    posterSrc: "/images/comedy/n-AgoNbE7Ms.jpg",
+  },
+  {
+    youtubeId: "aVqjFdhp5a8",
+    title: "Comedy/Bar, Seattle (Jul 2023)",
+    posterSrc: "/images/comedy/aVqjFdhp5a8.jpg",
+  },
 ];
 
 // Add photos at public/images/comedy/ and list them here, e.g.

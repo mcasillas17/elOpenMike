@@ -1,12 +1,9 @@
 import Link from "next/link";
-import { Container } from "@/components/ui/Container";
-import { Reveal } from "@/components/ui/Reveal";
-import { ComicPanel } from "@/components/ui/comic/ComicPanel";
-import { IssueTag } from "@/components/ui/comic/IssueTag";
+import { Section } from "@/components/ui/Section";
 import { howIWork } from "@/data/howIWork";
 
 const EVIDENCE_LINK_CLASS =
-  "relative z-10 inline-flex min-h-11 items-center font-display text-xs font-black uppercase tracking-widest text-web-strong underline decoration-web/60 underline-offset-4 transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-web";
+  "relative z-10 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-web-strong underline decoration-web/60 underline-offset-4 transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-web";
 
 function EvidenceLink({ href, label }: { href: string; label: string }) {
   if (href.startsWith("http")) {
@@ -19,7 +16,6 @@ function EvidenceLink({ href, label }: { href: string; label: string }) {
         className={EVIDENCE_LINK_CLASS}
       >
         {label}
-        <span className="sr-only"> opens in a new tab</span>
         <span aria-hidden="true"> ↗</span>
       </a>
     );
@@ -34,60 +30,20 @@ function EvidenceLink({ href, label }: { href: string; label: string }) {
 
 export function HowIWork() {
   return (
-    <section
-      id="how-i-work"
-      aria-labelledby="how-i-work-title"
-      className="scroll-anchor py-20"
-    >
-      <Container>
-        <Reveal>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
-            Engineering approach
-          </p>
-          <h2
-            id="how-i-work-title"
-            className="mt-2 font-display text-3xl font-extrabold sm:text-4xl"
-          >
-            How I work
-          </h2>
-          <p className="mt-4 max-w-2xl text-muted">
-            A few evidence-backed habits behind the systems and project work above.
-          </p>
-
-          <div className="mt-10 grid gap-5 lg:grid-cols-2">
-            {howIWork.map((principle) => (
-              <ComicPanel
-                key={principle.number}
-                tint={principle.tint}
-                className="min-h-64"
-              >
-                <IssueTag number={principle.number} label="METHOD" variant="dark" />
-                <div className="relative z-10 flex h-full flex-col px-6 pb-6 pt-12 sm:px-7">
-                  <h3 className="font-display text-xl font-black leading-tight sm:text-2xl">
-                    {principle.title}
-                  </h3>
-                  <p className="mt-3 max-w-prose text-sm leading-6 text-muted sm:text-base">
-                    {principle.description}
-                  </p>
-                  <div className="mt-auto pt-5">
-                    <p className="font-display text-[10px] font-black uppercase tracking-[0.18em] text-ink">
-                      Evidence
-                    </p>
-                    <ul className="mt-1.5 space-y-2">
-                      {principle.evidence.map((evidence) => (
-                        <li key={evidence.href}>
-                          <EvidenceLink {...evidence} />
-                          <p className="text-xs leading-5 text-muted">{evidence.detail}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </ComicPanel>
-            ))}
+    <Section id="how-i-work" eyebrow="Engineering approach" title="How I work">
+      <div className="grid gap-x-10 gap-y-7 sm:grid-cols-2">
+        {howIWork.map((principle) => (
+          <div key={principle.number} className="flex flex-col border-t border-edge pt-5">
+            <h3 className="font-display text-xl font-bold leading-tight">{principle.title}</h3>
+            <p className="mt-3 max-w-prose text-sm leading-6 text-muted sm:text-base">{principle.description}</p>
+            <ul className="mt-auto flex flex-wrap gap-x-5 pt-3">
+              {principle.evidence.map((evidence) => (
+                <li key={evidence.href}><EvidenceLink {...evidence} /></li>
+              ))}
+            </ul>
           </div>
-        </Reveal>
-      </Container>
-    </section>
+        ))}
+      </div>
+    </Section>
   );
 }

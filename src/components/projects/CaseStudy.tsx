@@ -1,5 +1,4 @@
 import type { CaseStudy as CaseStudyData } from "@/data/projects";
-import { ComicPanel } from "@/components/ui/comic/ComicPanel";
 
 type Props = {
   caseStudy: CaseStudyData;
@@ -14,7 +13,7 @@ function SectionHeading({ id, children }: SectionHeadingProps) {
   return (
     <h2
       id={id}
-      className="font-display text-2xl font-black uppercase tracking-tight text-ink sm:text-3xl"
+      className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl"
     >
       {children}
     </h2>
@@ -34,49 +33,34 @@ function ItemList({ items }: { items: string[] }) {
   );
 }
 
-function compactStatus(status: string) {
-  const firstSentenceEnd = status.indexOf(". ");
-  return firstSentenceEnd === -1 ? status : status.slice(0, firstSentenceEnd + 1);
-}
-
 export function CaseStudy({ caseStudy }: Props) {
   return (
-    <div className="mt-14 space-y-14">
+    <div className="mt-12 space-y-12">
+      <nav aria-label="Case study sections" className="flex flex-wrap gap-x-6 border-y border-edge py-2 text-sm">
+        <a className="text-link" href="#case-study-problem">Overview</a>
+        <a className="text-link" href="#case-study-architecture">Architecture</a>
+        <a className="text-link" href="#case-study-decisions">Decisions</a>
+        <a className="text-link" href="#case-study-evidence">Evidence</a>
+      </nav>
       <section aria-labelledby="case-study-problem">
         <SectionHeading id="case-study-problem">Problem</SectionHeading>
-        <ComicPanel tint="blue" className="mt-4 p-5 sm:p-6">
-          <p className="relative z-10 max-w-prose text-lg leading-relaxed text-ink">
-            {caseStudy.problem}
-          </p>
-        </ComicPanel>
-        <aside
-          aria-label="Current status"
-          className="mt-4 border-l-4 border-spidey bg-[#fff4bf] px-4 py-3 text-black"
-          role="note"
-        >
-          <p className="font-display text-xs font-black uppercase tracking-widest">
-            Current status
-          </p>
-          <p className="mt-1 text-sm font-medium leading-relaxed">
-            {compactStatus(caseStudy.status)}
-          </p>
-        </aside>
+        <p className="mt-4 max-w-prose text-lg leading-relaxed text-ink">{caseStudy.problem}</p>
       </section>
 
       <section aria-labelledby="case-study-what-i-built">
         <SectionHeading id="case-study-what-i-built">What I built</SectionHeading>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {caseStudy.whatIBuilt.map((item, index) => (
-            <ComicPanel key={item} tint={index % 2 === 0 ? "purple" : "blue"} className="p-5">
-              <p className="relative z-10 text-base leading-relaxed text-ink">{item}</p>
-            </ComicPanel>
+          {caseStudy.whatIBuilt.map((item) => (
+            <div key={item} className="border-t border-edge pt-4">
+              <p className="text-base leading-relaxed text-muted">{item}</p>
+            </div>
           ))}
         </div>
       </section>
 
       <section aria-labelledby="case-study-constraints">
         <SectionHeading id="case-study-constraints">Constraints</SectionHeading>
-        <div className="mt-5 border-l-4 border-web-strong bg-surface px-5 py-5 sm:px-6">
+        <div className="mt-5 max-w-prose">
           <ItemList items={caseStudy.constraints} />
         </div>
       </section>
@@ -90,21 +74,21 @@ export function CaseStudy({ caseStudy }: Props) {
             {caseStudy.architecture.flowLabel}
           </p>
         </figcaption>
-        <ol className="mt-6 grid gap-3 md:grid-cols-[repeat(var(--case-study-nodes),minmax(0,1fr))]" style={{ "--case-study-nodes": caseStudy.architecture.nodes.length } as React.CSSProperties}>
+        <ol className="mt-6 grid gap-4 sm:grid-cols-2">
           {caseStudy.architecture.nodes.map((node, index) => (
             <li key={node.title} className="relative min-w-0">
               <div className="h-full border-2 border-panel-border bg-[#0e1320] p-4 text-white">
                 <span className="font-mono text-xs font-bold text-web-strong">
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <h3 className="mt-2 font-display text-lg font-black uppercase leading-tight">
+                <h3 className="mt-2 font-display text-lg font-bold leading-tight">
                   {node.title}
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-200">{node.detail}</p>
               </div>
               {index < caseStudy.architecture.nodes.length - 1 && (
-                <span aria-hidden="true" className="absolute -bottom-3 left-1/2 z-10 flex size-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-panel-border bg-spidey font-display text-sm font-black text-white md:-right-3 md:bottom-auto md:left-auto md:top-1/2 md:-translate-y-1/2 md:translate-x-1/2">
-                  →
+                <span aria-hidden="true" className="absolute -bottom-3 left-1/2 z-10 flex size-6 -translate-x-1/2 items-center justify-center bg-web font-display text-sm font-bold text-white sm:hidden">
+                  ↓
                 </span>
               )}
             </li>
@@ -114,14 +98,14 @@ export function CaseStudy({ caseStudy }: Props) {
 
       <section aria-labelledby="case-study-decisions">
         <SectionHeading id="case-study-decisions">Critical decisions &amp; tradeoffs</SectionHeading>
-        <div className="mt-5 space-y-3">
-          {caseStudy.decisions.map((decision, index) => (
-            <ComicPanel key={decision.title} tint={index % 2 === 0 ? "purple" : "blue"} className="p-5 sm:p-6">
-              <h3 className="relative z-10 font-display text-xl font-black text-ink">
+        <div className="mt-5 divide-y divide-edge border-y border-edge">
+          {caseStudy.decisions.map((decision) => (
+            <div key={decision.title} className="py-5 sm:grid sm:grid-cols-[1fr_1.6fr] sm:gap-8">
+              <h3 className="font-display text-lg font-bold text-ink">
                 {decision.title}
               </h3>
-              <p className="relative z-10 mt-2 leading-relaxed text-ink">{decision.detail}</p>
-            </ComicPanel>
+              <p className="mt-2 max-w-prose leading-relaxed text-muted sm:mt-0">{decision.detail}</p>
+            </div>
           ))}
         </div>
       </section>
@@ -130,8 +114,8 @@ export function CaseStudy({ caseStudy }: Props) {
         <SectionHeading id="case-study-proof">Engineering proof</SectionHeading>
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           {caseStudy.verification.map((proof) => (
-            <div key={proof.title} className="border-2 border-panel-border bg-[#fff4bf] p-5 text-black" style={{ boxShadow: "var(--shadow-panel-sm)" }}>
-              <h3 className="font-display text-lg font-black uppercase leading-tight">
+            <div key={proof.title} className="border border-edge bg-surface p-5 text-ink">
+              <h3 className="font-display text-lg font-bold leading-tight">
                 {proof.title}
               </h3>
               <p className="mt-2 text-sm leading-relaxed">{proof.detail}</p>
@@ -142,20 +126,20 @@ export function CaseStudy({ caseStudy }: Props) {
 
       <section aria-labelledby="case-study-evidence">
         <SectionHeading id="case-study-evidence">Evidence &amp; current status</SectionHeading>
-        <ComicPanel tint="red" className="mt-5 p-5 sm:p-6">
-          <p className="relative z-10 max-w-prose leading-relaxed text-ink">{caseStudy.status}</p>
-        </ComicPanel>
+        <aside role="note" aria-label="Current status" className="mt-5 border border-edge bg-surface p-5 sm:p-6">
+          <p className="max-w-prose leading-relaxed text-ink">{caseStudy.status}</p>
+        </aside>
         <h3 className="mt-6 font-display text-lg font-black uppercase tracking-wide text-ink">
           Source evidence
         </h3>
-        <ul className="mt-3 divide-y-2 divide-panel-border border-y-2 border-panel-border">
+        <ul className="mt-3 divide-y divide-edge border-y border-edge">
           {caseStudy.evidence.map((evidence) => (
-            <li key={evidence.href} className="bg-surface p-4 sm:p-5">
+            <li key={evidence.href} className="py-4 sm:py-5">
               <a
                 href={evidence.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-display text-lg font-black text-web-strong underline decoration-2 underline-offset-4 hover:text-spidey focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-web"
+                className="inline-flex min-h-11 items-center font-display text-base font-semibold text-web-strong underline underline-offset-4 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-web"
               >
                 {evidence.label}
               </a>
@@ -169,7 +153,7 @@ export function CaseStudy({ caseStudy }: Props) {
 
       <section aria-labelledby="case-study-lessons">
         <SectionHeading id="case-study-lessons">Lessons &amp; next steps</SectionHeading>
-        <div className="mt-5 border-t-4 border-spidey pt-5">
+        <div className="mt-5 max-w-prose">
           <ItemList items={caseStudy.lessons} />
         </div>
       </section>

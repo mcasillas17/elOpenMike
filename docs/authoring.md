@@ -37,6 +37,8 @@ as you type.
 | Code block | ` ``` ` | `/code` |
 | Task list | `[] ` + space | `/to-do` |
 | Quote | `> ` + space | `/quote` |
+| Callout | — | `/callout` |
+| Expandable detail | — | `/toggle` |
 | Divider | `---` | `/divider` |
 | Image | — | `/image`, or paste from the camera roll |
 | Table | — | `/table` |
@@ -44,6 +46,54 @@ as you type.
 
 Notion's Heading 1/2/3 render on the site as h2/h3/h4 — the post title is
 already the page's h1.
+
+## Building a richer article
+
+Write with native Notion blocks, not HTML, React, or component names. The sync
+preserves the block types and the site gives them a shared editorial treatment.
+You do not edit the generated files in `content/blog/`.
+
+| In Notion | On the website |
+| --- | --- |
+| Headings | Chapters with permalinks; articles with at least four H1/H2 blocks get a reading guide. |
+| Callout | A distinct note panel, preserving the emoji and formatted content. Red, orange, or yellow callouts use the warning treatment. |
+| Quote | A pull quote, separate from the callout treatment. |
+| Image with caption | A captioned figure with an Expand control, zoom, and an original-image link. |
+| Code with caption | A labelled code example with syntax highlighting and a copy control. |
+| Toggle list | A native expandable disclosure, including its nested blocks. |
+| Bookmark or link preview | A lightweight reference block using your label and link, without fetching external previews. |
+
+For a **before/after comparison**, place two code blocks next to each other and
+set their Notion captions to **Before** and **After**, in that order. The labels
+are case-insensitive; no other caption text is inferred as a comparison. Any
+paragraph between the blocks keeps them separate. Comparisons stack on smaller
+screens, and each example retains its own copy button.
+
+For a **diagram**, upload a PNG, JPEG, WebP, GIF, or supported still AVIF through
+Notion's image block. Add a caption that explains what the reader should notice.
+The site does not generate diagrams from prose or execute diagram code. Existing
+image download and format protections still apply.
+
+The reading guide comes from the same generated heading IDs as the permalinks,
+so duplicate headings and formatted titles stay in sync. It is open beside the
+article on wide screens and collapsible above the text on smaller screens.
+Headings inside toggle lists, callouts, and quotes are omitted from the guide.
+Short notes do not get a guide or reading-progress indicator. Toggleable heading
+blocks retain their normal heading and visible children; use a toggle list when
+the content should be optional.
+
+Use only the blocks the argument needs. A useful pattern is a clear question,
+an explanation or diagram, a practical example, the caveats, and the sources.
+There is no mandatory section template.
+
+### Local layout specimen
+
+Run `ARTICLE_PREVIEW=1 pnpm dev` and open `/preview/article` to see a synthetic
+Notion page go through the actual converter and renderer. It includes a diagram,
+before/after code, callouts, a nested toggle, a table, and a reference.
+It is not a published post and never enters the blog list, RSS feed, or sitemap.
+The route is disabled by default. Leave `ARTICLE_PREVIEW` unset in deployment;
+for a local production preview, set it when running `pnpm build`.
 
 ## Markdown characters are literal
 
@@ -96,15 +146,15 @@ label are useful.
 
 Section headings receive a permalink beside them, so keep headings short and
 descriptive enough to make sense when somebody follows a deep link. Images
-scale to the article width; add meaningful captions or surrounding prose for
-context. Wide tables and long code lines scroll inside their own containers on
+scale to the article width; their captions remain visible, and captioned figures
+can be expanded. Wide tables and long code lines scroll inside their own containers on
 small screens instead of widening the page. Task-list checkboxes publish as a
 read-only snapshot of their Notion state.
 
 ## What to avoid
 
-These have no blog equivalent and are **skipped with a warning** — their
-content disappears silently:
+These remain unsupported and are **skipped with a warning**. Do not place
+content intended for publication inside them:
 
 - Synced blocks
 - Databases embedded in a page

@@ -50,13 +50,24 @@ describe("CaseStudy", () => {
     );
   });
 
-  it("surfaces a compact current-status signal before the detailed sections", () => {
+  it("keeps the full current status once, alongside its evidence", () => {
     render(<CaseStudy caseStudy={fixture} />);
 
     const status = screen.getByRole("note", { name: "Current status" });
     expect(status).toHaveTextContent(fixture.status);
-    expect(status.compareDocumentPosition(screen.getByRole("heading", { name: "What I built" }))).toBe(
+    expect(screen.getAllByText(fixture.status)).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Engineering proof" }).compareDocumentPosition(status)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("offers jump links for readers who want the architecture or evidence", () => {
+    render(<CaseStudy caseStudy={fixture} />);
+    expect(screen.getByRole("link", { name: "Architecture" })).toHaveAttribute(
+      "href", "#case-study-architecture",
+    );
+    expect(screen.getByRole("link", { name: "Evidence" })).toHaveAttribute(
+      "href", "#case-study-evidence",
     );
   });
 

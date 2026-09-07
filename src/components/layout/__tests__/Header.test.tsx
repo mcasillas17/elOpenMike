@@ -45,6 +45,15 @@ describe("Header", () => {
     );
   });
 
+  it("orders navigation with the page and includes a direct contact destination", () => {
+    render(<Header />);
+    expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute(
+      "href", "/#contact",
+    );
+    const labels = screen.getAllByRole("link").slice(1).map((link) => link.textContent);
+    expect(labels).toEqual(["Projects", "Experience", "Skills", "Writing", "About", "Comedy", "Contact"]);
+  });
+
   it("gives each desktop navigation link a 44px target and visible keyboard focus", () => {
     render(<Header />);
     const experience = screen.getByRole("link", { name: "Experience" });

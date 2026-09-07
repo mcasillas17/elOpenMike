@@ -1,5 +1,10 @@
 import type { ComponentProps } from "react";
 import { CodeBlock } from "@/components/blog/CodeBlock";
+import { ArticleFigure } from "./ArticleFigure";
+import {
+  ArticleCallout, ArticleToggle, ArticleSummary, ArticleCaption,
+  ArticleCode, ArticleComparison, ArticleReference,
+} from "./ArticleBlocks";
 
 function classes(base: string, extra?: string) {
   return extra ? `${base} ${extra}` : base;
@@ -10,17 +15,25 @@ function classes(base: string, extra?: string) {
 // inline code (`x`) has a string child; fenced blocks (via rehype-pretty-code)
 // have element children (Shiki <span>s), which we leave untouched.
 export const mdxComponents = {
+  ArticleCallout,
+  ArticleToggle,
+  ArticleSummary,
+  ArticleFigure,
+  ArticleCaption,
+  ArticleCode,
+  ArticleComparison,
+  ArticleReference,
   h1: (p: ComponentProps<"h2">) => (
-    <h2 className="mt-10 mb-3 font-display text-2xl font-bold text-ink" {...p} />
+    <h2 tabIndex={-1} className="mt-10 mb-3 font-display text-2xl font-bold text-ink" {...p} />
   ),
   h2: (p: ComponentProps<"h2">) => (
-    <h2 className="mt-10 mb-3 font-display text-2xl font-bold text-ink" {...p} />
+    <h2 tabIndex={-1} className="mt-10 mb-3 font-display text-2xl font-bold text-ink" {...p} />
   ),
   h3: (p: ComponentProps<"h3">) => (
-    <h3 className="mt-8 mb-2 font-display text-xl font-bold text-ink" {...p} />
+    <h3 tabIndex={-1} className="mt-8 mb-2 font-display text-xl font-bold text-ink" {...p} />
   ),
   h4: (p: ComponentProps<"h4">) => (
-    <h4 className="mt-6 mb-2 font-display text-lg font-bold text-ink" {...p} />
+    <h4 tabIndex={-1} className="mt-6 mb-2 font-display text-lg font-bold text-ink" {...p} />
   ),
   p: (p: ComponentProps<"p">) => (
     <p className="mb-4 leading-relaxed text-muted" {...p} />
@@ -45,7 +58,7 @@ export const mdxComponents = {
   ),
   blockquote: (p: ComponentProps<"blockquote">) => (
     <blockquote
-      className="mb-4 border-l-2 border-edge pl-4 italic text-muted"
+      className="article-quote"
       {...p}
     />
   ),

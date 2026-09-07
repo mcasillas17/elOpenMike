@@ -4,16 +4,16 @@ export type SkillGroup = { label: string; items: string[] };
 // like recruiters to read your range.
 export const skills: SkillGroup[] = [
   {
-    label: "Languages",
-    items: ["C#", "TypeScript", "Go", "C++", "JavaScript", "SQL"],
-  },
-  {
     label: "Backend & APIs",
     items: [".NET", "Node.js", "gRPC", "REST APIs", "Distributed systems", "Microservices"],
   },
   {
     label: "AI & agents",
     items: ["LLM & agent tooling", "MCP", "Ollama", "Model routing"],
+  },
+  {
+    label: "Languages",
+    items: ["C#", "TypeScript", "Go", "C++", "JavaScript", "SQL"],
   },
   {
     label: "Cloud & infra",

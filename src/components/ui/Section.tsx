@@ -16,7 +16,7 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section id={id} className={`scroll-anchor py-20 ${className}`.trim()}>
+    <section id={id} aria-labelledby={`${id}-title`} className={`scroll-anchor py-14 sm:py-20 ${className}`.trim()}>
       <Container>
         <Reveal>
           {eyebrow && (
@@ -24,10 +24,10 @@ export function Section({
               {eyebrow}
             </p>
           )}
-          <h2 className="mt-2 font-display text-3xl font-extrabold sm:text-4xl">
+          <h2 id={`${id}-title`} className="mt-2 font-display text-3xl font-extrabold sm:text-4xl">
             {title}
           </h2>
-          <div className="mt-10">{children}</div>
+          <div className="mt-7 sm:mt-9">{children}</div>
         </Reveal>
       </Container>
     </section>

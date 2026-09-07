@@ -35,16 +35,17 @@ describe("HowIWork", () => {
         });
 
         expect(link).toHaveAttribute("href", evidence.href);
-        expect(
-          within(section as HTMLElement).getByText(evidence.detail),
-        ).toBeInTheDocument();
-
         if (external) {
           expect(link).toHaveAttribute("target", "_blank");
           expect(link).toHaveAttribute("rel", "noopener noreferrer");
         }
       }
     }
+  });
+
+  it("avoids repeating evidence descriptions underneath the same principle", () => {
+    render(<HowIWork />);
+    expect(screen.queryByText(howIWork[0].evidence[0].detail)).not.toBeInTheDocument();
   });
 
   it("keeps evidence links usable by touch and keyboard", () => {

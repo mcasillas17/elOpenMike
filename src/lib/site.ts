@@ -55,7 +55,7 @@ export const site = {
     "I build AI-powered, distributed systems — services that stay fast, scalable, and observable as they grow.",
   tagline: "Builder by day, open-mic by night.",
   availability:
-    "Open to conversations about senior backend, platform, and AI-infrastructure opportunities.",
+    "Open to senior backend, platform & AI conversations.",
   intro:
     "I ship software, lift heavy, and occasionally make rooms laugh. Software Engineer focused on building things that work — and a few that web-sling.",
   resumeHref: routes.resume,
@@ -63,14 +63,14 @@ export const site = {
     emailHref: recruitingEmailHref,
     emailSubject: recruitingEmailSubject,
   },
-  // Only sections that exist in Plan 1. Grow this as later plans land.
   nav: [
+    { label: "Projects", href: "/#projects" },
     { label: "Experience", href: "/#experience" },
     { label: "Skills", href: "/#skills" },
-    { label: "Projects", href: "/#projects" },
+    { label: "Writing", href: routes.blog },
     { label: "About", href: "/#about" },
     { label: "Comedy", href: "/#comedy" },
-    { label: "Writing", href: routes.blog },
+    { label: "Contact", href: "/#contact" },
   ] as NavItem[],
   socials: [
     { label: "GitHub", href: "https://github.com/mcasillas17" },
