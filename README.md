@@ -45,7 +45,13 @@ without JavaScript.
 `featuredProjects` in `src/data/projects.ts` controls homepage curation independently
 of the chronological project archive and issue numbers. Cards use local product
 screenshots or labelled conceptual previews, with shorter `cardSummary` copy.
-Full project descriptions and source evidence remain on the detail pages.
+Detail pages present product `highlights` and a separate `vision`, alongside the
+technical `stack`, screenshots, and source or live links. Set
+`mediaLayout: "portrait"` for phone screenshots and `imageFit: "contain"` to keep
+an entire image visible on cards and in the detail carousel, as with ScoreArc's
+World Cup bracket. Optional `mediaCredit` links provide screenshot provenance
+and artwork attribution; local media credits live in
+[`public/images/projects/CREDITS.md`](public/images/projects/CREDITS.md).
 
 The portrait at `public/images/about/miguel.jpg` is a local copy of Miguel's
 [public GitHub profile image](https://github.com/mcasillas17). Halftone texture
