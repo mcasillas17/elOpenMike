@@ -15,7 +15,9 @@ export function ProjectPreview({ project }: { project: Project }) {
             alt={`${project.title} interface preview`}
             fill
             sizes={portrait ? "176px" : "(max-width: 640px) 100vw, 480px"}
-            className="object-cover object-top"
+            className={project.imageFit === "contain"
+              ? "object-contain"
+              : "object-cover object-top"}
           />
         </div>
       </div>

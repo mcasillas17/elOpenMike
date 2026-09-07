@@ -18,14 +18,17 @@ describe("Projects (home section)", () => {
     ).toHaveAttribute("href", "/projects");
   });
 
-  it("features TuringAgent beside WebSnag rather than burying it as a name-only card", () => {
+  it("features ScoreArc and WallCrawl while keeping WebSnag and TuringAgent visible", () => {
     render(<Projects />);
     const cards = screen.getAllByRole("article");
-    expect(cards.slice(0, 2).map((card) => card.querySelector("h3")?.textContent)).toEqual([
-      "WebSnag", "TuringAgent",
+    expect(cards.map((card) => card.querySelector("h3")?.textContent)).toEqual([
+      "ScoreArc", "WallCrawl", "WebSnag", "TuringAgent",
     ]);
     expect(screen.getByText(/A private assistant stack/)).toBeInTheDocument();
-    expect(cards[1]).toHaveTextContent("№03");
+    expect(cards[0]).toHaveTextContent("№08");
+    expect(cards[1]).toHaveTextContent("№07");
+    expect(cards[2]).toHaveTextContent("№06");
+    expect(cards[3]).toHaveTextContent("№03");
   });
 
   it("renders the curated projects, each linked to its detail page", () => {

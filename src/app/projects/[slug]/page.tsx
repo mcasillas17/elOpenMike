@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/comic/ComicButton";
 import { Carousel } from "@/components/ui/Carousel";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
-import { CaseStudy } from "@/components/projects/CaseStudy";
 import { ProjectPreview } from "@/components/projects/ProjectPreview";
 import { getProject, getAllSlugs, projects } from "@/data/projects";
 import { getTint } from "@/lib/projectVisuals";
@@ -122,18 +121,27 @@ export default async function ProjectDetailPage({
             </div>
           )}
           {!project.youtubeId && project.images.length > 0 && (
-            <div
-              className={`overflow-hidden border-[3px] border-panel-border shadow-panel-lg ${
+            <figure
+              className={`${
                 usesPortraitMedia ? "mx-auto w-full max-w-sm" : "mt-8"
               }`}
             >
-              <Carousel
-                images={project.images}
-                altPrefix={`${project.title} screenshot`}
-                aspectClassName={usesPortraitMedia ? "aspect-[9/16]" : "aspect-video"}
-                imageFit={usesPortraitMedia ? "contain" : "cover"}
-              />
-            </div>
+              <div className="overflow-hidden border-[3px] border-panel-border shadow-panel-lg">
+                <Carousel
+                  images={project.images}
+                  altPrefix={`${project.title} screenshot`}
+                  aspectClassName={usesPortraitMedia ? "aspect-[9/16]" : "aspect-video"}
+                  imageFit={project.imageFit ?? (usesPortraitMedia ? "contain" : "cover")}
+                />
+              </div>
+              {project.mediaCredit && (
+                <figcaption className="mt-2 text-xs leading-relaxed text-muted">
+                  <a href={project.mediaCredit.href} className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-web-strong">
+                    {project.mediaCredit.label}
+                  </a>
+                </figcaption>
+              )}
+            </figure>
           )}
         </div>
 
@@ -143,16 +151,16 @@ export default async function ProjectDetailPage({
           </div>
         )}
 
-        {!project.caseStudy && project.highlights.length > 0 && (
-          <>
-            <div className="mt-10">
+        {project.highlights.length > 0 && (
+          <section className="mt-10" aria-labelledby="project-features">
+            <h2 id="project-features">
               <span
                 className="inline-block border-2 border-panel-border bg-white px-2.5 py-1 font-display text-sm font-black uppercase tracking-widest text-black"
                 style={{ boxShadow: "var(--shadow-panel-accent)" }}
               >
                 What it does
               </span>
-            </div>
+            </h2>
             <div className="mt-5 flex flex-col gap-3">
               {project.highlights.map((h, i) => (
                 <ComicPanel key={h} tint="blue" className="px-5 py-4 pl-16">
@@ -167,10 +175,17 @@ export default async function ProjectDetailPage({
                 </ComicPanel>
               ))}
             </div>
-          </>
+          </section>
         )}
 
-        {project.caseStudy && <CaseStudy caseStudy={project.caseStudy} />}
+        {project.vision && (
+          <section className="mt-10 border-t border-edge pt-8" aria-labelledby="project-vision">
+            <h2 id="project-vision" className="font-display text-2xl font-black text-ink">
+              Vision
+            </h2>
+            <p className="mt-4 max-w-prose text-lg leading-relaxed text-muted">{project.vision}</p>
+          </section>
+        )}
       </div>
     </Container>
   );

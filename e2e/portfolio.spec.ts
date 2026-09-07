@@ -24,7 +24,7 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(page).toHaveURL(/#projects$/);
     const projects = page.locator("#projects");
     await expect(projects.getByRole("heading", { level: 3 })).toHaveText([
-      "WebSnag", "TuringAgent", "Mexican Mom", "Thwiply",
+      "ScoreArc", "WallCrawl", "WebSnag", "TuringAgent",
     ]);
     const order = await page.locator("main > section").evaluateAll((sections) => sections.map((section) => section.id));
     expect(order.indexOf("projects")).toBeLessThan(order.indexOf("experience"));
@@ -48,12 +48,12 @@ for (const width of [320, 390, 768, 1440]) {
   });
 }
 
-test("case-study navigation reaches the evidence while preserving the media controls", async ({ page }) => {
+test("product details preserve media controls alongside features and vision", async ({ page }) => {
   await page.goto("/projects/websnag");
   const carousel = page.getByRole("group", { name: "WebSnag screenshot photos" });
   await carousel.getByRole("button", { name: "Next photo" }).click();
   await expect(carousel.getByRole("status")).toHaveText("WebSnag screenshot photo 2 of 4");
-  await page.getByRole("navigation", { name: "Case study sections" }).getByRole("link", { name: "Evidence" }).click();
-  await expect(page.getByRole("heading", { name: "Evidence & current status" })).toBeVisible();
-  await expect(page.getByRole("note", { name: "Current status" })).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "What it does", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vision", exact: true })).toBeVisible();
+  await expect(page.getByRole("note", { name: "Current status" })).toHaveCount(0);
 });

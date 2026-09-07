@@ -8,7 +8,7 @@ export function Projects() {
   return (
     <Section id="projects" eyebrow="Work" title="Selected Projects">
       <p className="mb-7 max-w-xl leading-relaxed text-muted">
-        From private AI systems to tools for a more intentional day.
+        Live matchdays, local-first Android apps, and private AI systems.
         A few things I&apos;ve designed and built.
       </p>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

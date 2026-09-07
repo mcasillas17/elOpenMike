@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { projects, getProject, getAllSlugs } from "@/data/projects";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { projects, featuredProjects, getProject, getAllSlugs } from "@/data/projects";
 
 describe("projects data", () => {
   it("has well-formed entries", () => {
@@ -21,11 +23,85 @@ describe("projects data", () => {
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
-  it("includes WebSnag as the newest portrait case study", () => {
+  it("curates four product and architecture projects in the approved order", () => {
+    expect(featuredProjects.map((project) => project.slug)).toEqual([
+      "scorearc", "wallcrawl", "websnag", "turingagent",
+    ]);
+  });
+
+  it("adds two projects without changing the six existing archive issue numbers", () => {
+    expect(projects).toHaveLength(8);
+    expect(Object.fromEntries(projects.map((project, index) => [
+      project.slug, String(projects.length - index).padStart(2, "0"),
+    ]))).toEqual({
+      scorearc: "08",
+      wallcrawl: "07",
+      websnag: "06",
+      "mexican-mom": "05",
+      thwiply: "04",
+      turingagent: "03",
+      turingcare: "02",
+      "light-master": "01",
+    });
+  });
+
+  it("introduces ScoreArc through football features and a separate vision", () => {
+    const project = getProject("scorearc");
+    expect(project).toMatchObject({
+      title: "ScoreArc",
+      liveUrl: "https://www.scorearc.futbol/en/c/world-cup/2026",
+      repoUrl: "https://github.com/mcasillas17/ScoreArc",
+      images: ["/images/projects/scorearc-world-cup.webp"],
+      imageFit: "contain",
+    });
+    expect(project?.vision).toMatch(/football/i);
+    expect(project?.caseStudy).toBeUndefined();
+  });
+
+  it("introduces WallCrawl through training features and a separate vision", () => {
+    const project = getProject("wallcrawl");
+    expect(project).toMatchObject({
+      title: "WallCrawl",
+      repoUrl: "https://github.com/mcasillas17/WallCrawl",
+      mediaLayout: "portrait",
+      images: [
+        "/images/projects/wallcrawl-today.webp",
+        "/images/projects/wallcrawl-active-workout.webp",
+        "/images/projects/wallcrawl-progress.webp",
+      ],
+    });
+    expect(project?.liveUrl).toBeUndefined();
+    expect(project?.vision).toMatch(/private.*on-device.*companion/i);
+    expect(project?.caseStudy).toBeUndefined();
+  });
+
+  it("keeps public project copy about purpose, features, and vision", () => {
+    for (const project of projects) {
+      expect(project.vision).toBeTruthy();
+      const publicCopy = [
+        project.summary, project.cardSummary, ...project.highlights, project.vision,
+      ].join(" ");
+      expect(publicCopy).not.toMatch(/scaffold|source revision|snapshot reviewed|cutover|FakeWorkoutPlanner|no production|public roadmap/i);
+    }
+  });
+
+  it.each(["scorearc", "wallcrawl"])("ships optimized local screenshot media for %s", (slug) => {
+    const project = getProject(slug);
+    expect(project?.images.length).toBeGreaterThan(0);
+    for (const image of project!.images) {
+      expect(image).toMatch(/^\/images\/projects\/[\w-]+\.webp$/);
+      const path = join(process.cwd(), "public", image);
+      expect(existsSync(path)).toBe(true);
+      expect(readFileSync(path).subarray(8, 12).toString()).toBe("WEBP");
+      expect(statSync(path).size).toBeLessThan(400_000);
+    }
+    expect(project?.cardSummary?.length).toBeLessThan(180);
+  });
+
+  it("preserves WebSnag's portrait case study", () => {
     const project = getProject("websnag");
 
     expect(project).toBeDefined();
-    expect(projects[0]).toBe(project);
     expect(project).toMatchObject({
       title: "WebSnag",
       summary:

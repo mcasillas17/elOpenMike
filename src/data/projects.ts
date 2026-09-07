@@ -38,18 +38,78 @@ export type Project = {
   tags: string[]; // chips
   stack: string[]; // tech list
   highlights: string[]; // "What it does" bullets (detail page)
+  vision?: string;
   liveUrl?: string;
   repoUrl?: string;
   youtubeId?: string; // optional trailer/demo embedded on the detail page
-  images: string[]; // /images/projects/...; carousel on the detail page only
+  images: string[]; // /images/projects/...; first image on covers, all in the detail carousel
   mediaLayout?: "portrait"; // defaults to the existing landscape carousel
-  caseStudy?: CaseStudy; // detailed engineering narrative for flagship projects
+  imageFit?: "contain"; // opt out of cropping on covers and in the detail carousel
+  mediaCredit?: { label: string; href: string };
+  caseStudy?: CaseStudy; // retained technical notes; public pages use highlights and vision
 };
 
 // Real projects (pulled from github.com/mcasillas17). Array order controls
 // archive order and issue numbers. The homepage selects its featured projects
 // separately; screenshots and conceptual previews also appear on the covers.
 export const projects: Project[] = [
+  {
+    slug: "scorearc",
+    title: "ScoreArc",
+    summary:
+      "A live football platform built around the 2026 World Cup, with a signature arc bracket, fixtures, standings, and news in English and Spanish.",
+    cardSummary:
+      "Follow the World Cup through a signature arc bracket. Live football, fixtures, standings, and news in English and Spanish.",
+    year: "2026",
+    tags: ["Web app", "Sports", "Full-stack"],
+    stack: ["TypeScript", "Next.js", "Go", "PostgreSQL", "Cloudflare R2"],
+    highlights: [
+      "See the whole World Cup knockout journey in one arc, from the Round of 32 to the final.",
+      "Follow live scores, upcoming fixtures, and standings across football competitions.",
+      "Explore match details and the latest competition news without losing your place in the tournament.",
+      "Switch between English and Spanish, with navigation and dates that follow your language.",
+    ],
+    vision:
+      "Build a richer, connected football experience: a place where live matchdays, tournament history, deeper insights, and the screens around you tell one continuous story of the game.",
+    liveUrl: "https://www.scorearc.futbol/en/c/world-cup/2026",
+    repoUrl: "https://github.com/mcasillas17/ScoreArc",
+    images: ["/images/projects/scorearc-world-cup.webp"],
+    imageFit: "contain",
+    mediaCredit: {
+      label: "Live World Cup screenshot",
+      href: "/images/projects/CREDITS.md",
+    },
+  },
+  {
+    slug: "wallcrawl",
+    title: "WallCrawl",
+    summary:
+      "A local-first Android workout planner and progress tracker with a bundled exercise catalog, reusable routines, type-aware set logging, and user-owned backups.",
+    cardSummary:
+      "Plan a workout, log each set, and see your progress. A local-first Android app with reusable routines and user-owned data.",
+    year: "2026",
+    tags: ["Android", "Fitness", "Open source"],
+    stack: ["Kotlin", "Jetpack Compose", "Room", "Coroutines", "Flow"],
+    highlights: [
+      "Plan workouts around your equipment and goals, or build reusable routines from a searchable catalog of 302 exercises.",
+      "Log each set with the right fields for reps, weight, assistance, duration, or distance, and keep a rest timer close at hand.",
+      "Follow your workout history, weekly consistency, training volume, and progress over time.",
+      "Keep your data on your phone, with your own exports, restore controls, and a fully offline English or Spanish interface.",
+    ],
+    vision:
+      "Grow into a private, on-device training companion that understands your routines and helps you build lasting consistency, with your workout history always under your control.",
+    repoUrl: "https://github.com/mcasillas17/WallCrawl",
+    images: [
+      "/images/projects/wallcrawl-today.webp",
+      "/images/projects/wallcrawl-active-workout.webp",
+      "/images/projects/wallcrawl-progress.webp",
+    ],
+    mediaLayout: "portrait",
+    mediaCredit: {
+      label: "WallCrawl screenshots; exercise artwork by Everkinetic & Workout Guide (CC BY-SA 4.0)",
+      href: "/images/projects/CREDITS.md",
+    },
+  },
   {
     slug: "websnag",
     title: "WebSnag",
@@ -72,6 +132,8 @@ export const projects: Project[] = [
       "An event-driven Accessibility Service intercepts blocked foreground apps and presents a calm Compose overlay.",
       "Local activity history tracks focused time and blocked attempts, while emergency unlocks preserve a deliberate recovery path.",
     ],
+    vision:
+      "Make focus a choice you can carry into your environment: simple routines, physical cues, and thoughtful friction that help you spend your attention on what matters.",
     repoUrl: "https://github.com/mcasillas17/WebSnag",
     images: [
       "/images/projects/websnag-dashboard.png",
@@ -208,6 +270,8 @@ export const projects: Project[] = [
       "Node.js validation and GitHub Actions enforce frontmatter, cross-skill routing, listing-size, packaging, and version contracts.",
       "Rules target false success claims, premature “not found” reports, swallowed failures, unsafe destructive actions, and prompt-injection attempts.",
     ],
+    vision:
+      "Make careful engineering habits feel natural in everyday AI-assisted work, with a memorable voice that keeps evidence, clarity, and human intent at the center.",
     repoUrl: "https://github.com/mcasillas17/mexican-mom",
     images: [],
   },
@@ -215,9 +279,9 @@ export const projects: Project[] = [
     slug: "thwiply",
     title: "Thwiply",
     summary:
-      "An Android v1 scaffold for downloading a device-held model and trying streamed, on-device LLM inference from a debug screen.",
+      "An Android playground for private, on-device AI: download a model to your phone and explore streamed responses locally.",
     cardSummary:
-      "An Android experiment in on-device AI: download a model, initialize it, and stream a response. Currently a v1 scaffold.",
+      "Explore private AI on your phone: download a model, run it locally, and watch responses stream.",
     preview: {
       kind: "flow",
       label: "On-device inference",
@@ -236,8 +300,9 @@ export const projects: Project[] = [
       "Compose onboarding that downloads a model to the app’s files directory and reports download state.",
       "LiteRT-LM engine initialization and streamed debug inference after a model is available.",
       "Hilt-provided app dependencies, Coroutines/Flow state, and an OkHttp download client.",
-      "The public roadmap keeps notification capture, OCR, task extraction, Room persistence, and a Today screen as v2 work.",
     ],
+    vision:
+      "Turn everyday notifications and captured text into useful, organized tasks through a private assistant that lives on your device.",
     repoUrl: "https://github.com/mcasillas17/Thwiply",
     images: [],
     caseStudy: {
@@ -363,6 +428,8 @@ export const projects: Project[] = [
       "MCP tool servers for safe system tools and approval-gated sandboxed file access.",
       "Flutter client with chat, streamed responses, and approval cards.",
     ],
+    vision:
+      "Bring models, tools, and personal workflows together in a private assistant workspace where you choose the models and stay in control of the actions.",
     repoUrl: "https://github.com/mcasillas17/TuringAgent",
     images: [],
     caseStudy: {
@@ -492,6 +559,8 @@ export const projects: Project[] = [
       "Exportable “Behavior Brief” PDF to share with a trainer.",
       "Directory to find science-based, force-free trainers.",
     ],
+    vision:
+      "Help dog owners and trainers build a shared understanding of everyday behavior, making compassionate, force-free support easier to find and follow.",
     repoUrl: "https://github.com/mcasillas17/TuringCare",
     images: [],
   },
@@ -507,6 +576,8 @@ export const projects: Project[] = [
       "Side-scrolling platformer built in Unity (C#).",
       "Enemy behavior trees are evolved using genetic programming.",
     ],
+    vision:
+      "Explore how evolving enemy behavior can make game worlds more surprising, expressive, and engaging to play.",
     repoUrl: "https://github.com/mcasillas17/Light_Master",
     youtubeId: "0RjQiMqRIoE",
     images: [
@@ -526,7 +597,7 @@ export function getAllSlugs(): string[] {
   return projects.map((p) => p.slug);
 }
 
-export const featuredProjects = ["websnag", "turingagent", "mexican-mom", "thwiply"].map(
+export const featuredProjects = ["scorearc", "wallcrawl", "websnag", "turingagent"].map(
   (slug) => {
     const project = getProject(slug);
     if (!project) throw new Error(`Featured project not found: ${slug}`);
