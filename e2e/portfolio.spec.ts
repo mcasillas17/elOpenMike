@@ -24,7 +24,7 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(page).toHaveURL(/#projects$/);
     const projects = page.locator("#projects");
     await expect(projects.getByRole("heading", { level: 3 })).toHaveText([
-      "ScoreArc", "WallCrawl", "WebSnag", "TuringAgent",
+      "ScoreArc", "WallCrawl", "TuringCare", "WebSnag", "TuringAgent", "Watchslinger",
     ]);
     const order = await page.locator("main > section").evaluateAll((sections) => sections.map((section) => section.id));
     expect(order.indexOf("projects")).toBeLessThan(order.indexOf("experience"));

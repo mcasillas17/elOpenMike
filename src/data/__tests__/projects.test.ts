@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { projects, featuredProjects, getProject, getAllSlugs } from "@/data/projects";
+import { projects, projectCategories, featuredProjects, getProject, getAllSlugs } from "@/data/projects";
 
 describe("projects data", () => {
   it("has well-formed entries", () => {
@@ -23,17 +23,22 @@ describe("projects data", () => {
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
-  it("curates four product and architecture projects in the approved order", () => {
+  it("curates six featured projects in the approved order", () => {
     expect(featuredProjects.map((project) => project.slug)).toEqual([
-      "scorearc", "wallcrawl", "websnag", "turingagent",
+      "scorearc", "wallcrawl", "turingcare", "websnag", "turingagent", "watchslinger",
     ]);
   });
 
-  it("adds two projects without changing the six existing archive issue numbers", () => {
-    expect(projects).toHaveLength(8);
+  it("adds five curated entries without changing existing archive issue numbers", () => {
+    expect(projects).toHaveLength(13);
     expect(Object.fromEntries(projects.map((project, index) => [
       project.slug, String(projects.length - index).padStart(2, "0"),
     ]))).toEqual({
+      watchslinger: "13",
+      "webslinger-cli": "12",
+      "coding-skills": "11",
+      "panda-path": "10",
+      prehispanicapp: "09",
       scorearc: "08",
       wallcrawl: "07",
       websnag: "06",
@@ -43,6 +48,44 @@ describe("projects data", () => {
       turingcare: "02",
       "light-master": "01",
     });
+  });
+
+  it("assigns every project to exactly one public archive category", () => {
+    expect(projectCategories).toEqual([
+      { id: "products", label: "Products" },
+      { id: "developer-tools", label: "Developer tools" },
+      { id: "games", label: "Games" },
+    ]);
+    for (const project of projects) {
+      expect(projectCategories.map((category) => category.id)).toContain(project.category);
+    }
+    expect(projects.filter((project) => project.category === "games").map((project) => project.slug)).toEqual([
+      "panda-path", "prehispanicapp", "light-master",
+    ]);
+  });
+
+  it.each([
+    ["watchslinger", "Watchslinger", "2026"],
+    ["webslinger-cli", "WebSlinger-CLI", "2026"],
+    ["coding-skills", "coding-skills", "2026"],
+    ["panda-path", "Panda_Path", "2018"],
+    ["prehispanicapp", "PrehispanicApp", "2018"],
+  ])("gives %s a source-backed year and an explicitly conceptual preview", (slug, repo, year) => {
+    const project = getProject(slug);
+    expect(project).toMatchObject({
+      year, repoUrl: `https://github.com/mcasillas17/${repo}`,
+      images: [], preview: { kind: "flow", label: expect.stringMatching(/concept/i) },
+    });
+    expect(project?.liveUrl).toBeUndefined();
+    expect(project?.vision).toBeTruthy();
+    expect(project?.cardSummary?.length).toBeLessThan(180);
+  });
+
+  it("credits Watchy's foundation rather than claiming a wholly original wearable", () => {
+    expect(getProject("watchslinger")?.summary).toMatch(/built on Watchy/);
+    expect(getProject("watchslinger")?.stack).toEqual([
+      "C++", "Arduino", "PlatformIO", "ESP32-S3", "E-paper",
+    ]);
   });
 
   it("introduces ScoreArc through football features and a separate vision", () => {
@@ -81,7 +124,7 @@ describe("projects data", () => {
       const publicCopy = [
         project.summary, project.cardSummary, ...project.highlights, project.vision,
       ].join(" ");
-      expect(publicCopy).not.toMatch(/scaffold|source revision|snapshot reviewed|cutover|FakeWorkoutPlanner|no production|public roadmap/i);
+      expect(publicCopy).not.toMatch(/v1 scaffold|currently a scaffold|source revision|snapshot reviewed|cutover|FakeWorkoutPlanner|no production|public roadmap/i);
     }
   });
 

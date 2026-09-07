@@ -36,14 +36,16 @@ test("projects index opens a project detail", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
-test("the archive preserves all eight projects and the original issue numbers", async ({ page, request }) => {
+test("the archive presents thirteen projects and preserves the original issue numbers", async ({ page, request }) => {
   await page.goto("/projects");
   const cards = page.getByRole("article");
-  await expect(cards).toHaveCount(8);
+  await expect(cards).toHaveCount(13);
   for (const [title, number] of [
     ["ScoreArc", "08"], ["WallCrawl", "07"], ["WebSnag", "06"],
     ["Mexican Mom", "05"], ["Thwiply", "04"], ["TuringAgent", "03"],
     ["TuringCare", "02"], ["Light Master", "01"],
+    ["Watchslinger", "13"], ["WebSlinger-CLI", "12"], ["Knights of the Round Table", "11"],
+    ["Panda Path", "10"], ["PrehispanicApp", "09"],
   ]) {
     await expect(cards.filter({ has: page.getByRole("heading", { name: title, exact: true }) })).toContainText(`№${number}`);
   }
@@ -52,9 +54,50 @@ test("the archive preserves all eight projects and the original issue numbers", 
   const xml = await sitemap.text();
   expect(xml).toContain("/projects/scorearc</loc>");
   expect(xml).toContain("/projects/wallcrawl</loc>");
+  for (const slug of ["watchslinger", "webslinger-cli", "coding-skills", "panda-path", "prehispanicapp"]) {
+    expect(xml).toContain(`/projects/${slug}</loc>`);
+  }
 });
 
 for (const width of [390, 1440]) {
+  test(`the grouped archive is reachable without overflow at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/projects");
+    const navigation = page.getByRole("navigation", { name: "Project categories" });
+    for (const category of ["Products", "Developer tools", "Games"]) {
+      await navigation.getByRole("link", { name: category, exact: true }).click();
+      await expect(page.getByRole("region", { name: category }).getByRole("heading", { level: 2 })).toBeInViewport();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
+
+  for (const project of [
+    { slug: "watchslinger", title: "Watchslinger", repo: "Watchslinger" },
+    { slug: "webslinger-cli", title: "WebSlinger-CLI", repo: "WebSlinger-CLI" },
+    { slug: "coding-skills", title: "Knights of the Round Table", repo: "coding-skills" },
+    { slug: "panda-path", title: "Panda Path", repo: "Panda_Path" },
+    { slug: "prehispanicapp", title: "PrehispanicApp", repo: "PrehispanicApp" },
+  ]) {
+    test(`${project.title} at ${width}px uses a labelled concept and truthful source link`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await page.goto(`/projects/${project.slug}`);
+      await expect(page.getByRole("heading", { level: 1, name: project.title })).toBeVisible();
+      await expect(page.getByRole("img", { name: /concept/i })).toBeVisible();
+      await expect(page.getByRole("link", { name: "View Source" })).toHaveAttribute(
+        "href", `https://github.com/mcasillas17/${project.repo}`,
+      );
+      await expect(page.getByRole("heading", { name: "Vision", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Live demo" })).toHaveCount(0);
+      if (project.slug === "watchslinger") {
+        await expect(page.locator("main")).toContainText("built on Watchy");
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+      expect(errors).toEqual([]);
+    });
+  }
+
   for (const project of [
     { slug: "scorearc", title: "ScoreArc", repo: "ScoreArc", count: 1, liveUrl: "https://www.scorearc.futbol/en/c/world-cup/2026" },
     { slug: "wallcrawl", title: "WallCrawl", repo: "WallCrawl", count: 3, liveUrl: null },

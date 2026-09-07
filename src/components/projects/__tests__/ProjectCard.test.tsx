@@ -7,6 +7,7 @@ import { projects } from "@/data/projects";
 const base: Project = {
   slug: "demo",
   title: "Demo Project",
+  category: "developer-tools",
   summary: "A short summary.",
   year: "2025",
   tags: ["CLI", "Open source"],

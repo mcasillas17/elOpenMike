@@ -26,9 +26,18 @@ export type CaseStudy = {
   evidence: CaseStudyEvidence[];
 };
 
+export const projectCategories = [
+  { id: "products", label: "Products" },
+  { id: "developer-tools", label: "Developer tools" },
+  { id: "games", label: "Games" },
+] as const;
+
+export type ProjectCategory = (typeof projectCategories)[number]["id"];
+
 export type Project = {
   slug: string; // URL segment + React key
   title: string;
+  category: ProjectCategory;
   summary: string; // one-liner (card + detail)
   cardSummary?: string;
   preview?:
@@ -49,13 +58,146 @@ export type Project = {
   caseStudy?: CaseStudy; // retained technical notes; public pages use highlights and vision
 };
 
-// Real projects (pulled from github.com/mcasillas17). Array order controls
-// archive order and issue numbers. The homepage selects its featured projects
-// separately; screenshots and conceptual previews also appear on the covers.
+// Array order assigns stable issue numbers: prepend new entries rather than
+// reordering existing ones. Categories and homepage curation control presentation.
 export const projects: Project[] = [
+  {
+    slug: "watchslinger",
+    title: "Watchslinger",
+    category: "products",
+    summary:
+      "Custom e-paper watch firmware built on Watchy, bringing personal watchfaces, customizable menus, and weather to a wearable you can make your own.",
+    cardSummary:
+      "Make an e-paper watch your own with custom faces, menus, and weather. Firmware built on Watchy.",
+    preview: {
+      kind: "flow",
+      label: "Wearable firmware concept",
+      steps: ["Your watchface", "Your menus", "Your weather"],
+    },
+    year: "2026",
+    tags: ["Hardware", "Wearable", "Open source"],
+    stack: ["C++", "Arduino", "PlatformIO", "ESP32-S3", "E-paper"],
+    highlights: [
+      "Build a personal watchface for Watchy v3's 200x200 e-paper display.",
+      "Use familiar Watchy watchface interfaces while customizing the firmware underneath.",
+      "Add your own menu apps, combine them with stock entries, or replace the menu entirely.",
+      "Choose Open-Meteo weather or connect an OpenWeatherMap provider.",
+    ],
+    vision:
+      "Make wearables something you can understand, adapt, and own, from what appears on your wrist to the services behind it.",
+    repoUrl: "https://github.com/mcasillas17/Watchslinger",
+    images: [],
+  },
+  {
+    slug: "webslinger-cli",
+    title: "WebSlinger-CLI",
+    category: "developer-tools",
+    summary:
+      "A Go command-line tool that turns a project idea into a ready-to-work web app, with scaffolding and a Fly.io deployment workflow from the terminal.",
+    cardSummary:
+      "From idea to a running web project: scaffold an app and ship it from the terminal.",
+    preview: {
+      kind: "flow",
+      label: "CLI workflow concept",
+      steps: ["thwip new", "Build", "thwip ship"],
+    },
+    year: "2026",
+    tags: ["CLI", "Developer tools", "Open source"],
+    stack: ["Go", "Cobra", "TOML", "Embedded templates", "Fly.io"],
+    highlights: [
+      "Create a Next.js app with TypeScript, Tailwind, and pnpm using thwip new.",
+      "Start with a Git repository and an initial commit instead of repeating setup by hand.",
+      "Use embedded templates to keep project scaffolding close to the tool.",
+      "Deploy the project to Fly.io with the thwip ship workflow.",
+    ],
+    vision:
+      "Shorten the distance between an idea and a working product, keeping repeatable setup and shipping steps out of the way of building.",
+    repoUrl: "https://github.com/mcasillas17/WebSlinger-CLI",
+    images: [],
+  },
+  {
+    slug: "coding-skills",
+    title: "Knights of the Round Table",
+    category: "developer-tools",
+    summary:
+      "A coordinated AI engineering workflow that takes a coding task through implementation, independent review, repairs, documentation, and pull-request delivery.",
+    cardSummary:
+      "Turn a coding task into a reviewed pull request with a coordinated team of AI implementers and independent reviewers.",
+    preview: {
+      kind: "flow",
+      label: "AI engineering workflow concept",
+      steps: ["Implement", "Review & repair", "Deliver PR"],
+    },
+    year: "2026",
+    tags: ["AI", "Developer tools", "Open source"],
+    stack: ["Agent Skills", "Node.js", "Markdown", "YAML"],
+    highlights: [
+      "Give a coding task a repeatable path from implementation to pull-request delivery.",
+      "Use independent reviewer agents to examine the work and feed findings into repair rounds.",
+      "Keep documentation and validation part of the delivery workflow.",
+      "Bring the workflow to Claude Code, GitHub Copilot, Codex, and Gemini harnesses.",
+    ],
+    vision:
+      "Make AI-assisted engineering a coordinated practice, where implementation, critique, and evidence work together instead of relying on one agent's confidence.",
+    repoUrl: "https://github.com/mcasillas17/coding-skills",
+    images: [],
+  },
+  {
+    slug: "panda-path",
+    title: "Panda Path",
+    category: "games",
+    summary:
+      "A Unity puzzle game about guiding a panda across a 5x5 grid, collecting bamboo, and making every move count.",
+    cardSummary:
+      "A panda, a 5x5 grid, and a limited number of moves. Find a path to the bamboo.",
+    preview: {
+      kind: "flow",
+      label: "Puzzle mechanic concept",
+      steps: ["Read the grid", "Plan moves", "Collect bamboo"],
+    },
+    year: "2018",
+    tags: ["Game", "Puzzle", "Unity"],
+    stack: ["Unity", "C#"],
+    highlights: [
+      "Guide the panda through compact 5x5 puzzle boards.",
+      "Plan a route that collects bamboo within the level's move limit.",
+      "Play levels defined as text-based layouts, separating board design from movement logic.",
+    ],
+    vision:
+      "Create approachable strategy puzzles where a small board and a simple goal reward thoughtful choices.",
+    repoUrl: "https://github.com/mcasillas17/Panda_Path",
+    images: [],
+  },
+  {
+    slug: "prehispanicapp",
+    title: "PrehispanicApp",
+    category: "games",
+    summary:
+      "A mobile educational game built in Unity that invites players to explore pre-Hispanic cultures through period selection and minigames.",
+    cardSummary:
+      "Explore pre-Hispanic cultures through historical periods and playful minigames.",
+    preview: {
+      kind: "flow",
+      label: "Learning game concept",
+      steps: ["Choose a period", "Explore a culture", "Play"],
+    },
+    year: "2018",
+    tags: ["Game", "Education", "Unity"],
+    stack: ["Unity", "C#", "Mobile"],
+    highlights: [
+      "Choose a historical period as an entry point into the experience.",
+      "Navigate culture-focused activities and minigames.",
+      "Explore Maya-themed gameplay through a touch-friendly mobile game format.",
+    ],
+    vision:
+      "Make cultural curiosity an invitation to play, using interactive experiences to open a door to pre-Hispanic history.",
+    repoUrl: "https://github.com/mcasillas17/PrehispanicApp",
+    images: [],
+  },
   {
     slug: "scorearc",
     title: "ScoreArc",
+    category: "products",
     summary:
       "A live football platform built around the 2026 World Cup, with a signature arc bracket, fixtures, standings, and news in English and Spanish.",
     cardSummary:
@@ -83,6 +225,7 @@ export const projects: Project[] = [
   {
     slug: "wallcrawl",
     title: "WallCrawl",
+    category: "products",
     summary:
       "A local-first Android workout planner and progress tracker with a bundled exercise catalog, reusable routines, type-aware set logging, and user-owned backups.",
     cardSummary:
@@ -113,6 +256,7 @@ export const projects: Project[] = [
   {
     slug: "websnag",
     title: "WebSnag",
+    category: "products",
     summary:
       "A local-first Android focus app that combines NFC locks, recurring schedules, allowlist profiles, and deliberate unlock friction to make distractions harder to reach.",
     cardSummary:
@@ -252,6 +396,7 @@ export const projects: Project[] = [
   {
     slug: "mexican-mom",
     title: "Mexican Mom",
+    category: "developer-tools",
     summary:
       "A cross-platform Agent Skills plugin that gives coding agents a rigorously tested engineering-discipline layer with a distinct Mexican-mom voice.",
     cardSummary:
@@ -278,6 +423,7 @@ export const projects: Project[] = [
   {
     slug: "thwiply",
     title: "Thwiply",
+    category: "products",
     summary:
       "An Android companion for manual Today tasks and on-device AI experiments, with persistent task storage and a streaming LLM Lab.",
     cardSummary:
@@ -413,6 +559,7 @@ export const projects: Project[] = [
   {
     slug: "turingagent",
     title: "TuringAgent",
+    category: "developer-tools",
     cardSummary:
       "A private assistant stack with a Go backend, Flutter client, model routing, and human-approved MCP actions.",
     preview: {
@@ -545,6 +692,7 @@ export const projects: Project[] = [
   {
     slug: "turingcare",
     title: "TuringCare",
+    category: "products",
     cardSummary:
       "A behavior journal, practice goals, and a shareable brief that help dog owners work with force-free trainers.",
     summary:
@@ -579,6 +727,7 @@ export const projects: Project[] = [
   {
     slug: "light-master",
     title: "Light Master",
+    category: "games",
     summary:
       "A Unity platformer where enemy behavior is evolved with genetic programming over behavior trees.",
     year: "2019",
@@ -609,7 +758,7 @@ export function getAllSlugs(): string[] {
   return projects.map((p) => p.slug);
 }
 
-export const featuredProjects = ["scorearc", "wallcrawl", "websnag", "turingagent"].map(
+export const featuredProjects = ["scorearc", "wallcrawl", "turingcare", "websnag", "turingagent", "watchslinger"].map(
   (slug) => {
     const project = getProject(slug);
     if (!project) throw new Error(`Featured project not found: ${slug}`);
