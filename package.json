@@ -47,7 +47,7 @@
     "jsdom": "^29.1.1",
     "pdfjs-dist": "5.4.624",
     "tailwindcss": "^4",
-    "tsx": "^4.23.5",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vite": "^5.4.21",
     "vite-tsconfig-paths": "^6.1.1",
