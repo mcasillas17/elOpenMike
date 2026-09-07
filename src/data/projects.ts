@@ -559,18 +559,18 @@ export const projects: Project[] = [
   {
     slug: "turingagent",
     title: "TuringAgent",
-    category: "developer-tools",
+    category: "products",
     cardSummary:
-      "A private assistant stack with a Go backend, Flutter client, model routing, and human-approved MCP actions.",
+      "A local-first AI agent for private chat and tool-connected assistance, with you in control of its actions.",
     preview: {
       kind: "flow",
       label: "TuringAgent architecture",
       steps: ["Flutter client", "Go backend", "Models + MCP"],
     },
     summary:
-      "A local-first AI orchestration platform — a Flutter client and Go gRPC backend that run a private assistant stack with model routing, streaming, MCP tools, and approval-gated actions.",
+      "A local-first AI agent for private conversations and tool-connected assistance, with your choice of models, streamed responses, and approval-gated actions.",
     year: "2026",
-    tags: ["AI", "Full-stack", "Open source"],
+    tags: ["AI agent", "Full-stack", "Open source"],
     stack: ["Go", "gRPC", "Flutter", "Ollama", "MCP", "Docker"],
     highlights: [
       "Go gRPC orchestrator for sessions, messages, runs, events, and approvals.",

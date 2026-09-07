@@ -60,6 +60,39 @@ test("the archive presents thirteen projects and preserves the original issue nu
 });
 
 for (const width of [390, 1440]) {
+  test(`TuringAgent at ${width}px is an AI agent under Products`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto("/projects");
+    const products = page.getByRole("region", { name: "Products", exact: true });
+    const developerTools = page.getByRole("region", { name: "Developer tools", exact: true });
+    await expect(products.getByRole("article")).toHaveCount(7);
+    await expect(developerTools.getByRole("article")).toHaveCount(3);
+    await expect(page.getByRole("region", { name: "Games", exact: true }).getByRole("article")).toHaveCount(3);
+    await expect(developerTools.getByRole("link", { name: "TuringAgent", exact: true })).toHaveCount(0);
+    const card = products.getByRole("article").filter({
+      has: page.getByRole("heading", { name: "TuringAgent", exact: true }),
+    });
+    await expect(card).toContainText(/\bAI agent\b/);
+    await expect(card).toContainText("№03");
+    await card.getByRole("link", { name: "TuringAgent", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/turingagent$/);
+    await expect(page.getByRole("heading", { level: 1, name: "TuringAgent" })).toBeVisible();
+    await expect(page.getByText(/^A local-first AI agent\b/)).toBeVisible();
+    await expect(page.getByText("AI agent", { exact: true })).toBeVisible();
+    await expect(page.getByText("Go · gRPC · Flutter · Ollama · MCP · Docker", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "View Source" })).toHaveAttribute(
+      "href", "https://github.com/mcasillas17/TuringAgent",
+    );
+    await expect(page.getByRole("img", { name: "TuringAgent architecture", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What it does", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Vision", exact: true })).toBeVisible();
+    await expect(page.locator("main")).not.toContainText(/orchestration platform|assistant stack|developer toolkit/i);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    expect(errors).toEqual([]);
+  });
+
   test(`the grouped archive is reachable without overflow at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/projects");

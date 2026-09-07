@@ -59,9 +59,52 @@ describe("projects data", () => {
     for (const project of projects) {
       expect(projectCategories.map((category) => category.id)).toContain(project.category);
     }
-    expect(projects.filter((project) => project.category === "games").map((project) => project.slug)).toEqual([
-      "panda-path", "prehispanicapp", "light-master",
+    expect(Object.fromEntries(projectCategories.map(({ id }) => [
+      id, projects.filter((project) => project.category === id).map((project) => project.slug),
+    ]))).toEqual({
+      products: ["watchslinger", "scorearc", "wallcrawl", "websnag", "thwiply", "turingagent", "turingcare"],
+      "developer-tools": ["webslinger-cli", "coding-skills", "mexican-mom"],
+      games: ["panda-path", "prehispanicapp", "light-master"],
+    });
+  });
+
+  it("preserves every project's source and live URLs", () => {
+    expect(projects.map(({ slug, repoUrl, liveUrl }) => [slug, repoUrl, liveUrl])).toEqual([
+      ["watchslinger", "https://github.com/mcasillas17/Watchslinger", undefined],
+      ["webslinger-cli", "https://github.com/mcasillas17/WebSlinger-CLI", undefined],
+      ["coding-skills", "https://github.com/mcasillas17/coding-skills", undefined],
+      ["panda-path", "https://github.com/mcasillas17/Panda_Path", undefined],
+      ["prehispanicapp", "https://github.com/mcasillas17/PrehispanicApp", undefined],
+      ["scorearc", "https://github.com/mcasillas17/ScoreArc", "https://www.scorearc.futbol/en/c/world-cup/2026"],
+      ["wallcrawl", "https://github.com/mcasillas17/WallCrawl", undefined],
+      ["websnag", "https://github.com/mcasillas17/WebSnag", undefined],
+      ["mexican-mom", "https://github.com/mcasillas17/mexican-mom", undefined],
+      ["thwiply", "https://github.com/mcasillas17/Thwiply", undefined],
+      ["turingagent", "https://github.com/mcasillas17/TuringAgent", undefined],
+      ["turingcare", "https://github.com/mcasillas17/TuringCare", "https://turingcare.dog/"],
+      ["light-master", "https://github.com/mcasillas17/Light_Master", undefined],
     ]);
+  });
+
+  it.each(["summary", "cardSummary"] as const)("introduces TuringAgent as an AI agent in its %s", (field) => {
+    const copy = getProject("turingagent")?.[field];
+    expect(copy).toMatch(/\b(?:AI agent|personal AI assistant)\b/i);
+    expect(copy).not.toMatch(/orchestration platform|assistant stack|developer (?:tool|toolkit|framework)|platform for developers/i);
+  });
+
+  it("labels TuringAgent as an AI agent while preserving its technical details and vision", () => {
+    const project = getProject("turingagent");
+    expect(project?.tags).toContain("AI agent");
+    expect(project).toMatchObject({
+      stack: ["Go", "gRPC", "Flutter", "Ollama", "MCP", "Docker"],
+      preview: {
+        kind: "flow",
+        label: "TuringAgent architecture",
+        steps: ["Flutter client", "Go backend", "Models + MCP"],
+      },
+      vision:
+        "Bring models, tools, and personal workflows together in a private assistant workspace where you choose the models and stay in control of the actions.",
+    });
   });
 
   it.each([
