@@ -26,9 +26,18 @@ export type CaseStudy = {
   evidence: CaseStudyEvidence[];
 };
 
+export const projectCategories = [
+  { id: "products", label: "Products" },
+  { id: "developer-tools", label: "Developer tools" },
+  { id: "games", label: "Games" },
+] as const;
+
+export type ProjectCategory = (typeof projectCategories)[number]["id"];
+
 export type Project = {
   slug: string; // URL segment + React key
   title: string;
+  category: ProjectCategory;
   summary: string; // one-liner (card + detail)
   cardSummary?: string;
   preview?:
@@ -38,21 +47,216 @@ export type Project = {
   tags: string[]; // chips
   stack: string[]; // tech list
   highlights: string[]; // "What it does" bullets (detail page)
+  vision?: string;
   liveUrl?: string;
   repoUrl?: string;
   youtubeId?: string; // optional trailer/demo embedded on the detail page
-  images: string[]; // /images/projects/...; carousel on the detail page only
+  images: string[]; // /images/projects/...; first image on covers, all in the detail carousel
   mediaLayout?: "portrait"; // defaults to the existing landscape carousel
-  caseStudy?: CaseStudy; // detailed engineering narrative for flagship projects
+  imageFit?: "contain"; // opt out of cropping on covers and in the detail carousel
+  mediaCredit?: { label: string; href: string };
+  caseStudy?: CaseStudy; // retained technical notes; public pages use highlights and vision
 };
 
-// Real projects (pulled from github.com/mcasillas17). Array order controls
-// archive order and issue numbers. The homepage selects its featured projects
-// separately; screenshots and conceptual previews also appear on the covers.
+// Array order assigns stable issue numbers: prepend new entries rather than
+// reordering existing ones. Categories and homepage curation control presentation.
 export const projects: Project[] = [
+  {
+    slug: "watchslinger",
+    title: "Watchslinger",
+    category: "products",
+    summary:
+      "Custom e-paper watch firmware built on Watchy, bringing personal watchfaces, customizable menus, and weather to a wearable you can make your own.",
+    cardSummary:
+      "Make an e-paper watch your own with custom faces, menus, and weather. Firmware built on Watchy.",
+    preview: {
+      kind: "flow",
+      label: "Wearable firmware concept",
+      steps: ["Your watchface", "Your menus", "Your weather"],
+    },
+    year: "2026",
+    tags: ["Hardware", "Wearable", "Open source"],
+    stack: ["C++", "Arduino", "PlatformIO", "ESP32-S3", "E-paper"],
+    highlights: [
+      "Build a personal watchface for Watchy v3's 200x200 e-paper display.",
+      "Use familiar Watchy watchface interfaces while customizing the firmware underneath.",
+      "Add your own menu apps, combine them with stock entries, or replace the menu entirely.",
+      "Choose Open-Meteo weather or connect an OpenWeatherMap provider.",
+    ],
+    vision:
+      "Make wearables something you can understand, adapt, and own, from what appears on your wrist to the services behind it.",
+    repoUrl: "https://github.com/mcasillas17/Watchslinger",
+    images: [],
+  },
+  {
+    slug: "webslinger-cli",
+    title: "WebSlinger-CLI",
+    category: "developer-tools",
+    summary:
+      "A Go command-line tool that turns a project idea into a ready-to-work web app, with scaffolding and a Fly.io deployment workflow from the terminal.",
+    cardSummary:
+      "From idea to a running web project: scaffold an app and ship it from the terminal.",
+    preview: {
+      kind: "flow",
+      label: "CLI workflow concept",
+      steps: ["thwip new", "Build", "thwip ship"],
+    },
+    year: "2026",
+    tags: ["CLI", "Developer tools", "Open source"],
+    stack: ["Go", "Cobra", "TOML", "Embedded templates", "Fly.io"],
+    highlights: [
+      "Create a Next.js app with TypeScript, Tailwind, and pnpm using thwip new.",
+      "Start with a Git repository and an initial commit instead of repeating setup by hand.",
+      "Use embedded templates to keep project scaffolding close to the tool.",
+      "Deploy the project to Fly.io with the thwip ship workflow.",
+    ],
+    vision:
+      "Shorten the distance between an idea and a working product, keeping repeatable setup and shipping steps out of the way of building.",
+    repoUrl: "https://github.com/mcasillas17/WebSlinger-CLI",
+    images: [],
+  },
+  {
+    slug: "coding-skills",
+    title: "Knights of the Round Table",
+    category: "developer-tools",
+    summary:
+      "A coordinated AI engineering workflow that takes a coding task through implementation, independent review, repairs, documentation, and pull-request delivery.",
+    cardSummary:
+      "Turn a coding task into a reviewed pull request with a coordinated team of AI implementers and independent reviewers.",
+    preview: {
+      kind: "flow",
+      label: "AI engineering workflow concept",
+      steps: ["Implement", "Review & repair", "Deliver PR"],
+    },
+    year: "2026",
+    tags: ["AI", "Developer tools", "Open source"],
+    stack: ["Agent Skills", "Node.js", "Markdown", "YAML"],
+    highlights: [
+      "Give a coding task a repeatable path from implementation to pull-request delivery.",
+      "Use independent reviewer agents to examine the work and feed findings into repair rounds.",
+      "Keep documentation and validation part of the delivery workflow.",
+      "Bring the workflow to Claude Code, GitHub Copilot, Codex, and Gemini harnesses.",
+    ],
+    vision:
+      "Make AI-assisted engineering a coordinated practice, where implementation, critique, and evidence work together instead of relying on one agent's confidence.",
+    repoUrl: "https://github.com/mcasillas17/coding-skills",
+    images: [],
+  },
+  {
+    slug: "panda-path",
+    title: "Panda Path",
+    category: "games",
+    summary:
+      "A Unity puzzle game about guiding a panda across a 5x5 grid, collecting bamboo, and making every move count.",
+    cardSummary:
+      "A panda, a 5x5 grid, and a limited number of moves. Find a path to the bamboo.",
+    preview: {
+      kind: "flow",
+      label: "Puzzle mechanic concept",
+      steps: ["Read the grid", "Plan moves", "Collect bamboo"],
+    },
+    year: "2018",
+    tags: ["Game", "Puzzle", "Unity"],
+    stack: ["Unity", "C#"],
+    highlights: [
+      "Guide the panda through compact 5x5 puzzle boards.",
+      "Plan a route that collects bamboo within the level's move limit.",
+      "Play levels defined as text-based layouts, separating board design from movement logic.",
+    ],
+    vision:
+      "Create approachable strategy puzzles where a small board and a simple goal reward thoughtful choices.",
+    repoUrl: "https://github.com/mcasillas17/Panda_Path",
+    images: [],
+  },
+  {
+    slug: "prehispanicapp",
+    title: "PrehispanicApp",
+    category: "games",
+    summary:
+      "A mobile educational game built in Unity that invites players to explore pre-Hispanic cultures through period selection and minigames.",
+    cardSummary:
+      "Explore pre-Hispanic cultures through historical periods and playful minigames.",
+    preview: {
+      kind: "flow",
+      label: "Learning game concept",
+      steps: ["Choose a period", "Explore a culture", "Play"],
+    },
+    year: "2018",
+    tags: ["Game", "Education", "Unity"],
+    stack: ["Unity", "C#", "Mobile"],
+    highlights: [
+      "Choose a historical period as an entry point into the experience.",
+      "Navigate culture-focused activities and minigames.",
+      "Explore Maya-themed gameplay through a touch-friendly mobile game format.",
+    ],
+    vision:
+      "Make cultural curiosity an invitation to play, using interactive experiences to open a door to pre-Hispanic history.",
+    repoUrl: "https://github.com/mcasillas17/PrehispanicApp",
+    images: [],
+  },
+  {
+    slug: "scorearc",
+    title: "ScoreArc",
+    category: "products",
+    summary:
+      "A live football platform built around the 2026 World Cup, with a signature arc bracket, fixtures, standings, and news in English and Spanish.",
+    cardSummary:
+      "Follow the World Cup through a signature arc bracket. Live football, fixtures, standings, and news in English and Spanish.",
+    year: "2026",
+    tags: ["Web app", "Sports", "Full-stack"],
+    stack: ["TypeScript", "Next.js", "Go", "PostgreSQL", "Cloudflare R2"],
+    highlights: [
+      "See the whole World Cup knockout journey in one arc, from the Round of 32 to the final.",
+      "Follow live scores, upcoming fixtures, and standings across football competitions.",
+      "Explore match details and the latest competition news without losing your place in the tournament.",
+      "Switch between English and Spanish, with navigation and dates that follow your language.",
+    ],
+    vision:
+      "Build a richer, connected football experience: a place where live matchdays, tournament history, deeper insights, and the screens around you tell one continuous story of the game.",
+    liveUrl: "https://www.scorearc.futbol/en/c/world-cup/2026",
+    repoUrl: "https://github.com/mcasillas17/ScoreArc",
+    images: ["/images/projects/scorearc-world-cup.webp"],
+    imageFit: "contain",
+    mediaCredit: {
+      label: "Live World Cup screenshot",
+      href: "/images/projects/CREDITS.md",
+    },
+  },
+  {
+    slug: "wallcrawl",
+    title: "WallCrawl",
+    category: "products",
+    summary:
+      "A local-first Android workout planner and progress tracker with a bundled exercise catalog, reusable routines, type-aware set logging, and user-owned backups.",
+    cardSummary:
+      "Plan a workout, log each set, and see your progress. A local-first Android app with reusable routines and user-owned data.",
+    year: "2026",
+    tags: ["Android", "Fitness", "Open source"],
+    stack: ["Kotlin", "Jetpack Compose", "Room", "Coroutines", "Flow"],
+    highlights: [
+      "Plan workouts around your equipment and goals, or build reusable routines from a searchable catalog of 302 exercises.",
+      "Log each set with the right fields for reps, weight, assistance, duration, or distance, and keep a rest timer close at hand.",
+      "Follow your workout history, weekly consistency, training volume, and progress over time.",
+      "Keep your data on your phone, with your own exports, restore controls, and a fully offline English or Spanish interface.",
+    ],
+    vision:
+      "Grow into a private, on-device training companion that understands your routines and helps you build lasting consistency, with your workout history always under your control.",
+    repoUrl: "https://github.com/mcasillas17/WallCrawl",
+    images: [
+      "/images/projects/wallcrawl-today.webp",
+      "/images/projects/wallcrawl-active-workout.webp",
+      "/images/projects/wallcrawl-progress.webp",
+    ],
+    mediaLayout: "portrait",
+    mediaCredit: {
+      label: "WallCrawl screenshots; exercise artwork by Everkinetic & Workout Guide (CC BY-SA 4.0)",
+      href: "/images/projects/CREDITS.md",
+    },
+  },
   {
     slug: "websnag",
     title: "WebSnag",
+    category: "products",
     summary:
       "A local-first Android focus app that combines NFC locks, recurring schedules, allowlist profiles, and deliberate unlock friction to make distractions harder to reach.",
     cardSummary:
@@ -72,6 +276,8 @@ export const projects: Project[] = [
       "An event-driven Accessibility Service intercepts blocked foreground apps and presents a calm Compose overlay.",
       "Local activity history tracks focused time and blocked attempts, while emergency unlocks preserve a deliberate recovery path.",
     ],
+    vision:
+      "Make focus a choice you can carry into your environment: simple routines, physical cues, and thoughtful friction that help you spend your attention on what matters.",
     repoUrl: "https://github.com/mcasillas17/WebSnag",
     images: [
       "/images/projects/websnag-dashboard.png",
@@ -190,6 +396,7 @@ export const projects: Project[] = [
   {
     slug: "mexican-mom",
     title: "Mexican Mom",
+    category: "developer-tools",
     summary:
       "A cross-platform Agent Skills plugin that gives coding agents a rigorously tested engineering-discipline layer with a distinct Mexican-mom voice.",
     cardSummary:
@@ -208,36 +415,43 @@ export const projects: Project[] = [
       "Node.js validation and GitHub Actions enforce frontmatter, cross-skill routing, listing-size, packaging, and version contracts.",
       "Rules target false success claims, premature “not found” reports, swallowed failures, unsafe destructive actions, and prompt-injection attempts.",
     ],
+    vision:
+      "Make careful engineering habits feel natural in everyday AI-assisted work, with a memorable voice that keeps evidence, clarity, and human intent at the center.",
     repoUrl: "https://github.com/mcasillas17/mexican-mom",
     images: [],
   },
   {
     slug: "thwiply",
     title: "Thwiply",
+    category: "products",
     summary:
-      "An Android v1 scaffold for downloading a device-held model and trying streamed, on-device LLM inference from a debug screen.",
+      "An Android companion for manual Today tasks and on-device AI experiments, with persistent task storage and a streaming LLM Lab.",
     cardSummary:
-      "An Android experiment in on-device AI: download a model, initialize it, and stream a response. Currently a v1 scaffold.",
+      "Keep Today tasks on your phone and explore on-device AI in a streaming LLM Lab, with model setup on your terms.",
     preview: {
       kind: "flow",
-      label: "On-device inference",
-      steps: ["Download", "Initialize", "Stream"],
+      label: "Local LLM Lab",
+      steps: ["Choose model", "Set up", "Stream"],
     },
     year: "2026",
     tags: ["Android", "AI", "Open source"],
     stack: [
       "Kotlin",
       "Jetpack Compose",
-      "LiteRT-LM",
-      "Gemma 3",
+      "Room",
       "Hilt",
+      "Coroutines",
+      "LiteRT-LM",
+      "ML Kit",
     ],
     highlights: [
-      "Compose onboarding that downloads a model to the app’s files directory and reports download state.",
-      "LiteRT-LM engine initialization and streamed debug inference after a model is available.",
-      "Hilt-provided app dependencies, Coroutines/Flow state, and an OkHttp download client.",
-      "The public roadmap keeps notification capture, OCR, task extraction, Room persistence, and a Today screen as v2 work.",
+      "Create, complete, and delete manual tasks in Today, with changes that persist across app restarts.",
+      "Stream responses in the local LLM Lab using Qwen 2.5 through LiteRT-LM or Gemini Nano through ML Kit/AICore on supported devices.",
+      "Start with Today and Settings, then enter optional model setup when you want to explore local inference.",
+      "Keep theme and provider preferences across app restarts.",
     ],
+    vision:
+      "Turn everyday notifications and captured text into useful, organized tasks through a private assistant that lives on your device.",
     repoUrl: "https://github.com/mcasillas17/Thwiply",
     images: [],
     caseStudy: {
@@ -345,6 +559,7 @@ export const projects: Project[] = [
   {
     slug: "turingagent",
     title: "TuringAgent",
+    category: "developer-tools",
     cardSummary:
       "A private assistant stack with a Go backend, Flutter client, model routing, and human-approved MCP actions.",
     preview: {
@@ -363,6 +578,8 @@ export const projects: Project[] = [
       "MCP tool servers for safe system tools and approval-gated sandboxed file access.",
       "Flutter client with chat, streamed responses, and approval cards.",
     ],
+    vision:
+      "Bring models, tools, and personal workflows together in a private assistant workspace where you choose the models and stay in control of the actions.",
     repoUrl: "https://github.com/mcasillas17/TuringAgent",
     images: [],
     caseStudy: {
@@ -475,29 +692,42 @@ export const projects: Project[] = [
   {
     slug: "turingcare",
     title: "TuringCare",
+    category: "products",
     cardSummary:
-      "A behavior journal and shareable brief that help dog owners work with force-free trainers.",
-    preview: {
-      kind: "flow",
-      label: "From observation to support",
-      steps: ["Journal", "Behavior brief", "Trainer"],
-    },
+      "A behavior journal, practice goals, and a shareable brief that help dog owners work with force-free trainers.",
     summary:
-      "A humane, force-free dog-training support platform — owners keep a structured behavior journal, find science-based trainers, and export a shareable “Behavior Brief” PDF.",
+      "A bilingual dog-training companion that brings behavior journaling, practice goals, and force-free support together in a shareable Behavior Brief.",
     year: "2026",
     tags: ["Web app", "Full-stack"],
-    stack: ["TypeScript", "Next.js", "Node", "PostgreSQL", "Drizzle"],
-    highlights: [
-      "Structured behavior journal for puppy and newly-adopted-dog owners.",
-      "Exportable “Behavior Brief” PDF to share with a trainer.",
-      "Directory to find science-based, force-free trainers.",
+    stack: [
+      "TypeScript", "React", "Vite", "React Router", "TanStack Query",
+      "Hono", "Drizzle", "PostgreSQL", "Better Auth", "i18next",
     ],
+    highlights: [
+      "Keep a structured behavior journal to capture everyday observations about your dog.",
+      "Set training goals, work on skills, and choose a weekly practice focus.",
+      "Find positive-reinforcement trainers and courses to support your next steps.",
+      "Export a shareable Behavior Brief PDF to bring your journal and training context to a trainer.",
+      "Use the journal and training tools in English or Spanish.",
+    ],
+    vision:
+      "Help dog owners and trainers build a shared understanding of everyday behavior, making compassionate, force-free support easier to find and follow.",
+    liveUrl: "https://turingcare.dog/",
     repoUrl: "https://github.com/mcasillas17/TuringCare",
-    images: [],
+    images: [
+      "/images/projects/turingcare-website.webp",
+      "/images/projects/turingcare-behavior-brief.webp",
+    ],
+    imageFit: "contain",
+    mediaCredit: {
+      label: "Public website and Behavior Brief explanation",
+      href: "/images/projects/CREDITS.md",
+    },
   },
   {
     slug: "light-master",
     title: "Light Master",
+    category: "games",
     summary:
       "A Unity platformer where enemy behavior is evolved with genetic programming over behavior trees.",
     year: "2019",
@@ -507,6 +737,8 @@ export const projects: Project[] = [
       "Side-scrolling platformer built in Unity (C#).",
       "Enemy behavior trees are evolved using genetic programming.",
     ],
+    vision:
+      "Explore how evolving enemy behavior can make game worlds more surprising, expressive, and engaging to play.",
     repoUrl: "https://github.com/mcasillas17/Light_Master",
     youtubeId: "0RjQiMqRIoE",
     images: [
@@ -526,7 +758,7 @@ export function getAllSlugs(): string[] {
   return projects.map((p) => p.slug);
 }
 
-export const featuredProjects = ["websnag", "turingagent", "mexican-mom", "thwiply"].map(
+export const featuredProjects = ["scorearc", "wallcrawl", "turingcare", "websnag", "turingagent", "watchslinger"].map(
   (slug) => {
     const project = getProject(slug);
     if (!project) throw new Error(`Featured project not found: ${slug}`);

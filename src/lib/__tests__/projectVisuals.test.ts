@@ -12,6 +12,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     slug: "demo",
     title: "Demo",
+    category: "products",
     summary: "demo summary",
     year: "2026",
     tags: [],

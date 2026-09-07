@@ -43,9 +43,25 @@ roles use native expandable disclosures; their full highlights remain available
 without JavaScript.
 
 `featuredProjects` in `src/data/projects.ts` controls homepage curation independently
-of the chronological project archive and issue numbers. Cards use local product
+of archive grouping and issue numbers. The six selected entries are ScoreArc,
+WallCrawl, TuringCare, WebSnag, TuringAgent, and Watchslinger; the first two use
+larger cards. The archive groups thirteen entries into Products, Developer tools,
+and Games using each project's `category` and the ordered `projectCategories`
+list. Category headings and jump links provide navigation without JavaScript.
+Prepend new entries to `projects` to preserve existing issue numbers; group
+rendering uses each entry's original array index, not its category position.
+Cards use local product
 screenshots or labelled conceptual previews, with shorter `cardSummary` copy.
-Full project descriptions and source evidence remain on the detail pages.
+Detail pages present product `highlights` and a separate `vision`, alongside the
+technical `stack`, screenshots, and source or live links. Set
+`mediaLayout: "portrait"` for phone screenshots and `imageFit: "contain"` to keep
+an entire image visible on cards and in the detail carousel, as with ScoreArc's
+World Cup bracket. Optional `mediaCredit` links provide screenshot provenance
+and artwork attribution; local media credits live in
+[`public/images/projects/CREDITS.md`](public/images/projects/CREDITS.md).
+Entries without original product imagery use explicitly labelled conceptual
+previews. Watchslinger credits its Watchy foundation; community watchface art is
+not presented as an original screenshot.
 
 The portrait at `public/images/about/miguel.jpg` is a local copy of Miguel's
 [public GitHub profile image](https://github.com/mcasillas17). Halftone texture

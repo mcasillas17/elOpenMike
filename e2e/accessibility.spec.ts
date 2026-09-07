@@ -33,11 +33,12 @@ test.describe("desktop accessibility", () => {
     await page.goto("/");
     const homeProjects = page.locator("#projects");
     await expect(homeProjects.getByRole("heading", { level: 2, name: "Selected Projects" })).toBeVisible();
-    await expect(homeProjects.getByRole("heading", { level: 3 })).toHaveCount(4);
+    await expect(homeProjects.getByRole("heading", { level: 3 })).toHaveCount(6);
 
     await page.goto("/projects");
     await expect(page.getByRole("heading", { level: 1, name: /Casefile/ })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2 })).toHaveCount(projects.length);
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Products", "Developer tools", "Games"]);
+    await expect(page.getByRole("heading", { level: 3 })).toHaveCount(projects.length);
   });
 
   test("carousel controls announce the active slide and offer 44px hit areas", async ({ page }) => {

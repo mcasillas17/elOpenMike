@@ -7,7 +7,6 @@ import ProjectDetailPage, {
 import { projects, getAllSlugs } from "@/data/projects";
 
 const sample = projects[0];
-const legacySample = projects.find((project) => !project.caseStudy)!;
 
 describe("/projects/[slug] detail page", () => {
   it("generateStaticParams returns every slug", () => {
@@ -36,60 +35,64 @@ describe("/projects/[slug] detail page", () => {
     ).toHaveAttribute("href", "/projects");
   });
 
-  it("keeps the legacy highlights for a project without a case study", async () => {
-    const ui = await ProjectDetailPage({
-      params: Promise.resolve({ slug: legacySample.slug }),
-    });
-    render(ui);
-
-    expect(screen.getByText("What it does", { exact: true })).toBeInTheDocument();
-    for (const h of legacySample.highlights) {
-      expect(screen.getByText(h)).toBeInTheDocument();
-    }
-  });
-
-  it.each(["websnag", "turingagent", "thwiply"])(
-    "renders the evidence-rich case-study sections for %s",
-    async (slug) => {
+  it.each(projects)(
+    "presents $title through features and vision instead of engineering audit sections",
+    async (project) => {
       const ui = await ProjectDetailPage({
-        params: Promise.resolve({ slug }),
+        params: Promise.resolve({ slug: project.slug }),
       });
       render(ui);
 
-      expect(
-        screen.getByRole("heading", { level: 2, name: "Architecture & data flow" }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole("heading", { level: 2, name: "Evidence & current status" }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole("figure", { name: /architecture.*data flow/i }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole("note", { name: "Current status" }),
-      ).toBeInTheDocument();
-      expect(
-        screen.queryByText("What it does", { exact: true }),
-      ).not.toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 2, name: "What it does" })).toBeInTheDocument();
+      for (const highlight of project.highlights) {
+        expect(screen.getByText(highlight)).toBeInTheDocument();
+      }
+      expect(screen.getByRole("heading", { level: 2, name: "Vision" })).toBeInTheDocument();
+      expect(screen.getByText(project.vision!)).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: /Engineering proof|Evidence & current status|Constraints|Critical decisions/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("note", { name: "Current status" })).not.toBeInTheDocument();
+      if (project.caseStudy) {
+        expect(screen.queryByText(project.caseStudy.status)).not.toBeInTheDocument();
+      }
     },
   );
 
-  it("renders WebSnag screenshots in a contained portrait carousel", async () => {
+  it.each(["websnag", "wallcrawl"])("renders %s screenshots in a contained portrait carousel", async (slug) => {
     const ui = await ProjectDetailPage({
-      params: Promise.resolve({ slug: "websnag" }),
+      params: Promise.resolve({ slug }),
     });
     render(ui);
 
     const carousel = screen.getByRole("group", {
-      name: "WebSnag screenshot photos",
+      name: new RegExp(`${slug} screenshot photos`, "i"),
     });
-    expect(carousel.parentElement).toHaveClass("max-w-sm");
+    expect(carousel.closest("figure")).toHaveClass("max-w-sm");
     expect(carousel.querySelector(".aspect-\\[9\\/16\\]")).toHaveClass(
       "aspect-[9/16]",
     );
     expect(
-      screen.getAllByRole("img", { name: /websnag screenshot/i })[0],
+      screen.getAllByRole("img", { name: new RegExp(`${slug} screenshot`, "i") })[0],
     ).toHaveClass("object-contain");
+  });
+
+  it("contains the entire ScoreArc bracket in its landscape carousel", async () => {
+    render(await ProjectDetailPage({ params: Promise.resolve({ slug: "scorearc" }) }));
+    expect(screen.getByRole("img", { name: /ScoreArc screenshot/ })).toHaveClass("object-contain");
+    expect(screen.getByRole("link", { name: "Live demo" })).toHaveAttribute(
+      "href", "https://www.scorearc.futbol/en/c/world-cup/2026",
+    );
+  });
+
+  it("presents TuringCare's public website in a contained two-image carousel", async () => {
+    render(await ProjectDetailPage({ params: Promise.resolve({ slug: "turingcare" }) }));
+    const carousel = screen.getByRole("group", { name: "TuringCare screenshot photos" });
+    const images = carousel.querySelectorAll("img");
+    expect(images).toHaveLength(2);
+    images.forEach((image) => expect(image).toHaveClass("object-contain"));
+    expect(screen.getByRole("link", { name: "Live demo" })).toHaveAttribute("href", "https://turingcare.dog/");
+    expect(screen.getByRole("link", { name: /public.*Behavior Brief.*explanation/i })).toHaveAttribute(
+      "href", "/images/projects/CREDITS.md",
+    );
   });
 
   it("sets metadata title and description from the project", async () => {

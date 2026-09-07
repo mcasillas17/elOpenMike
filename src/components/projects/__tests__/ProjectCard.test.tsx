@@ -7,6 +7,7 @@ import { projects } from "@/data/projects";
 const base: Project = {
   slug: "demo",
   title: "Demo Project",
+  category: "developer-tools",
   summary: "A short summary.",
   year: "2025",
   tags: ["CLI", "Open source"],
@@ -95,11 +96,27 @@ describe("ProjectCard", () => {
 
   it("shows real product imagery on image-backed projects", () => {
     render(
-      <ProjectCard project={projects[0]} index={0} variant="large" issueNumber="06" headingLevel={3} />,
+      <ProjectCard project={projects.find((p) => p.slug === "websnag")!} index={2} variant="uniform" issueNumber="06" headingLevel={3} />,
     );
     expect(screen.getByRole("img", { name: /WebSnag/ })).toHaveAttribute(
       "src", expect.stringContaining("websnag-dashboard"),
     );
+  });
+
+  it("keeps the entire ScoreArc bracket in the card frame", () => {
+    const project = projects.find((p) => p.slug === "scorearc");
+    expect(project).toBeDefined();
+    render(<ProjectCard project={project!} index={0} variant="feature" issueNumber="08" headingLevel={3} />);
+    expect(screen.getByRole("img", { name: /ScoreArc/ })).toHaveClass("object-contain");
+  });
+
+  it("gives WallCrawl the same portrait preview treatment as WebSnag", () => {
+    const project = projects.find((p) => p.slug === "wallcrawl");
+    expect(project).toBeDefined();
+    render(<ProjectCard project={project!} index={1} variant="feature" issueNumber="07" headingLevel={3} />);
+    const image = screen.getByRole("img", { name: /WallCrawl/ });
+    expect(image).toHaveAttribute("src", expect.stringContaining("wallcrawl-today"));
+    expect(image.parentElement).toHaveClass("w-44", "rounded-t-2xl");
   });
 
   it("gives an architecture project a labelled flow preview", () => {
