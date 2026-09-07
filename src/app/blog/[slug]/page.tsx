@@ -16,7 +16,7 @@ import { PostNav } from "@/components/blog/PostNav";
 import { PostFooter } from "@/components/blog/PostFooter";
 import { RelatedProjects } from "@/components/blog/RelatedProjects";
 import { ArticleJsonLd } from "@/components/seo/ArticleJsonLd";
-import { routes, alternatesFor } from "@/lib/site";
+import { routes, metadataFor, site } from "@/lib/site";
 
 export const dynamicParams = false;
 
@@ -32,10 +32,17 @@ export async function generateMetadata({
   const { slug } = await params;
   const post = getPost(slug);
   if (!post) return {};
+  const metadata = metadataFor(routes.blogPost(slug), post.meta.title, post.meta.excerpt);
   return {
-    title: post.meta.title,
-    description: post.meta.excerpt,
-    alternates: alternatesFor(routes.blogPost(slug)),
+    ...metadata,
+    openGraph: {
+      ...metadata.openGraph,
+      type: "article",
+      publishedTime: post.meta.date,
+      modifiedTime: post.meta.updated ?? post.meta.date,
+      authors: [site.name],
+      tags: post.meta.tags,
+    },
   };
 }
 

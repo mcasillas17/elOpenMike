@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import { Container } from "@/components/ui/Container";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { projects, projectCategories } from "@/data/projects";
-import { routes, alternatesFor } from "@/lib/site";
+import { routes, metadataFor } from "@/lib/site";
 
 // Metadata title stays "Projects" for searchability (per spec §1 out-of-scope).
 // Visible h1 is "The Casefile."
-export const metadata: Metadata = {
-  title: "Projects",
-  description: "Things I've built — personal projects and open-source work.",
-  alternates: alternatesFor(routes.projects),
-};
+export const metadata: Metadata = metadataFor(
+  routes.projects,
+  "Projects",
+  "Things I've built — personal projects and open-source work.",
+);
 
 export default function ProjectsPage() {
   const total = projects.length;

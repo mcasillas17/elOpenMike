@@ -5,7 +5,7 @@ import { Container } from "@/components/ui/Container";
 import { PostCard } from "@/components/blog/PostCard";
 import { BlogTopicNav } from "@/components/blog/BlogTopicNav";
 import { getAllPosts, getAllTags, getPostsByTag } from "@/lib/blog";
-import { routes, alternatesFor } from "@/lib/site";
+import { routes, metadataFor } from "@/lib/site";
 
 export const dynamicParams = false;
 
@@ -25,11 +25,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const name = tagName(slug);
   if (!name) return {};
-  return {
-    title: `${name} — Blog`,
-    description: `Posts tagged ${name}.`,
-    alternates: alternatesFor(routes.blogTag(slug)),
-  };
+  return metadataFor(routes.blogTag(slug), `${name} — Blog`, `Posts tagged ${name}.`);
 }
 
 export default async function TagPage({

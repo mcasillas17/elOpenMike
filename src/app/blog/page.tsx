@@ -4,13 +4,13 @@ import { PostCard } from "@/components/blog/PostCard";
 import { FeaturedPost } from "@/components/blog/FeaturedPost";
 import { BlogTopicNav } from "@/components/blog/BlogTopicNav";
 import { getAllPosts } from "@/lib/blog";
-import { routes, alternatesFor } from "@/lib/site";
+import { routes, metadataFor } from "@/lib/site";
 
-export const metadata: Metadata = {
-  title: "Blog",
-  description: "Notes on AI systems, distributed systems, and observability.",
-  alternates: alternatesFor(routes.blog),
-};
+export const metadata: Metadata = metadataFor(
+  routes.blog,
+  "Blog",
+  "Notes on AI systems, distributed systems, and observability.",
+);
 
 export default function BlogPage() {
   const posts = getAllPosts();

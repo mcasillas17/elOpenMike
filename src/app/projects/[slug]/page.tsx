@@ -15,7 +15,7 @@ import { ProjectNavigation } from "@/components/projects/ProjectNavigation";
 import { ProjectWriting } from "@/components/projects/ProjectWriting";
 import { getProject, getAllSlugs, projects } from "@/data/projects";
 import { getTint } from "@/lib/projectVisuals";
-import { routes, alternatesFor } from "@/lib/site";
+import { routes, metadataFor } from "@/lib/site";
 
 function accentedTitle(title: string): ReactNode {
   const parts = title.split(" ");
@@ -41,11 +41,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const project = getProject(slug);
   if (!project) return {};
-  return {
-    title: project.title,
-    description: project.summary,
-    alternates: alternatesFor(routes.projectDetail(slug)),
-  };
+  return metadataFor(routes.projectDetail(slug), project.title, project.summary);
 }
 
 export default async function ProjectDetailPage({

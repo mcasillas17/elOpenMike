@@ -8,10 +8,11 @@ import { Writing } from "@/components/sections/Writing";
 import { About } from "@/components/sections/About";
 import { Comedy } from "@/components/sections/Comedy";
 import { Contact } from "@/components/sections/Contact";
-import { routes, alternatesFor } from "@/lib/site";
+import { routes, metadataFor, site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  alternates: alternatesFor(routes.home),
+  ...metadataFor(routes.home, site.title, site.description),
+  title: { absolute: site.title },
 };
 
 export default function Home() {

@@ -3,13 +3,13 @@ import { Container } from "@/components/ui/Container";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
 import { PhotoGallery } from "@/components/comedy/PhotoGallery";
 import { clips, photos } from "@/data/comedy";
-import { routes, alternatesFor } from "@/lib/site";
+import { routes, metadataFor } from "@/lib/site";
 
-export const metadata: Metadata = {
-  title: "Comedy",
-  description: "Stand-up clips and photos.",
-  alternates: alternatesFor(routes.comedy),
-};
+export const metadata: Metadata = metadataFor(
+  routes.comedy,
+  "Comedy",
+  "Stand-up clips and photos.",
+);
 
 export default function ComedyPage() {
   return (
