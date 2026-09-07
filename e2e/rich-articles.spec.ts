@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+test("the article specimen is unavailable in the production build", async ({ page }) => {
+  test.skip(process.env.ARTICLE_PREVIEW === "1", "The specimen is explicitly enabled in this build.");
+  const response = await page.goto("/preview/article");
+  expect(response?.status()).toBe(404);
+});
+
 test("short published notes remain free of unnecessary reader controls", async ({ page }) => {
   await page.goto("/blog/grounding-agents-with-mcp");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

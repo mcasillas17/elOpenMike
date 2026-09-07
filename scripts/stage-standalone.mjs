@@ -17,7 +17,7 @@
 //   COPY /app/.next/static      ./.next/static    .next/standalone/.next/static
 //
 // Run it with no build present and it builds first, so `pnpm e2e` works from a
-// clean checkout — which is what CI has, since its e2e job never builds.
+// clean local checkout. CI builds explicitly and reuses that build here.
 
 import { cp, mkdir, rm, stat } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
