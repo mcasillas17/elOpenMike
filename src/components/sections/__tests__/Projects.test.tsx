@@ -24,7 +24,7 @@ describe("Projects (home section)", () => {
     expect(cards.map((card) => card.querySelector("h3")?.textContent)).toEqual([
       "ScoreArc", "WallCrawl", "TuringCare", "WebSnag", "TuringAgent", "Watchslinger",
     ]);
-    expect(screen.getByText(/A private assistant stack/)).toBeInTheDocument();
+    expect(cards[4]).toHaveTextContent(/A local-first AI agent/);
     expect(cards[0]).toHaveTextContent("№08");
     expect(cards[1]).toHaveTextContent("№07");
     expect(cards[2]).toHaveTextContent("№02");
