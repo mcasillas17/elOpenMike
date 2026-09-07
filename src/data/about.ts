@@ -3,6 +3,7 @@ export type About = {
   bio: string[]; // paragraphs
   turing: { caption: string; images: string[] }; // paths under /images/about/ (first = main shot)
   facts: string[]; // chip labels
+  projectInterests: { label: string; slug: string }[];
 };
 
 // Edit freely. Turing photos live under public/images/about/ (first is the main shot).
@@ -22,4 +23,11 @@ export const about: About = {
     ],
   },
   facts: ["🏋️ Lifting", "🎬 Movies & TV", "🕷️ Spider-Man (huge)"],
+  projectInterests: [
+    { label: "Football", slug: "scorearc" },
+    { label: "Training", slug: "wallcrawl" },
+    { label: "Focus", slug: "websnag" },
+    { label: "Life with Turing", slug: "turingcare" },
+    { label: "AI agents", slug: "turingagent" },
+  ],
 };

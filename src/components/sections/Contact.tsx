@@ -1,6 +1,7 @@
 import { Container } from "@/components/ui/Container";
 import { ComicButton } from "@/components/ui/comic/ComicButton";
 import { site } from "@/lib/site";
+import { CopyEmail } from "@/components/ui/CopyEmail";
 
 export function Contact() {
   return (
@@ -19,6 +20,10 @@ export function Contact() {
             <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
               <ComicButton href={site.recruitingContact.emailHref}>Email me ↗</ComicButton>
               <a className="text-link text-sm" href={site.resumeHref} download>Download résumé (PDF)</a>
+            </div>
+            <div className="mt-5 flex flex-wrap items-start gap-x-5 gap-y-2">
+              <a className="text-link text-sm sm:text-base" href={site.recruitingContact.emailHref}>{site.email}</a>
+              <CopyEmail email={site.email} />
             </div>
           </div>
         </div>

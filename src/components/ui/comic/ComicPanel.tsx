@@ -21,7 +21,7 @@ const TINT_STYLE: Record<Tint, CSSProperties> = {
 };
 
 const base =
-  "relative overflow-hidden border-[3px] border-panel-border bg-surface focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-spidey";
+  "relative overflow-hidden border-[3px] border-panel-border bg-surface focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-web";
 
 // Comic-issue panel: thick black border, hard drop-shadow, halftone overlay,
 // colored tint. Consumers put IssueTag / PowMark / content inside.

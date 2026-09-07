@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { ArticleReader } from "@/components/blog/ArticleReader";
+import { RelatedProjects } from "@/components/blog/RelatedProjects";
 import { compileArticle } from "@/lib/article";
 import { articleSpecimen, specimenImagePath } from "@/lib/article-specimen";
 import { blocksToMarkdown } from "@/lib/notion/blocks-to-md";
 import { routes } from "@/lib/site";
+import { readProjectReferences } from "@/lib/project-references";
 
 export const metadata: Metadata = {
   title: "Article layout specimen",
@@ -20,6 +22,8 @@ export default async function PreviewPage() {
     onWarning: (message) => { throw new Error(`Article specimen: ${message}`); },
   });
   const { content, headings } = await compileArticle(source);
+  const references = readProjectReferences(["TuringCare"]);
+  if (!references.ok) throw new Error(references.error);
 
   return (
     <Container className="py-12 sm:py-16">
@@ -38,6 +42,7 @@ export default async function PreviewPage() {
           </p>
         </header>
         <ArticleReader headings={headings}>{content}</ArticleReader>
+        <RelatedProjects projectSlugs={references.projects} />
         <footer className="mt-14 max-w-3xl border-t border-edge pt-7 text-sm leading-relaxed text-muted">
           This specimen is excluded from the blog, RSS feed, and sitemap.
           Your existing posts and Notion workspace are unchanged.

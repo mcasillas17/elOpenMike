@@ -59,7 +59,7 @@ export function ProjectCard({
   const Heading = headingLevel === 2 ? "h2" : "h3";
 
   return (
-    <ComicPanel tint={tint} className={`group flex h-full w-full flex-col ${className}`}>
+    <ComicPanel tint={tint} className={`project-card group flex h-full w-full flex-col ${className}`}>
       <IssueTag
         number={issueNumber}
         label={label}
@@ -91,9 +91,22 @@ export function ProjectCard({
         <p className="mt-3 text-sm leading-relaxed text-ink">
           {project.cardSummary ?? project.summary}
         </p>
-        <p aria-hidden="true" className="mt-auto pt-5 text-sm font-semibold text-web-strong">
-          Explore project <span className="inline-block transition-transform motion-safe:group-hover:translate-x-1">→</span>
-        </p>
+        <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 pt-4 text-sm font-semibold">
+          <p aria-hidden="true" className="inline-flex min-h-11 items-center gap-1 text-web-strong">
+            Explore project <span className="inline-block transition-transform motion-safe:group-hover:translate-x-1">→</span>
+          </p>
+          {project.liveUrl && (
+            <a
+              href={project.liveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-link relative z-20"
+            >
+              Try it live <span aria-hidden="true" className="ml-1">↗</span>
+              <span className="sr-only"> — {project.title} (opens in a new tab)</span>
+            </a>
+          )}
+        </div>
       </div>
     </ComicPanel>
   );

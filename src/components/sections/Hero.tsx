@@ -62,8 +62,8 @@ export function Hero() {
         </p>
         <ul className="mt-9 flex flex-wrap gap-x-8 gap-y-3 border-t border-edge pt-5 text-xs text-muted sm:text-sm">
           <li>Microsoft since 2018</li>
-          <li>Computer Engineering, ITAM</li>
-          <li>Based in Redmond, WA</li>
+          <li>{site.education}</li>
+          <li>Based in {site.location}</li>
         </ul>
       </Container>
     </section>

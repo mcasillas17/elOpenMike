@@ -1,6 +1,7 @@
 import type { PageObject } from "./client";
 import type { MdBlock, PostSource, PostFrontmatter } from "./types";
 import { slugify } from "./slug";
+import { readProjectReferences } from "../project-references";
 
 type Property = Record<string, unknown>;
 
@@ -89,6 +90,43 @@ export function pageTags(page: PageObject): string[] {
   return multiSelect((page.properties as Record<string, Property>).Tags);
 }
 
+export class InvalidProjectsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidProjectsError";
+  }
+}
+
+export function pageProjectsType(page: PageObject): string {
+  const property = (page.properties as Record<string, Property>).Projects;
+  return typeof property?.type === "string" ? property.type : "";
+}
+
+export function pageProjects(page: PageObject): string[] {
+  const property = (page.properties as Record<string, Property>).Projects;
+  if (property === undefined) return [];
+  if (property?.type !== "multi_select") {
+    throw new InvalidProjectsError("Projects must be a multi-select property");
+  }
+  const options = property.multi_select;
+  if (!Array.isArray(options)) {
+    throw new InvalidProjectsError("Projects must contain a valid multi-select list");
+  }
+  // Bound the list before walking it; the shared reader rejects an oversized
+  // array before inspecting its elements.
+  const result = readProjectReferences(
+    options.length > 100
+      ? options
+      : options.map((option: unknown) =>
+          option !== null && typeof option === "object" && "name" in option
+            ? option.name
+            : undefined,
+        ),
+  );
+  if (!result.ok) throw new InvalidProjectsError(result.error);
+  return result.projects;
+}
+
 export function pageDate(page: PageObject): string {
   return dateStart((page.properties as Record<string, Property>).Published);
 }
@@ -97,6 +135,7 @@ export function pageDate(page: PageObject): string {
 // the page's last_edited_time; no Notion property is needed for it.
 export function toPostSource(page: PageObject, blocks: MdBlock[]): PostSource {
   const properties = page.properties as Record<string, Property>;
+  const projects = pageProjects(page);
 
   const frontmatter: PostFrontmatter = {
     title: plain(titleProperty(properties)),
@@ -104,6 +143,7 @@ export function toPostSource(page: PageObject, blocks: MdBlock[]): PostSource {
     excerpt: plain(properties.Excerpt),
     tags: multiSelect(properties.Tags),
     updated: page.last_edited_time.slice(0, 10),
+    ...(projects.length === 0 ? {} : { projects }),
   };
 
   return {

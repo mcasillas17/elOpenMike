@@ -20,6 +20,36 @@ also automatic: posts sharing the most tags are preferred, with newer matches
 first. Accurate, focused tags therefore improve both topic archives and what a
 reader sees next.
 
+### Linking an article to projects
+
+Optionally add a **Multi-select** property named **Projects** to the Blog
+database. Select the exact public project title or its URL slug: for example,
+**Knights of the Round Table** or `coding-skills`, **Watchslinger** or
+`watchslinger`, and **TuringAgent** or `turingagent`. The public catalog in
+`src/data/projects.ts` is the source of truth; private repository names and
+partial titles are not references.
+
+Leading/trailing whitespace and letter case are ignored. References keep the
+selection order, and title/slug aliases of the same project appear only once.
+The generated frontmatter stores canonical slugs, for example
+`projects: ["coding-skills", "watchslinger"]`, after the five existing fields.
+Leave the selection empty, or omit the property altogether, for an unrelated
+article: no `projects` line is generated and legacy output stays unchanged.
+
+Unknown references, malformed selections, and a **Projects** property of any
+other type fail that post's sync rather than being silently dropped. The
+existing file is preserved; `--check` fails, and diagnostics identify the
+field without repeating rejected author values. At most 100 selections are
+accepted before deduplication.
+
+Local-to-Notion migration uses the same normalization and validation. A post
+with references requires an existing **Projects** multi-select column; the
+preflight stops before creating pages if it is missing or misconfigured and
+never adds columns automatically. Resumed drafts have their project references
+checked along with their other metadata, including clearing them when the local
+post removes them. Already-published pages retain the migration's existing
+skip behavior; edit those references in Notion, the publishing source of truth.
+
 ## Formatting on your phone
 
 You never type markdown. Use Notion's own formatting — these shortcuts convert

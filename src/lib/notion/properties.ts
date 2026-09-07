@@ -193,7 +193,10 @@ const WRITTEN_PROPERTIES = {
 // once, before the first write. Pure: it is given the schema the run already
 // read, and answers with problems rather than throwing, so they can be reported
 // beside the posts' own.
-export function schemaProblems(schema: DataSourceSchema): string[] {
+export function schemaProblems(
+  schema: DataSourceSchema,
+  requiresProjects = false,
+): string[] {
   const problems: string[] = [];
 
   const titles = Object.entries(schema).filter(
@@ -236,5 +239,27 @@ export function schemaProblems(schema: DataSourceSchema): string[] {
     }
   }
 
+  problems.push(...projectsSchemaProblems(schema, requiresProjects));
   return problems;
+}
+
+export function projectsSchemaProblems(
+  schema: DataSourceSchema,
+  required: boolean,
+): string[] {
+  const property = schema.Projects;
+  if (property === undefined) {
+    return required
+      ? [
+          'the database has no "Projects" multi-select property — add it in ' +
+            "Notion before migrating project references; the migration cannot add a column",
+        ]
+      : [];
+  }
+  return property.type === "multi_select"
+    ? []
+    : [
+        '"Projects" must be a multi-select property — correct its type in ' +
+          "Notion before migrating",
+      ];
 }

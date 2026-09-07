@@ -53,4 +53,12 @@ describe("Experience", () => {
       expect(details?.querySelector("summary")).toHaveTextContent(role.focus);
     }
   });
+
+  it("presents Microsoft once with roles nested below its company heading", () => {
+    render(<Experience />);
+    expect(screen.getAllByText("Microsoft")).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 3, name: "Microsoft" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 4 })).toHaveLength(experience.length);
+    expect(screen.getByText("2018 – Present")).toBeInTheDocument();
+  });
 });

@@ -43,7 +43,8 @@ export function alternatesFor(canonical: string) {
 
 const recruitingEmailSubject =
   "Senior backend, platform, or AI-infrastructure opportunity";
-const recruitingEmailHref = `mailto:micasillm@gmail.com?subject=${encodeURIComponent(recruitingEmailSubject)}`;
+const email = "micasillm@gmail.com";
+const recruitingEmailHref = `mailto:${email}?subject=${encodeURIComponent(recruitingEmailSubject)}`;
 
 export const site = {
   name: "Miguel Casillas",
@@ -51,6 +52,9 @@ export const site = {
   lastName: "Casillas",
   role: "Software Engineer II",
   company: "Microsoft",
+  location: "Redmond, WA",
+  education: "Computer Engineering, ITAM",
+  email,
   headline:
     "I build AI-powered, distributed systems — services that stay fast, scalable, and observable as they grow.",
   tagline: "Builder by day, open-mic by night.",
@@ -75,6 +79,6 @@ export const site = {
   socials: [
     { label: "GitHub", href: "https://github.com/mcasillas17" },
     { label: "LinkedIn", href: "https://www.linkedin.com/in/mcasillas17/" },
-    { label: "Email", href: "mailto:micasillm@gmail.com" },
+    { label: "Email", href: `mailto:${email}` },
   ],
 } as const;

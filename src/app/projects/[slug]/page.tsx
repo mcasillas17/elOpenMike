@@ -11,6 +11,8 @@ import {
 import { Carousel } from "@/components/ui/Carousel";
 import { YouTubeEmbed } from "@/components/comedy/YouTubeEmbed";
 import { ProjectPreview } from "@/components/projects/ProjectPreview";
+import { ProjectNavigation } from "@/components/projects/ProjectNavigation";
+import { ProjectWriting } from "@/components/projects/ProjectWriting";
 import { getProject, getAllSlugs, projects } from "@/data/projects";
 import { getTint } from "@/lib/projectVisuals";
 import { routes, alternatesFor } from "@/lib/site";
@@ -186,6 +188,8 @@ export default async function ProjectDetailPage({
             <p className="mt-4 max-w-prose text-lg leading-relaxed text-muted">{project.vision}</p>
           </section>
         )}
+        <ProjectWriting projectSlug={slug} />
+        <ProjectNavigation project={project} />
       </div>
     </Container>
   );

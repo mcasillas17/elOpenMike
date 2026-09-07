@@ -1,8 +1,11 @@
 import type { Client, UpdatePageParameters } from "@notionhq/client";
 import { fetchBlockTree, queryPages, retrievePage } from "./client";
 import {
+  InvalidProjectsError,
   pageDate,
   pageExcerpt,
+  pageProjects,
+  pageProjectsType,
   pageSlug,
   pageStatus,
   pageStatusType,
@@ -93,6 +96,14 @@ export function createMigrationExecutor(
       const before = await retrievePage(client, pageId);
       const blocks = await fetchBlockTree(client, pageId);
       const after = await retrievePage(client, pageId);
+      let projects: string[] = [];
+      let projectsError: string | undefined;
+      try {
+        projects = pageProjects(after);
+      } catch (error: unknown) {
+        if (!(error instanceof InvalidProjectsError)) throw error;
+        projectsError = error.message;
+      }
 
       return {
         metadata: {
@@ -101,6 +112,9 @@ export function createMigrationExecutor(
           date: pageDate(after),
           excerpt: pageExcerpt(after),
           tags: pageTags(after),
+          ...(projects.length === 0 ? {} : { projects }),
+          projectsType: pageProjectsType(after),
+          ...(projectsError === undefined ? {} : { projectsError }),
           statusType: pageStatusType(after),
         },
         status: pageStatus(after),

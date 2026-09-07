@@ -1,6 +1,7 @@
 import matter from "gray-matter";
 import type { BlockObjectRequest } from "@notionhq/client";
 import { JSON_SCHEMA, load as loadYaml } from "js-yaml";
+import { readProjectReferences } from "../project-references";
 import { slugify, isValidSlug, slugFilenameProblems } from "./slug";
 import {
   titlePropertyName,
@@ -8,6 +9,7 @@ import {
   describePropertyType,
   describeStatus,
   schemaProblems,
+  projectsSchemaProblems,
   DRAFT_STATUS,
   PUBLISHED_STATUS,
   type DataSourceSchema,
@@ -86,6 +88,7 @@ export type LocalPost = {
   date: string;
   excerpt: string;
   tags: string[];
+  projects?: string[];
   // The scalar/sequence exactly as YAML parsed it. Present only on posts read
   // from disk, so preflight can reject malformed authored frontmatter without
   // ever coercing it into strings that could reach a Notion request.
@@ -94,6 +97,7 @@ export type LocalPost = {
   rawExcerpt?: { value: unknown };
   rawDate?: { value: unknown };
   rawUpdated?: { value: unknown };
+  rawProjects?: { value: unknown };
   // Only what the file itself carries. Notion has no column for it — the sync
   // derives a post's `updated` from the page's last_edited_time — so this is
   // never written; it is read so a file claiming an unreadable one is caught
@@ -186,6 +190,11 @@ export type PageMetadata = {
   date: string;
   excerpt: string;
   tags: string[];
+  projects?: string[];
+  projectsType?: string;
+  // A redacted validation failure, not an unreadable page: its publication
+  // state is still known and the usual promotion rollback must remain possible.
+  projectsError?: string;
   // "status" or "select": which of the two property shapes the page's Status
   // is. Notion refuses the value written in the other one, so promoting a page
   // whose shape has changed underneath the run would fail — or, worse, write a
@@ -275,6 +284,7 @@ export function toLocalPost(file: string, raw: string): LocalPost {
   const rawTags: unknown = data.tags;
   const rawTitle: unknown = data.title;
   const rawExcerpt: unknown = data.excerpt;
+  const projects = readProjectReferences(data.projects);
   const tags =
     Array.isArray(rawTags) &&
     rawTags.every((tag): tag is string => typeof tag === "string")
@@ -288,6 +298,9 @@ export function toLocalPost(file: string, raw: string): LocalPost {
     date: frontmatterDate(data.date),
     excerpt: authoredText(rawExcerpt, ""),
     tags,
+    ...(projects.ok && projects.projects.length > 0
+      ? { projects: projects.projects }
+      : {}),
     ...(data.updated === undefined ? {} : { updated }),
     content,
   };
@@ -299,6 +312,7 @@ export function toLocalPost(file: string, raw: string): LocalPost {
     ["rawExcerpt", rawExcerpt],
     ["rawDate", data.date],
     ["rawUpdated", data.updated],
+    ["rawProjects", data.projects],
   ] as const) {
     Object.defineProperty(post, name, { value: { value }, enumerable: false });
   }
@@ -561,6 +575,21 @@ export function migrationRequests(
   const writes: MigrationWrite[] = [];
 
   for (const { post, pageId } of work) {
+    const projects = readProjectReferences(
+      post.rawProjects === undefined ? post.projects : post.rawProjects.value,
+    );
+    if (!projects.ok) {
+      problems.push(`${post.file}: ${projects.error}`);
+      continue;
+    }
+    const projectSchemaErrors = projectsSchemaProblems(
+      schema,
+      projects.projects.length > 0,
+    );
+    if (projectSchemaErrors.length > 0) {
+      problems.push(...projectSchemaErrors.map((error) => `${post.file}: ${error}`));
+      continue;
+    }
     let blocks: BlockObjectRequest[];
     try {
       blocks = normalizeBlocks(markdownToBlocks(post.content));
@@ -578,6 +607,9 @@ export function migrationRequests(
       Tags: { multi_select: post.tags.map((tag) => ({ name: tag })) },
       Status: draft,
       Published: { date: { start: post.date } },
+      ...(schema.Projects?.type === "multi_select"
+        ? { Projects: { multi_select: projects.projects.map((name) => ({ name })) } }
+        : {}),
     };
 
     problems.push(...blockProblems(blocks, post.file));
@@ -628,6 +660,8 @@ export function migrationRequests(
         date: post.date.slice(0, 10),
         excerpt: post.excerpt.trim(),
         tags: post.tags,
+        ...(projects.projects.length === 0 ? {} : { projects: projects.projects }),
+        projectsType: schema.Projects?.type ?? "",
         statusType: "status" in draft ? "status" : "select",
       },
       page: createPageBody(pageBase, children),
@@ -759,7 +793,10 @@ export async function prepareMigration(
 ): Promise<PreparedMigration> {
   const plan = planMigration(posts, pages);
   const errors = [
-    ...schemaProblems(options.schema),
+    ...schemaProblems(
+      options.schema,
+      posts.some((post) => (post.projects?.length ?? 0) > 0),
+    ),
     ...validateLocalPosts(posts),
     ...plan.errors,
   ];
@@ -837,6 +874,7 @@ const METADATA_PROPERTY = {
   date: "Published",
   excerpt: "Excerpt",
   tags: "Tags",
+  projects: "Projects",
 } as const;
 
 export type RepairableField = keyof typeof METADATA_PROPERTY;
@@ -861,6 +899,8 @@ export function compareMetadata(
   actual: PageMetadata,
 ): MetadataDivergence {
   const identity: string[] = [];
+  if (desired.projectsError) identity.push(desired.projectsError);
+  if (actual.projectsError) identity.push(actual.projectsError);
 
   if (actual.title !== desired.title) {
     identity.push("its title is not this post's");
@@ -880,6 +920,27 @@ export function compareMetadata(
   if (actual.excerpt !== desired.excerpt) repairable.push("excerpt");
   if (JSON.stringify(actual.tags) !== JSON.stringify(desired.tags)) {
     repairable.push("tags");
+  }
+  const desiredProjects = readProjectReferences(desired.projects);
+  const actualProjects = readProjectReferences(actual.projects);
+  if (!desiredProjects.ok) identity.push(desiredProjects.error);
+  if (!actualProjects.ok) identity.push(actualProjects.error);
+  if (desiredProjects.ok && actualProjects.ok) {
+    if (
+      (desiredProjects.projects.length > 0 || actualProjects.projects.length > 0) &&
+      desired.projectsType !== actual.projectsType
+    ) {
+      identity.push(
+        "its Projects property does not match the database schema — " +
+          "references cannot be safely written or cleared",
+      );
+    }
+    if (
+      JSON.stringify(actualProjects.projects) !==
+      JSON.stringify(desiredProjects.projects)
+    ) {
+      repairable.push("projects");
+    }
   }
 
   return { identity, repairable };
@@ -1524,4 +1585,3 @@ function unfinished(
       "migration again to finish it",
   );
 }
-

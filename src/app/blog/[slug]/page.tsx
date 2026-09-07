@@ -14,6 +14,7 @@ import { compileArticle } from "@/lib/article";
 import { ArticleReader } from "@/components/blog/ArticleReader";
 import { PostNav } from "@/components/blog/PostNav";
 import { PostFooter } from "@/components/blog/PostFooter";
+import { RelatedProjects } from "@/components/blog/RelatedProjects";
 import { ArticleJsonLd } from "@/components/seo/ArticleJsonLd";
 import { routes, alternatesFor } from "@/lib/site";
 
@@ -122,6 +123,7 @@ export default async function PostPage({
           </header>
           <ArticleReader headings={headings}>{content}</ArticleReader>
           <div className="max-w-3xl">
+            <RelatedProjects projectSlugs={post.meta.projects ?? []} />
             <PostFooter related={getRelatedPosts(slug)} />
             <PostNav {...getAdjacentPosts(slug)} />
           </div>
