@@ -36,7 +36,7 @@ describe("blocksToMarkdown", () => {
         ],
         ctx(),
       ),
-    ).toBe("First\n\nSecond\n\n> Quoted\n\n---\n\n> 💡 Tip\n");
+    ).toBe('First\n\nSecond\n\n> Quoted\n\n---\n\n<ArticleCallout tone="note" icon="💡">\n\nTip\n\n</ArticleCallout>\n');
   });
 
   it("renders bullet, numbered, nested, and todo lists", () => {
@@ -110,7 +110,7 @@ describe("blocksToMarkdown", () => {
         ],
         ctx(),
       ),
-    ).toBe("- Parent\n  More\n\n  Details\n");
+    ).toBe("- Parent\n  <ArticleToggle>\n\n  <ArticleSummary>More</ArticleSummary>\n\n  Details\n\n  </ArticleToggle>\n");
   });
 
   it("maps code languages and keeps raw code contents", () => {
@@ -141,7 +141,7 @@ describe("blocksToMarkdown", () => {
         ],
         ctx({ imagePath: (blockId) => `/assets/${blockId}.webp` }),
       ),
-    ).toBe(`![*Caption* **Alt**](/assets/${image.id}.webp)\n\n| Name | Value |\n| --- | --- |\n| A | 1 |\n| B |  |\n`);
+    ).toBe(`<ArticleFigure>\n\n![*Caption* **Alt**](/assets/${image.id}.webp)\n\n<ArticleCaption>*Caption* **Alt**</ArticleCaption>\n\n</ArticleFigure>\n\n| Name | Value |\n| --- | --- |\n| A | 1 |\n| B |  |\n`);
   });
 
   it("escapes pipes and normalizes newlines inside GFM table cells", () => {
@@ -160,7 +160,7 @@ describe("blocksToMarkdown", () => {
     );
   });
 
-  it("renders quote and callout children inside the quoted content", () => {
+  it("renders quote and callout children inside their distinct containers", () => {
     expect(
       blocksToMarkdown(
         [
@@ -169,10 +169,10 @@ describe("blocksToMarkdown", () => {
         ],
         ctx(),
       ),
-    ).toBe("> Quoted\n>\n> Child quote\n\n> Tip\n>\n> Child callout\n");
+    ).toBe('> Quoted\n>\n> Child quote\n\n<ArticleCallout tone="note">\n\nTip\n\nChild callout\n\n</ArticleCallout>\n');
   });
 
-  it("warns for unsupported blocks and flattens toggle summaries with children", () => {
+  it("warns for unsupported blocks and preserves toggle summaries with children", () => {
     const warnings: string[] = [];
     const skipped = block("breadcrumb", {});
 
@@ -184,7 +184,7 @@ describe("blocksToMarkdown", () => {
         ],
         ctx({ onWarning: (message) => warnings.push(message) }),
       ),
-    ).toBe("More\n\nChild\n");
+    ).toBe("<ArticleToggle>\n\n<ArticleSummary>More</ArticleSummary>\n\nChild\n\n</ArticleToggle>\n");
     // Every warning names the block it came from, because the ones about a
     // block's content cannot name the url that caused them. See safe-url.ts.
     expect(warnings).toEqual([

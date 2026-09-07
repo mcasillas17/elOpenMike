@@ -13,15 +13,11 @@ export function FeaturedPost({ post }: { post: PostMeta }) {
   });
 
   return (
-    <article className="relative overflow-hidden rounded-2xl border border-edge bg-surface/80 p-6 shadow-lg shadow-black/10 sm:p-8">
-      <div
-        aria-hidden="true"
-        className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-web/10 blur-2xl"
-      />
+    <article className="relative border-y border-edge bg-surface/40 p-6 sm:p-8">
       <p className="relative text-xs font-semibold uppercase tracking-[0.2em] text-web-strong">
         Latest
       </p>
-      <h2 className="relative mt-3 max-w-3xl font-display text-2xl font-extrabold text-ink sm:text-3xl">
+      <h2 className="mt-3 max-w-3xl font-display text-2xl font-extrabold leading-tight text-ink sm:text-3xl">
         <Link
           href={routes.blogPost(post.slug)}
           className="after:absolute after:inset-0 after:content-[''] hover:text-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-web"
@@ -29,10 +25,10 @@ export function FeaturedPost({ post }: { post: PostMeta }) {
           {post.title}
         </Link>
       </h2>
-      <p className="relative mt-3 max-w-2xl text-base leading-relaxed text-muted">
+      <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
         {post.excerpt}
       </p>
-      <p className="relative mt-5 text-xs text-muted">
+      <p className="mt-5 text-sm text-muted">
         {dateLabel} · {post.readingMinutes} min read
       </p>
       {post.tags.length > 0 && (

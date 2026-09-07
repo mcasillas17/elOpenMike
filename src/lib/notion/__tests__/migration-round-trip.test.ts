@@ -190,7 +190,7 @@ describe("a document pushed into Notion and pulled back out", () => {
     ["a fenced block", "```ts\nconst a = 1;\n```\n"],
     ["a paragraph of two lines", "first line\nsecond line\n"],
     [
-      "a toggle, whose summary and children are siblings in markdown",
+      "legacy flattened toggle prose, which remains ordinary Markdown",
       "Summary\n\n- a child\n",
     ],
   ];

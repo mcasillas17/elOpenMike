@@ -309,7 +309,7 @@ describe("markers the block converter emits itself", () => {
   it("escapes a bracket in an image caption without breaking the image", () => {
     const image = block("image", { caption: [rt("A [diagram]")] });
     expect(blocksToMarkdown([image], ctx)).toBe(
-      `![A \\[diagram\\]](/images/${image.id}.png)\n`,
+      `<ArticleFigure>\n\n![A \\[diagram\\]](/images/${image.id}.png)\n\n<ArticleCaption>A \\[diagram\\]</ArticleCaption>\n\n</ArticleFigure>\n`,
     );
   });
 });

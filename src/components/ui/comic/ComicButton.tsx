@@ -9,7 +9,7 @@ const VARIANT: Record<Variant, string> = {
 };
 
 const base =
-  "inline-flex items-center justify-center border-2 border-panel-border px-3.5 py-2 font-display text-xs font-black uppercase tracking-widest focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web";
+  "inline-flex min-h-11 items-center justify-center border-2 border-panel-border px-4 py-3 font-display text-xs font-black uppercase tracking-widest transition-colors hover:border-web-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web";
 
 const shadowStyle = {
   boxShadow: "var(--shadow-panel-md)",

@@ -20,26 +20,33 @@ export default function ComedyPage() {
       <h1 className="mt-2 font-display text-4xl font-extrabold sm:text-5xl">
         Stand-up
       </h1>
-      <p className="mt-3 max-w-xl text-muted">
-        A few sets and clips. Bear with the lighting — open mics aren&rsquo;t
-        known for production value.
+      <p className="mt-4 max-w-2xl text-lg leading-relaxed text-muted">
+        Away from the keyboard, I write jokes and take them to the mic.
+        These two sets are from Seattle, July 2023.
       </p>
 
       {clips.length > 0 && (
-        <>
-          <h2 className="mt-10 text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
-            Clips
-          </h2>
-          <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {clips.map((c, i) => (
+        <section aria-labelledby="video-archive" className="mt-12">
+          <div className="border-t border-edge pt-6">
+            <h2 id="video-archive" className="font-display text-2xl font-bold">
+              Video archive
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+              YouTube only loads when you press play. You can also watch each
+              set directly on YouTube.
+            </p>
+          </div>
+          <div className="mt-6 grid gap-8 md:grid-cols-2">
+            {clips.map((c) => (
               <YouTubeEmbed
-                key={`${c.youtubeId}-${i}`}
+                key={c.youtubeId}
                 youtubeId={c.youtubeId}
                 title={c.title}
+                posterSrc={c.posterSrc}
               />
             ))}
           </div>
-        </>
+        </section>
       )}
 
       {photos.length > 0 && (

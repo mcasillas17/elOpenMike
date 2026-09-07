@@ -1,5 +1,7 @@
 import type { BlockObjectRequest } from "@notionhq/client";
 import { inlineToRichText, type RichTextInput } from "./md-to-rich-text";
+import { calloutColor, isArticleBoundary, parseArticleOpening } from "./article-markup";
+import { articleResource, localRasterPath, httpsRasterUrl } from "./article-resource";
 
 // Derived from the SDK rather than restated, so `pnpm exec tsc` fails if a
 // language below is not one Notion actually accepts.
@@ -117,17 +119,27 @@ export const plainRichText = (content: string): RichTextInput => [
 // the opposite direction has to undo exactly that step. A `#` heading therefore
 // has no Notion level to land on and is refused.
 //
-// Three shapes markdown cannot tell apart come back as the simpler one, which
-// renders identically rather than pretending to be what it was:
-//
-//   * a callout and a quote are both written as a blockquote, so both migrate
-//     back as a quote — a callout's icon is part of its text by then;
-//   * a bookmark and a paragraph holding one link are both written as
-//     `[label](url)`, so both migrate back as a paragraph;
-//   * a toggle's summary and its children are written as sibling blocks, and
-//     migrate back as siblings.
-export function markdownToBlocks(markdown: string): BlockObjectRequest[] {
-  return readBlocks(markdown.replace(/\r\n?/g, "\n").split("\n"));
+// Legacy Markdown stays legacy Markdown: quotes and standalone links are not
+// guessed into callouts and bookmarks. Only the fixed article wrappers carry
+// those semantics.
+export type MarkdownToBlocksOptions = {
+  // Notion cannot fetch a local path. The migration caller must explicitly map
+  // an already-published local raster image to its public HTTPS URL; this pure
+  // converter neither uploads files nor fetches arbitrary remote resources.
+  imageUrl?: (localPath: string) => string | undefined;
+};
+
+type ReadContext = { options: MarkdownToBlocksOptions; depth: number };
+
+// asChildren enforces the API's much smaller creation depth. This ceiling
+// bounds parsing itself before a maliciously deep tree can exhaust the stack.
+const MAX_BLOCK_PARSE_DEPTH = 100;
+
+export function markdownToBlocks(
+  markdown: string,
+  options: MarkdownToBlocksOptions = {},
+): BlockObjectRequest[] {
+  return readBlocks(markdown.replace(/\r\n?/g, "\n").split("\n"), 0, { options, depth: 0 });
 }
 
 // A refusal used to quote the line it choked on, in full. That message is
@@ -218,7 +230,8 @@ function opensBlock(content: string, interrupting = false): boolean {
     FENCE.test(content) ||
     HEADING.test(content) ||
     THEMATIC_BREAK.test(content) ||
-    content.startsWith(">")
+    content.startsWith(">") ||
+    isArticleBoundary(content)
   ) {
     return true;
   }
@@ -238,7 +251,7 @@ function opensBlock(content: string, interrupting = false): boolean {
 // list item's contents are read from a slice, so without it every refusal
 // inside one would name a line number counted from the wrong place — and a line
 // number is now the only thing a refusal says about where it is.
-function readBlocks(lines: string[], offset = 0): BlockObjectRequest[] {
+function readBlocks(lines: string[], offset: number, context: ReadContext): BlockObjectRequest[] {
   const blocks: BlockObjectRequest[] = [];
   let index = 0;
 
@@ -248,7 +261,7 @@ function readBlocks(lines: string[], offset = 0): BlockObjectRequest[] {
       continue;
     }
 
-    const read = readBlock(lines, index, offset);
+    const read = readBlock(lines, index, offset, context);
     blockLines.set(read.block, offset + index);
     blocks.push(read.block);
     index = read.next;
@@ -261,6 +274,7 @@ function readBlock(
   lines: string[],
   index: number,
   offset: number,
+  context: ReadContext,
 ): { block: BlockObjectRequest; next: number } {
   const line = lines[index];
   const { width, content } = measureIndent(line);
@@ -272,8 +286,17 @@ function readBlock(
     );
   }
 
+  if (context.depth > MAX_BLOCK_PARSE_DEPTH) {
+    throw unsupported("a block nested three levels deep, which Notion's api cannot create in one request", offset + index);
+  }
+
   const fence = FENCE.exec(content);
   if (fence) return readCode(lines, index, offset, fence[1], fence[2]);
+
+  if (isArticleBoundary(content)) return readArticle(lines, index, offset, context);
+  if (content.startsWith("![") && context.options.imageUrl) {
+    return { block: readImage(content, offset + index, context), next: index + 1 };
+  }
 
   const heading = HEADING.exec(content);
   if (heading) {
@@ -306,16 +329,142 @@ function readBlock(
     };
   }
 
-  if (content.startsWith(">")) return readQuote(lines, index, offset);
+  if (content.startsWith(">")) return readQuote(lines, index, offset, context);
 
   const columns = tableWidthAt(lines, index);
   if (columns !== undefined) return readTable(lines, index, offset, columns);
 
   if (BULLET.test(content) || ORDERED.test(content)) {
-    return readListItem(lines, index, offset);
+    return readListItem(lines, index, offset, context);
   }
 
   return readParagraph(lines, index, offset);
+}
+
+function readImage(
+  source: string,
+  index: number,
+  context: ReadContext,
+): Extract<BlockObjectRequest, { image: unknown }> {
+  const refuse = (): never => {
+    throw unsupported("an image without an explicit local raster image URL resolver", index);
+  };
+  if (!source.startsWith("![")) return refuse();
+  const { label, url: localPath } = articleResource(source.slice(1), index + 1, refuse);
+  if (!localRasterPath(localPath)) return refuse();
+  const url = context.options.imageUrl?.(localPath);
+  if (!url || !httpsRasterUrl(url)) return refuse();
+  return {
+    object: "block",
+    type: "image",
+    image: { type: "external", external: { url }, caption: label },
+  };
+}
+
+function readArticle(
+  lines: string[],
+  index: number,
+  offset: number,
+  context: ReadContext,
+): { block: BlockObjectRequest; next: number } {
+  const refuse = (at = index): never => {
+    throw unsupported("an unsupported article component, attribute, or child structure", offset + at);
+  };
+  const { name, attributes } = parseArticleOpening(measureIndent(lines[index]).content, () => refuse());
+  let scan = index + 1;
+  const contentAtCursor = () => {
+    const { width, content } = measureIndent(lines[scan] ?? "");
+    if (width >= 4) return refuse(scan);
+    return content;
+  };
+  const skipBlank = () => {
+    while (scan < lines.length && isBlank(lines[scan])) scan += 1;
+  };
+  const blankSeparator = () => {
+    if (scan >= lines.length || !isBlank(lines[scan])) refuse(scan);
+    skipBlank();
+  };
+  blankSeparator();
+
+  const readInline = (tag: "ArticleSummary" | "ArticleCaption"): RichTextInput => {
+    const text = contentAtCursor();
+    const open = `<${tag}>`;
+    const close = `</${tag}>`;
+    if (!text.startsWith(open) || !text.endsWith(close)) return refuse(scan);
+    const rich = inlineToRichText(text.slice(open.length, -close.length), {
+      line: offset + scan + 1,
+    });
+    scan += 1;
+    blankSeparator();
+    return rich;
+  };
+
+  const close = `</${name}>`;
+  const finish = (block: BlockObjectRequest) => {
+    if (contentAtCursor() !== close) return refuse(scan);
+    return { block, next: scan + 1 };
+  };
+
+  if (name === "ArticleCode") {
+    const caption = readInline("ArticleCaption");
+    const fence = FENCE.exec(contentAtCursor());
+    if (!fence) return refuse(scan);
+    const result = readCode(lines, scan, offset, fence[1], fence[2]);
+    const code = result.block as CodeBlockRequest;
+    code.code.caption = caption;
+    scan = result.next;
+    blankSeparator();
+    return finish(code);
+  }
+
+  if (name === "ArticleFigure") {
+    const image = readImage(contentAtCursor(), offset + scan, context);
+    scan += 1;
+    blankSeparator();
+    image.image.caption = readInline("ArticleCaption");
+    return finish(image);
+  }
+
+  if (name === "ArticleReference") {
+    const { label, url } = articleResource(
+      contentAtCursor(),
+      offset + scan + 1,
+      () => refuse(scan),
+    );
+    scan += 1;
+    blankSeparator();
+    return finish({ object: "block", type: "bookmark", bookmark: { url, caption: label } });
+  }
+
+  const summary = name === "ArticleToggle" ? readInline("ArticleSummary") : undefined;
+  const blocks: BlockObjectRequest[] = [];
+  while (scan < lines.length && contentAtCursor() !== close) {
+    const result = readBlock(lines, scan, offset, { ...context, depth: context.depth + 1 });
+    blockLines.set(result.block, offset + scan);
+    blocks.push(result.block);
+    scan = result.next;
+    skipBlank();
+  }
+
+  const lead = blocks[0];
+  const own = name === "ArticleCallout" && lead?.type === "paragraph"
+    ? (blocks.shift() as Extract<BlockObjectRequest, { paragraph: unknown }>).paragraph.rich_text
+    : [];
+  const children = blocks.length > 0 ? { children: asChildren(blocks, offset + index) } : {};
+  if (name === "ArticleToggle") {
+    return finish({ object: "block", type: "toggle", toggle: { rich_text: summary!, ...children } });
+  }
+  const color = calloutColor(attributes.color);
+  return finish({
+    object: "block",
+    type: "callout",
+    callout: {
+      rich_text: own,
+      ...(attributes.icon ? { icon: { type: "emoji", emoji: attributes.icon } } : {}),
+      ...(color ? { color } : attributes.tone === "warning" ? { color: "yellow_background" } : {}),
+      ...children,
+    },
+  });
 }
 
 // CommonMark closes a fenced block on a line of the same character, at least as
@@ -430,6 +579,7 @@ function readQuote(
   lines: string[],
   index: number,
   offset: number,
+  context: ReadContext,
 ): { block: BlockObjectRequest; next: number } {
   const inner: string[] = [];
   let scan = index;
@@ -457,7 +607,7 @@ function readQuote(
   // blocks-to-md writes a quote's own text first and its children after, so the
   // paragraph it opens with is the text and the rest are the children.
   // One inner line per quoted line, so the slice starts where the quote does.
-  const blocks = readBlocks(inner, offset + index);
+  const blocks = readBlocks(inner, offset + index, { ...context, depth: context.depth + 1 });
   const lead = blocks[0];
   const opensWithParagraph = lead !== undefined && lead.type === "paragraph";
   const rich_text = opensWithParagraph
@@ -485,6 +635,7 @@ function readListItem(
   lines: string[],
   index: number,
   offset: number,
+  context: ReadContext,
 ): { block: BlockObjectRequest; next: number } {
   const line = lines[index];
   const { width, content } = measureIndent(line);
@@ -537,12 +688,14 @@ function readListItem(
 
   // The item's own text is the paragraph it opens with; anything after that is
   // a block of its own, nested inside it.
+  const opensChild = (content: string) =>
+    opensBlock(content) || (context.options.imageUrl !== undefined && content.startsWith("!["));
   let paragraphEnd = 0;
-  if (body.length > 0 && !opensBlock(measureIndent(body[0]).content)) {
+  if (body.length > 0 && !opensChild(measureIndent(body[0]).content)) {
     paragraphEnd = 1;
     while (paragraphEnd < body.length) {
       const candidate = measureIndent(body[paragraphEnd]);
-      if (isBlank(body[paragraphEnd]) || opensBlock(candidate.content)) break;
+      if (isBlank(body[paragraphEnd]) || opensChild(candidate.content)) break;
       paragraphEnd += 1;
     }
   }
@@ -554,6 +707,7 @@ function readListItem(
   const children = readBlocks(
     body.slice(paragraphEnd),
     bodyOffset + paragraphEnd,
+    { ...context, depth: context.depth + 1 },
   );
   const nested =
     children.length > 0

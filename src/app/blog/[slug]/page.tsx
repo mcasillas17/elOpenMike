@@ -1,13 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { compileMDX } from "next-mdx-remote/rsc";
-import remarkGfm from "remark-gfm";
-import rehypePrettyCode, {
-  type Options as PrettyCodeOptions,
-} from "rehype-pretty-code";
-import rehypeSlug from "rehype-slug";
-import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import { Container } from "@/components/ui/Container";
 import { Tag } from "@/components/ui/Tag";
 import {
@@ -17,16 +10,12 @@ import {
   getAdjacentPosts,
   getRelatedPosts,
 } from "@/lib/blog";
-import { mdxComponents } from "@/components/blog/mdx-components";
+import { compileArticle } from "@/lib/article";
+import { ArticleReader } from "@/components/blog/ArticleReader";
 import { PostNav } from "@/components/blog/PostNav";
 import { PostFooter } from "@/components/blog/PostFooter";
 import { ArticleJsonLd } from "@/components/seo/ArticleJsonLd";
 import { routes, alternatesFor } from "@/lib/site";
-
-const prettyCodeOptions: PrettyCodeOptions = {
-  theme: "github-dark",
-  keepBackground: true,
-};
 
 export const dynamicParams = false;
 
@@ -79,36 +68,7 @@ export default async function PostPage({
   const post = getPost(slug);
   if (!post) notFound();
 
-  const { content } = await compileMDX({
-    source: post.body,
-    components: mdxComponents,
-    options: {
-      mdxOptions: {
-        remarkPlugins: [remarkGfm],
-        rehypePlugins: [
-          rehypeSlug,
-          [
-            rehypeAutolinkHeadings,
-            {
-              behavior: "after",
-              group: {
-                type: "element",
-                tagName: "div",
-                properties: { className: ["heading-group"] },
-                children: [],
-              },
-              properties: {
-                className: ["heading-anchor"],
-                ariaLabel: "Link to this section",
-              },
-              content: { type: "text", value: "#" },
-            },
-          ],
-          [rehypePrettyCode, prettyCodeOptions],
-        ],
-      },
-    },
-  });
+  const { content, headings } = await compileArticle(post.body);
 
   const publishedLabel = dateLabel(post.meta.date);
   const updatedLabel =
@@ -118,7 +78,7 @@ export default async function PostPage({
 
   return (
     <Container className="py-16">
-      <div className="mx-auto max-w-3xl">
+      <div className={`mx-auto ${headings.length >= 4 ? "max-w-6xl" : "max-w-3xl"}`}>
         <ArticleJsonLd
           slug={slug}
           title={post.meta.title}
@@ -134,7 +94,7 @@ export default async function PostPage({
           ← Back to blog
         </Link>
         <article>
-          <header>
+          <header className="mb-12 max-w-3xl">
             <p className="mt-6 text-xs font-medium uppercase tracking-[0.2em] text-web-strong">
               Published {publishedLabel}
               {updatedLabel && <> · Updated {updatedLabel}</>}
@@ -160,9 +120,11 @@ export default async function PostPage({
               </div>
             )}
           </header>
-          <div className="blog-prose mt-10">{content}</div>
-          <PostFooter related={getRelatedPosts(slug)} />
-          <PostNav {...getAdjacentPosts(slug)} />
+          <ArticleReader headings={headings}>{content}</ArticleReader>
+          <div className="max-w-3xl">
+            <PostFooter related={getRelatedPosts(slug)} />
+            <PostNav {...getAdjacentPosts(slug)} />
+          </div>
         </article>
       </div>
     </Container>

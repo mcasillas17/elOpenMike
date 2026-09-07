@@ -9,7 +9,7 @@ export function About() {
       <div className="grid gap-8 sm:grid-cols-[1.4fr_1fr]">
         <div>
           {about.bio.map((p) => (
-            <p key={p} className="mb-4 text-muted last:mb-0">
+            <p key={p} className="mb-4 max-w-prose leading-relaxed text-muted last:mb-0">
               {p}
             </p>
           ))}
@@ -22,7 +22,7 @@ export function About() {
           )}
         </div>
 
-        <figure className="overflow-hidden rounded-2xl border border-edge bg-surface">
+        <figure className="mx-auto w-full max-w-xs overflow-hidden border-[3px] border-panel-border bg-surface shadow-panel-lg">
           {about.turing.images.length > 0 ? (
             <Carousel
               images={about.turing.images}

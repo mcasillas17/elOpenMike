@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import type { ReactElement } from "react";
 import { blocksToMarkdown, type BlocksToMarkdownContext } from "../blocks-to-md";
 import { block, rt } from "./fixtures/blocks";
+import { articleComponents } from "./fixtures/article-components";
 
 // A bookmark and a link preview are the two blocks that can emit text of their
 // own into the file without a marker in front of it. Everything else writes
@@ -37,6 +38,7 @@ const markdownFor = (
 async function renderMdx(markdown: string): Promise<HTMLElement> {
   const { content } = await compileMDX({
     source: markdown,
+    components: articleComponents,
     options: { mdxOptions: { remarkPlugins: [remarkGfm] } },
   });
   return render(content as ReactElement).container;

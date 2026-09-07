@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import type { Project } from "@/data/projects";
+import { projects } from "@/data/projects";
 
 const base: Project = {
   slug: "demo",
@@ -79,7 +80,7 @@ describe("ProjectCard", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Demo Project" })).toBeInTheDocument();
   });
 
-  it("omits the summary in the small variant", () => {
+  it("keeps a useful summary even in the small variant", () => {
     render(
       <ProjectCard
         project={base}
@@ -89,7 +90,25 @@ describe("ProjectCard", () => {
         headingLevel={3}
       />,
     );
-    expect(screen.queryByText("A short summary.")).toBeNull();
+    expect(screen.getByText("A short summary.")).toBeInTheDocument();
+  });
+
+  it("shows real product imagery on image-backed projects", () => {
+    render(
+      <ProjectCard project={projects[0]} index={0} variant="large" issueNumber="06" headingLevel={3} />,
+    );
+    expect(screen.getByRole("img", { name: /WebSnag/ })).toHaveAttribute(
+      "src", expect.stringContaining("websnag-dashboard"),
+    );
+  });
+
+  it("gives an architecture project a labelled flow preview", () => {
+    const project = projects.find((p) => p.slug === "turingagent")!;
+    render(<ProjectCard project={project} index={3} variant="feature" issueNumber="03" headingLevel={3} />);
+    const preview = screen.getByRole("img", { name: /TuringAgent.*architecture/i });
+    expect(preview).toHaveTextContent("Flutter");
+    expect(preview).toHaveTextContent("Go");
+    expect(preview).toHaveTextContent("MCP");
   });
 
   it("never renders Live demo or Source links on listing variants", () => {

@@ -74,6 +74,8 @@ for (const path of ["/", "/comedy", "/projects/light-master"]) {
     await page.goto(path);
     const play = page.getByRole("button", { name: /^Play:/ }).first();
     await expect(play).toBeVisible();
+    const watchLink = page.getByRole("link", { name: /^Watch on YouTube/ }).first();
+    await expect(watchLink).toHaveAttribute("href", /^https:\/\/www\.youtube\.com\/watch\?v=/);
     expect(requests).toEqual([]);
     expect(policy.violations).toEqual([]);
     expect(policy.cspErrors).toEqual([]);
@@ -85,7 +87,8 @@ for (const path of ["/", "/comedy", "/projects/light-master"]) {
       /^https:\/\/www\.youtube-nocookie\.com\/embed\//,
     );
     await expect(player).toHaveAttribute("loading", "lazy");
-    await expect(player).toHaveAttribute("referrerpolicy", "no-referrer");
+    await expect(player).toHaveAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    await expect(watchLink).toBeVisible();
     await expect
       .poll(() =>
         page

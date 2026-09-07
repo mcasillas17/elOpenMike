@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../components/blog/article.css";
 
 @theme {
   --color-canvas: #0b0e14;
@@ -45,9 +46,50 @@ html {
 
 body {
   background-color: var(--color-canvas);
-  background-image: radial-gradient(var(--color-surface) 1px, transparent 1.5px);
-  background-size: 11px 11px;
   color: var(--color-ink);
+}
+
+.comic-field {
+  background-image: radial-gradient(var(--color-edge) 0.7px, transparent 1px);
+  background-size: 11px 11px;
+}
+
+h1,
+h2 {
+  text-wrap: balance;
+}
+
+.text-link {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  color: var(--color-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--color-edge);
+  text-underline-offset: 5px;
+}
+
+.text-link:hover {
+  color: var(--color-ink);
+  text-decoration-color: var(--color-web-strong);
+}
+
+.text-link:focus-visible {
+  outline: 2px solid var(--color-web-strong);
+  outline-offset: 4px;
+}
+
+.career-details summary {
+  list-style: none;
+}
+
+.career-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.career-details[open] .career-toggle {
+  transform: rotate(45deg);
 }
 
 /* Offset for the sticky header when anchor-scrolling to a section. */
@@ -100,6 +142,12 @@ html.js .reveal.is-visible {
    larger screens without squeezing article headers and footers. */
 .blog-prose {
   max-width: 68ch;
+  font-size: 1.0625rem;
+}
+
+.blog-prose p,
+.blog-prose li {
+  color: var(--color-ink);
 }
 
 @media (min-width: 40rem) {

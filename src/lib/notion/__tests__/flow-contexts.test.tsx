@@ -6,6 +6,7 @@ import type { ReactElement } from "react";
 import { blocksToMarkdown, type BlocksToMarkdownContext } from "../blocks-to-md";
 import { block, rt } from "./fixtures/blocks";
 import type { MdBlock } from "../types";
+import { articleComponents } from "./fixtures/article-components";
 
 // Notion rich text carries the author's own line endings: shift+enter in a
 // heading, a pasted paragraph inside a list item, a caption typed over two
@@ -36,6 +37,7 @@ const ctx: BlocksToMarkdownContext = {
 async function renderMdx(markdown: string): Promise<HTMLElement> {
   const { content } = await compileMDX({
     source: markdown,
+    components: articleComponents,
     options: { mdxOptions: { remarkPlugins: [remarkGfm] } },
   });
   return render(content as ReactElement).container;
@@ -130,12 +132,12 @@ const CASES: Array<{
       block("callout", { rich_text, icon: { type: "emoji", emoji: "💡" } }),
     ],
     intact: (container) =>
-      expect(container.querySelector("blockquote")).not.toBeNull(),
+      expect(container.querySelector("aside")).not.toBeNull(),
   },
   {
     name: "toggle",
     make: (rich_text) => [block("toggle", { rich_text })],
-    intact: (container) => expect(container.querySelector("p")).not.toBeNull(),
+    intact: (container) => expect(container.querySelector("details summary")).not.toBeNull(),
   },
   {
     name: "table cell",

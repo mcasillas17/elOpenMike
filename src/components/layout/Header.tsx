@@ -36,7 +36,7 @@ export function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[#171c28]/80 bg-canvas/80 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-edge bg-canvas/95">
       <Container className="flex h-16 items-center justify-between">
         <Link
           href={routes.home}
@@ -47,7 +47,7 @@ export function Header() {
         </Link>
 
         <nav aria-label="Site navigation" className="flex items-center gap-6">
-          <ul className="hidden items-center gap-6 sm:flex">
+          <ul className="hidden items-center gap-4 lg:flex">
             {site.nav.map((item) => {
               const state = navState(item.href);
               return (
@@ -55,7 +55,9 @@ export function Header() {
                   <Link
                     href={item.href}
                     aria-current={state.current ? "page" : undefined}
-                    className={`inline-flex min-h-11 items-center rounded px-1 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web ${
+                    className={`inline-flex min-h-11 items-center rounded text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web ${
+                      item.href === "/#contact" ? "border border-edge px-3 hover:border-web" : "px-1"
+                    } ${
                       state.active
                         ? "text-web-strong"
                         : "text-muted hover:text-ink"
@@ -73,7 +75,7 @@ export function Header() {
             aria-expanded={open}
             aria-controls="mobile-nav"
             onClick={() => setOpen((o) => !o)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-edge text-ink sm:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded border border-edge text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web lg:hidden"
           >
             <span aria-hidden="true">{open ? "✕" : "☰"}</span>
           </button>
@@ -81,9 +83,9 @@ export function Header() {
       </Container>
 
       {open && (
-        <div id="mobile-nav" className="sm:hidden border-t border-edge bg-canvas">
-          <Container className="py-3">
-            <ul className="flex flex-col gap-1">
+        <div id="mobile-nav" className="absolute inset-x-0 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-edge bg-canvas shadow-xl lg:hidden">
+          <Container className="py-4">
+            <ul className="flex flex-col divide-y divide-edge">
               {site.nav.map((item) => {
                 const state = navState(item.href);
                 return (
@@ -92,13 +94,14 @@ export function Header() {
                       href={item.href}
                       aria-current={state.current ? "page" : undefined}
                       onClick={() => setOpen(false)}
-                      className={`flex min-h-11 items-center rounded-lg px-2 text-sm ${
+                      className={`flex min-h-11 items-center justify-between gap-4 py-3 font-display text-base font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-web ${
                         state.active
                           ? "bg-surface text-web-strong"
                           : "text-muted hover:bg-surface hover:text-ink"
                       }`}
                     >
                       {item.label}
+                      <span aria-hidden="true" className="text-web-strong">↗</span>
                     </Link>
                   </li>
                 );

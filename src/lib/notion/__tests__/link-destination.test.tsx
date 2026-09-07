@@ -4,6 +4,7 @@ import { compileMDX } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 import type { ReactElement } from "react";
 import { blocksToMarkdown, type BlocksToMarkdownContext } from "../blocks-to-md";
+import { articleComponents } from "./fixtures/article-components";
 import { markdownDestination } from "../link-destination";
 import { block, rt } from "./fixtures/blocks";
 
@@ -23,6 +24,7 @@ const ctx: BlocksToMarkdownContext = {
 async function renderMdx(markdown: string): Promise<HTMLElement> {
   const { content } = await compileMDX({
     source: markdown,
+    components: articleComponents,
     options: { mdxOptions: { remarkPlugins: [remarkGfm] } },
   });
   return render(content as ReactElement).container;

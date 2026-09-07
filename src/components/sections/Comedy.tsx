@@ -8,12 +8,17 @@ export function Comedy() {
   const featured = clips[0];
   return (
     <Section id="comedy" eyebrow="Comedy" title="Stand-up">
-      <p className="max-w-xl text-muted">
-        Builder by day, open-mic by night. A recent set:
+      <p className="max-w-xl leading-relaxed text-muted">
+        Away from the keyboard, I write jokes and take them to the mic.
+        Here&rsquo;s a featured set from Seattle.
       </p>
       {featured && (
         <div className="mt-6 max-w-2xl">
-          <YouTubeEmbed youtubeId={featured.youtubeId} title={featured.title} />
+          <YouTubeEmbed
+            youtubeId={featured.youtubeId}
+            title={featured.title}
+            posterSrc={featured.posterSrc}
+          />
         </div>
       )}
       <div className="mt-8">
