@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import ProjectDetailPage, {
   generateStaticParams,
   generateMetadata,
@@ -101,6 +101,21 @@ describe("/projects/[slug] detail page", () => {
     });
     expect(meta.title).toBe(sample.title);
     expect(meta.description).toBe(sample.summary);
+  });
+
+  it("continues browsing within the current project collection", async () => {
+    render(await ProjectDetailPage({ params: Promise.resolve({ slug: "scorearc" }) }));
+    const navigation = screen.getByRole("navigation", { name: "More projects" });
+    expect(within(navigation).getByRole("link", { name: /previous project.*Watchslinger/i })).toHaveAttribute("href", "/projects/watchslinger");
+    expect(within(navigation).getByRole("link", { name: /next project.*WallCrawl/i })).toHaveAttribute("href", "/projects/wallcrawl");
+    expect(within(navigation).getByRole("link", { name: /back to products/i })).toHaveAttribute("href", "/projects#products");
+  });
+
+  it("does not wrap the last product into another category", async () => {
+    render(await ProjectDetailPage({ params: Promise.resolve({ slug: "turingcare" }) }));
+    const navigation = screen.getByRole("navigation", { name: "More projects" });
+    expect(within(navigation).queryByRole("link", { name: /next project/i })).not.toBeInTheDocument();
+    expect(within(navigation).getByRole("link", { name: /previous project.*TuringAgent/i })).toBeInTheDocument();
   });
 
   it("calls notFound for an unknown slug (throws)", async () => {

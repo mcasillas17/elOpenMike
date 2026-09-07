@@ -1,5 +1,6 @@
 import type { PostFrontmatter } from "./types";
 import { isValidDate } from "./validate";
+import { readProjectReferences } from "../project-references";
 
 // Frontmatter key order is fixed so identical content always serializes to
 // identical bytes — a prerequisite for the sync being idempotent (spec §7).
@@ -30,11 +31,16 @@ function quote(value: string): string {
 const OTHER_LINE_ENDINGS = /\r\n|\r/g;
 
 export function serializePost(fm: PostFrontmatter, body: string): string {
+  const projects = readProjectReferences(fm.projects);
+  if (!projects.ok) throw new Error(projects.error);
   const lines = KEY_ORDER.map((key) =>
     key === "tags"
       ? `tags: [${fm.tags.map(quote).join(", ")}]`
       : `${key}: ${quote(fm[key])}`,
   );
+  if (projects.projects.length > 0) {
+    lines.push(`projects: [${projects.projects.map(quote).join(", ")}]`);
+  }
   const normalizedBody = body.replace(OTHER_LINE_ENDINGS, "\n").replace(/\n+$/, "");
   return `---\n${lines.join("\n")}\n---\n\n${normalizedBody}\n`;
 }

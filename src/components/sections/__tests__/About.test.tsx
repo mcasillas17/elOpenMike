@@ -14,4 +14,14 @@ describe("About", () => {
       expect(screen.getByText(f)).toBeInTheDocument();
     }
   });
+
+  it("connects the person, interests, and work without invented facts", () => {
+    render(<About />);
+    expect(screen.getByText("Redmond, WA")).toBeInTheDocument();
+    expect(screen.getByText("Computer Engineering, ITAM")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Football" })).toHaveAttribute("href", "/projects/scorearc");
+    expect(screen.getByRole("link", { name: "AI agents" })).toHaveAttribute("href", "/projects/turingagent");
+    expect(decodeURIComponent(screen.getByRole("img", { name: /Miguel performing stand-up/ }).getAttribute("src") ?? "")).toContain("/images/comedy/");
+    expect(screen.getByRole("link", { name: /watch stand-up/i })).toHaveAttribute("href", "/comedy");
+  });
 });

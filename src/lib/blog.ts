@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
+import { readProjectReferences } from "./project-references";
 
 export type PostMeta = {
   slug: string;
@@ -10,6 +11,7 @@ export type PostMeta = {
   tags: string[];
   readingMinutes: number;
   updated?: string; // ISO; absent on posts that have never been revised
+  projects?: string[]; // canonical project slugs explicitly selected by the author
 };
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
@@ -35,6 +37,10 @@ export function getPost(
   if (!file.startsWith(BLOG_DIR + path.sep)) return undefined;
   if (!fs.existsSync(file)) return undefined;
   const { data, content } = matter(fs.readFileSync(file, "utf8"));
+  const references = readProjectReferences(data.projects);
+  if (!references.ok) {
+    throw new Error(`Invalid project references in blog metadata: ${references.error}`);
+  }
   const meta: PostMeta = {
     slug,
     title: String(data.title ?? slug),
@@ -43,6 +49,7 @@ export function getPost(
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
     updated: data.updated ? String(data.updated) : undefined,
     readingMinutes: readingMinutes(content),
+    ...(references.projects.length > 0 ? { projects: references.projects } : {}),
   };
   return { meta, body: content };
 }
@@ -93,6 +100,10 @@ export function getAllTags(): { name: string; slug: string; count: number }[] {
 
 export function getPostsByTag(slug: string): PostMeta[] {
   return getAllPosts().filter((post) => post.tags.map(tagSlug).includes(slug));
+}
+
+export function getPostsForProject(slug: string): PostMeta[] {
+  return getAllPosts().filter((post) => post.projects?.includes(slug));
 }
 
 export function getRelatedPosts(slug: string, limit = 3): PostMeta[] {

@@ -59,6 +59,18 @@ an entire image visible on cards and in the detail carousel, as with ScoreArc's
 World Cup bracket. Optional `mediaCredit` links provide screenshot provenance
 and artwork attribution; local media credits live in
 [`public/images/projects/CREDITS.md`](public/images/projects/CREDITS.md).
+
+Cards keep their project-detail destination and expose a separate **Try it live**
+action only when a `liveUrl` exists. Detail pages offer previous/next projects
+within the same category and a link back to that collection; they do not wrap
+into an unrelated category at the ends.
+
+The About section connects existing interests to projects and pairs Turing's
+photos with an existing stand-up image. Career roles are grouped under their
+employer, preserving the individual role dates and expandable details. Contact
+shows the canonical `site.email` address with a copy action, explicit success or
+manual-copy recovery, and the existing email/resume links. Interactive feedback
+respects reduced motion and never scales or crops the project imagery.
 Entries without original product imagery use explicitly labelled conceptual
 previews. Watchslinger credits its Watchy foundation; community watchface art is
 not presented as an original screenshot.
@@ -96,6 +108,13 @@ For a local, non-published specimen of the rich article pipeline, run
 `ARTICLE_PREVIEW=1 pnpm dev` and visit `/preview/article`. The route is disabled
 unless explicitly enabled and is excluded from the blog, RSS, and sitemap.
 See [`docs/authoring.md`](docs/authoring.md) for the native Notion authoring rules.
+
+An optional Notion **Projects** multi-select connects writing to the public
+project catalog. It accepts project titles or slugs and stores canonical slugs
+in optional `projects` frontmatter. Articles link to the selected projects;
+project pages show explicitly linked stories, newest first. No relationship is
+inferred from a topic tag, and empty sections are omitted. Existing posts without
+this property keep their prior publishing behavior and serialized format.
 
 Article routes intentionally have no inherited `loading.tsx` boundary. With the
 async MDX compiler, a root loading boundary put even prerendered article bodies in

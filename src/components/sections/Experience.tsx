@@ -3,15 +3,15 @@ import { site } from "@/lib/site";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 
-function RoleHeading({ role }: { role: Role }) {
+function RoleHeading({ role, companyLocation }: { role: Role; companyLocation?: string }) {
   return (
     <div className="flex flex-1 flex-wrap items-baseline justify-between gap-x-5 gap-y-2">
-      <h3 className="font-display text-lg font-bold">
-        {role.title}<span className="font-medium text-muted"> · <span>{role.company}</span></span>
+      <h4 className="font-display text-lg font-bold">
+        {role.title}
         <span className="mt-1 block text-base font-medium text-web-strong">{role.focus}</span>
-      </h3>
+      </h4>
       <span className="text-sm text-muted">
-        {role.start} – {role.end}{role.location ? ` · ${role.location}` : ""}
+        {role.start} – {role.end}{role.location && role.location !== companyLocation ? ` · ${role.location}` : ""}
       </span>
     </div>
   );
@@ -31,29 +31,53 @@ function RoleDetails({ role }: { role: Role }) {
 }
 
 export function Experience() {
-  const [current, ...previous] = experience;
+  const employers: { company: string; roles: Role[] }[] = [];
+  for (const role of experience) {
+    const previous = employers.at(-1);
+    if (previous?.company === role.company) previous.roles.push(role);
+    else employers.push({ company: role.company, roles: [role] });
+  }
   return (
     <Section id="experience" eyebrow="Career" title="Experience">
       <p className="mb-7 max-w-xl leading-relaxed text-muted">
         Platform work at Microsoft, from telemetry SDKs and scheduling to
         AI-powered messaging.
       </p>
-      {current && (
-        <div className="border border-edge bg-surface/60 p-5 sm:p-7">
-          <RoleHeading role={current} />
-          <RoleDetails role={current} />
-        </div>
-      )}
-      <div className="mt-5 divide-y divide-edge border-y border-edge">
-        {previous.map((role) => (
-          <details key={`${role.company}-${role.start}`} className="career-details py-5">
-            <summary className="flex min-h-11 cursor-pointer items-center gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-web">
-              <RoleHeading role={role} />
-              <span aria-hidden="true" className="career-toggle shrink-0 text-2xl text-web-strong motion-safe:transition-transform">+</span>
-            </summary>
-            <RoleDetails role={role} />
-          </details>
-        ))}
+      <div className="space-y-10">
+        {employers.map((employer) => {
+          const latest = employer.roles[0];
+          const earliest = employer.roles[employer.roles.length - 1];
+          const featured = latest === experience[0] ? latest : undefined;
+          const previous = employer.roles.filter((role) => role !== featured);
+          return (
+            <div key={`${employer.company}-${latest.start}`}>
+              <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
+                <h3 className="font-display text-2xl font-extrabold">{employer.company}</h3>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+                  <span>{earliest.start} – {latest.end}</span>
+                  {latest.location && <span>{latest.location}</span>}
+                </div>
+              </div>
+              {featured && (
+                <div className="border border-edge bg-surface/60 p-5 sm:p-7">
+                  <RoleHeading role={featured} companyLocation={latest.location} />
+                  <RoleDetails role={featured} />
+                </div>
+              )}
+              <div className="mt-5 divide-y divide-edge border-y border-edge">
+                {previous.map((role) => (
+                  <details key={`${role.title}-${role.start}`} className="career-details py-5">
+                    <summary className="flex min-h-11 cursor-pointer items-center gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-web">
+                      <RoleHeading role={role} companyLocation={latest.location} />
+                      <span aria-hidden="true" className="career-toggle shrink-0 text-2xl text-web-strong motion-safe:transition-transform">+</span>
+                    </summary>
+                    <RoleDetails role={role} />
+                  </details>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div className="mt-7">
         <Button href={site.resumeHref} download variant="secondary">

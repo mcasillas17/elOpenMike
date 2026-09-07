@@ -80,6 +80,55 @@ h2 {
   outline-offset: 4px;
 }
 
+.project-navigation-link {
+  display: flex;
+  min-height: 100px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.25rem;
+  border: 1px solid var(--color-edge);
+  background: var(--color-surface);
+}
+
+.project-navigation-link:hover {
+  border-color: var(--color-web-strong);
+}
+
+.project-navigation-link:focus-visible {
+  outline: 2px solid var(--color-web-strong);
+  outline-offset: 4px;
+}
+
+html:not(.js) .js-only {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pressable,
+  .project-card,
+  .project-navigation-link {
+    transition: transform 160ms ease-out, border-color 160ms ease-out, background-color 160ms ease-out;
+  }
+  .pressable:active:not(:disabled),
+  .project-card:active,
+  .project-navigation-link:active {
+    transform: translateY(1px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .pressable:hover:not(:disabled),
+  .project-card:hover,
+  .project-navigation-link:hover {
+    transform: translateY(-2px);
+  }
+  .pressable:active:not(:disabled),
+  .project-card:active,
+  .project-navigation-link:active {
+    transform: translateY(1px);
+  }
+}
+
 .career-details summary {
   list-style: none;
 }

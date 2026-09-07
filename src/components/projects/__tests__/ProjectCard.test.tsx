@@ -128,7 +128,7 @@ describe("ProjectCard", () => {
     expect(preview).toHaveTextContent("MCP");
   });
 
-  it("never renders Live demo or Source links on listing variants", () => {
+  it("offers an independent live destination without exposing the source action on cards", () => {
     render(
       <ProjectCard
         project={base}
@@ -138,10 +138,20 @@ describe("ProjectCard", () => {
         headingLevel={3}
       />,
     );
-    expect(screen.queryByRole("link", { name: /live demo/i })).toBeNull();
+    const live = screen.getByRole("link", { name: /try it live.*Demo Project/i });
+    expect(live).toHaveAttribute("href", base.liveUrl);
+    expect(live).toHaveAttribute("target", "_blank");
+    expect(live).toHaveAttribute("rel", "noopener noreferrer");
+    expect(live.closest("h3")).toBeNull();
+    expect(screen.getByRole("link", { name: "Demo Project" })).toHaveAttribute("href", "/projects/demo");
     expect(
       screen.queryByRole("link", { name: /^source$/i }),
     ).toBeNull();
+  });
+
+  it("does not invent a live destination for source-only projects", () => {
+    render(<ProjectCard project={{ ...base, liveUrl: undefined }} index={0} variant="uniform" issueNumber="01" headingLevel={3} />);
+    expect(screen.queryByRole("link", { name: /try it live/i })).not.toBeInTheDocument();
   });
 
   it("never renders tag pills on listing variants", () => {

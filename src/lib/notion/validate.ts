@@ -1,5 +1,6 @@
 import type { PostFrontmatter } from "./types";
 import { isValidSlug, slugFilenameProblems, slugify } from "./slug";
+import { readProjectReferences } from "../project-references";
 
 export type ValidatablePost = {
   // Notion's own id for the page this post came off. Opaque, stable, and the
@@ -45,6 +46,7 @@ export type PostMetadata = {
   excerpt: unknown;
   tags: unknown;
   updated?: unknown;
+  projects?: unknown;
 };
 
 // Nothing below ever repeats a value.
@@ -156,6 +158,8 @@ export function metadataProblems(meta: PostMetadata): string[] {
   }
 
   problems.push(...tagProblems(meta.tags));
+  const projects = readProjectReferences(meta.projects);
+  if (!projects.ok) problems.push(projects.error);
 
   return problems;
 }
@@ -335,6 +339,7 @@ export type MigratablePost = PostMetadata & {
   rawExcerpt?: { value: unknown };
   rawDate?: { value: unknown };
   rawUpdated?: { value: unknown };
+  rawProjects?: { value: unknown };
 };
 
 function localTagInput(post: MigratablePost): unknown {
@@ -384,6 +389,7 @@ export function validateLocalPosts(posts: readonly MigratablePost[]): string[] {
           ? {}
           : { updated: authoredDateInput(post.rawUpdated, post.updated) }),
         tags: localTagInput(post),
+        projects: authoredInput(post.rawProjects, post.projects),
       }).map(at),
     );
     if (post.content.trim() === "") errors.push(at("body is empty"));

@@ -6,7 +6,7 @@ export type NotionBlock = { id: string; type: string; has_children?: boolean; [k
 // Children are resolved after the initial pass so every block can form a stable in-memory tree.
 export type MdBlock = NotionBlock & { children: MdBlock[] };
 // YYYY-MM-DD keeps dates sortable and safe to serialize in frontmatter.
-export type PostFrontmatter = { title: string; date: string; excerpt: string; tags: string[]; updated: string; };
+export type PostFrontmatter = { title: string; date: string; excerpt: string; tags: string[]; updated: string; projects?: string[]; };
 // Published source metadata is the canonical package emitted for MDX generation.
 export type PostSource = { pageId: string; slug: string; frontmatter: PostFrontmatter; blocks: MdBlock[]; };
 // One post that could not be published this run. Every stage that can drop a

@@ -1,7 +1,12 @@
 import type { PageObject } from "./client";
 import { describeOffSite, offSiteState } from "./archived";
 import { isPartialBlockError } from "./block-shape";
-import { isPublished, pageSlug, toPostSource } from "./fetch-post";
+import {
+  InvalidProjectsError,
+  isPublished,
+  pageSlug,
+  toPostSource,
+} from "./fetch-post";
 import { mapWithConcurrency, MAX_CONCURRENT_REQUESTS } from "./pool";
 import type { MdBlock, PostFailure, PostSource } from "./types";
 
@@ -132,9 +137,15 @@ export async function collectSources(
       }
 
       const verdict = revalidatePage(page, after);
-      return verdict.ok
-        ? { ok: true, source: toPostSource(page, blocks) }
-        : { ok: false, failure: failureFor(page, verdict.message) };
+      if (!verdict.ok) {
+        return { ok: false, failure: failureFor(page, verdict.message) };
+      }
+      try {
+        return { ok: true, source: toPostSource(page, blocks) };
+      } catch (error: unknown) {
+        if (!(error instanceof InvalidProjectsError)) throw error;
+        return { ok: false, failure: failureFor(page, error.message) };
+      }
     },
     limit,
   );
