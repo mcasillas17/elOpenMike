@@ -12,11 +12,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Miguel Casillas — Software Engineer",
+    default: site.title,
     template: "%s — Miguel Casillas",
   },
-  description:
-    "Software Engineer, builder, and stand-up comedian. Experience, projects, and the occasional joke.",
+  description: site.description,
   alternates: {
     types: {
       "application/rss+xml": [
@@ -25,14 +24,14 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "Miguel Casillas — Software Engineer",
-    description: "Software Engineer, builder, and stand-up comedian.",
+    title: site.title,
+    description: site.description,
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Miguel Casillas — Software Engineer",
-    description: "Software Engineer, builder, and stand-up comedian.",
+    title: site.title,
+    description: site.description,
   },
 };
 

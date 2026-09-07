@@ -1,5 +1,6 @@
 import { renderOgImage, ogSize, ogContentType } from "@/lib/og";
-import { getAllPosts, getPostSlugs } from "@/lib/blog";
+import { getPost, getPostSlugs } from "@/lib/blog";
+import { notFound } from "next/navigation";
 
 export const alt = "elOpenMike blog post";
 export const size = ogSize;
@@ -16,6 +17,7 @@ export default async function Image({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const title = getAllPosts().find((p) => p.slug === slug)?.title;
-  return renderOgImage({ title, caption: "elOpenMike — the blog" });
+  const post = getPost(slug);
+  if (!post) notFound();
+  return renderOgImage({ title: post.meta.title, caption: post.meta.excerpt, label: "Article" });
 }

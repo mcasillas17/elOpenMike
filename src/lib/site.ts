@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 export type NavItem = { label: string; href: string };
 
 // Absolute origin used for canonical URLs, sitemap/robots, JSON-LD, and the
@@ -41,6 +43,25 @@ export function alternatesFor(canonical: string) {
   };
 }
 
+// Social fields do not inherit a page's document title/description. Keep them
+// together; file-based OG routes supply images (including Twitter's fallback).
+export function metadataFor(path: string, title: string, description: string) {
+  return {
+    title,
+    description,
+    alternates: alternatesFor(path),
+    openGraph: {
+      title,
+      description,
+      url: absoluteUrl(path),
+      siteName: "elOpenMike",
+      locale: "en_US",
+      type: "website",
+    },
+    twitter: { card: "summary_large_image", title, description },
+  } satisfies Metadata;
+}
+
 const recruitingEmailSubject =
   "Senior backend, platform, or AI-infrastructure opportunity";
 const email = "micasillm@gmail.com";
@@ -48,6 +69,9 @@ const recruitingEmailHref = `mailto:${email}?subject=${encodeURIComponent(recrui
 
 export const site = {
   name: "Miguel Casillas",
+  title: "Miguel Casillas — Software Engineer",
+  description:
+    "Software Engineer, builder, and stand-up comedian. Experience, projects, and the occasional joke.",
   firstName: "Miguel",
   lastName: "Casillas",
   role: "Software Engineer II",

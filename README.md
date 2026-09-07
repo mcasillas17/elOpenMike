@@ -35,6 +35,36 @@ are optional; the site builds and runs without any of them.
   client-side token). Forwarded to the Docker build via `fly.toml` →
   `[build.args]` so Next bakes it into the client bundle. Unset = analytics off.
 
+## Link previews
+
+Sharing a public page URL exposes a branded card through Open Graph and Twitter
+metadata. The homepage, project and blog archives, individual projects and
+articles, topic archives, and comedy page each have their own preview image.
+Project cards use the project's title and summary; article cards use the
+published title and excerpt, with publication/update dates in the metadata.
+No share button, image service, API key, or change to Notion authoring is needed.
+
+`metadataFor` in `src/lib/site.ts` keeps the document and social text together,
+including the canonical URL and RSS discovery link. Canonicals belong on pages,
+not the root layout, so error pages do not inherit the homepage's canonical.
+Use this helper when adding a public page, alongside a colocated
+`opengraph-image.tsx` if it needs its own image. Next's file-based metadata
+supplies the image URL, dimensions, format, alt text, and Twitter image fallback.
+
+`src/lib/og.tsx` renders 1200x630 PNGs using the local Sora fonts and the site's
+red/blue branding. Images are generated during the production build and served
+by the standalone artifact. Long card text is shortened/clamped without
+shortening the page's metadata. The image tests enforce a 300 KiB budget (our
+own delivery budget, not a documented WhatsApp limit). Unknown content-image
+URLs return 404.
+
+After changing content or card styling, rebuild and deploy before sharing the
+public URL at `SITE_URL`. `pnpm e2e e2e/sharing.spec.ts` exercises the local
+standalone build in a browser with a WhatsApp user agent and JavaScript disabled,
+then fetches the advertised image paths. This verifies crawler-visible HTML and
+PNG delivery, not the WhatsApp app itself; confirm a fresh share of the deployed
+URL in WhatsApp before treating an in-app preview problem as resolved.
+
 ## Portfolio presentation
 
 The homepage leads with selected work, followed by career history, engineering
