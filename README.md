@@ -26,6 +26,66 @@ exactly as the `Dockerfile` does. (`next start` does not work under
 `output: "standalone"` and says so.) It builds first if there is nothing to
 serve, so `pnpm e2e` works from a clean checkout.
 
+## Pre-merge website checks
+
+`.github/workflows/deploy.yml` runs **CI & Deploy** for every pull request
+targeting `main`, pushes to `main`, and merge-queue candidates. There are no
+path filters: content-only and workflow-only PRs receive the same checks.
+Fork PRs use `pull_request`, read-only repository permissions, and no deployment
+or Notion secrets; GitHub may require maintainer approval before a fork's run.
+
+| Check | Coverage |
+| --- | --- |
+| **Production website** | Full ESLint, full Vitest unit/component/integration suite (including local/mocked Notion sync), resume PDF verification, production build with TypeScript checking, and the full Chromium Playwright suite against that same standalone build. |
+| **Rich article specimen** | A separate `ARTICLE_PREVIEW=1` build and the rich-article and visitor-flow browser suites, including all eight opt-in reader/project-link cases. |
+| **Website checks** | Stable aggregate gate; succeeds only when both verification jobs succeed. Failure, cancellation, or a skipped dependency fails the gate. |
+
+Browser coverage includes blog archives, articles, tags, RSS, navigation, code
+copying, sharing metadata and generated PNGs, projects, portfolio, accessibility,
+CSP, visitor interactions, no-JavaScript behavior, and standalone assets. The
+production run also checks that `/preview/article` returns 404. The specimen
+run covers desktop/mobile reading guides, progress, comparisons, image zoom,
+native disclosures, publishing exclusion, and project links. It enables the
+flag at **build time and runner time** and never supplies deployment artifacts.
+Browser failures retain HTML reports, traces, and screenshots as
+`playwright-production` or `playwright-rich_articles` artifacts for seven days.
+
+Run the same commands locally with Node 24 and the pnpm version in
+`package.json`:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm test
+pnpm resume:verify
+ARTICLE_PREVIEW=0 pnpm run build
+pnpm exec playwright install --with-deps chromium
+CI=true ARTICLE_PREVIEW=0 pnpm e2e
+
+# A different build mode: rebuild before running the opt-in suites.
+ARTICLE_PREVIEW=1 pnpm run build
+CI=true ARTICLE_PREVIEW=1 pnpm e2e e2e/rich-articles.spec.ts e2e/visitor-flow.spec.ts
+```
+
+`CI=true` prevents reusing another server and enables the CI reports. Use
+`E2E_PORT` if port 3000 is occupied. Rebuild with `ARTICLE_PREVIEW=0` before
+returning to the normal production site. PR checks never run `sync:notion
+--check`, which requires the real Notion API; they use the committed content
+and existing mocked integration tests instead.
+
+**Activation: these checks are advisory until a repository rule requires
+`Website checks` on `main`.** This change does not activate branch protection or
+change repository settings. After the check has run on a PR, an administrator
+must explicitly approve and configure the rule. Requiring the check would
+block the current Notion automation's direct pushes to `main`; migrate that
+automation to checked content PRs with separate approval before enforcing the
+rule. `sync-content.yml` is intentionally unchanged.
+
+After a merge, a green main-push gate still automatically deploys to Fly.io.
+PR and merge-queue runs never deploy. Superseded PR runs are cancelled per PR;
+main verification/deployment runs retain their serialized, non-interrupting
+`deploy-main` concurrency group.
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` and fill in what you need. All variables

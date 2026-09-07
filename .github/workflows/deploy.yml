@@ -1,48 +1,122 @@
 name: CI & Deploy
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
 
-# Don't let two deploys run at once.
-concurrency: deploy-main
+permissions:
+  contents: read
+
+# PR updates cancel only that PR's checks. Keep main runs (including deployment)
+# serialized in the existing group, without interrupting a live deployment.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'deploy-main' || format('website-{0}-{1}', github.event_name, github.event.pull_request.number || github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
-  test:
-    name: Test & build
+  production:
+    name: Production website
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ARTICLE_PREVIEW: "0"
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6 # uses the packageManager field in package.json
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
       - run: pnpm test
+      - run: pnpm resume:verify
       - run: pnpm run build
+      - run: pnpm exec playwright install --with-deps chromium
+      # pnpm start stages and serves the build above, without building again.
+      - run: pnpm e2e
+      - name: Upload production browser failures
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-production
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
 
-  e2e:
-    name: E2E (Playwright)
-    needs: test
+  rich_articles:
+    name: Rich article specimen
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The opt-in route is prerendered, so both build and browser runner need this.
+    # This job's build is never uploaded or used by the deploy job.
+    env:
+      ARTICLE_PREVIEW: "1"
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm e2e
+      - run: pnpm e2e e2e/rich-articles.spec.ts e2e/visitor-flow.spec.ts
+      - name: Upload specimen browser failures
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-rich_articles
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
+
+  website_checks:
+    name: Website checks
+    if: ${{ always() }}
+    needs: [production, rich_articles]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every verification job to succeed
+        env:
+          PRODUCTION_RESULT: ${{ needs.production.result }}
+          RICH_ARTICLES_RESULT: ${{ needs.rich_articles.result }}
+        run: |
+          if [[ "$PRODUCTION_RESULT" != "success" || "$RICH_ARTICLES_RESULT" != "success" ]]; then
+            echo "::error::Website checks failed (production=$PRODUCTION_RESULT, rich_articles=$RICH_ARTICLES_RESULT)"
+            exit 1
+          fi
 
   deploy:
     name: Deploy to Fly.io
-    needs: [test, e2e] # only deploy if test + build passed
+    needs: [website_checks]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ARTICLE_PREVIEW: "0"
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
         env:
