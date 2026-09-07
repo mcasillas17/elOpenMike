@@ -85,7 +85,49 @@ describe("projects data", () => {
     }
   });
 
-  it.each(["scorearc", "wallcrawl"])("ships optimized local screenshot media for %s", (slug) => {
+  it("shows TuringCare's public website and accurate web stack", () => {
+    const project = getProject("turingcare");
+    expect(project).toMatchObject({
+      liveUrl: "https://turingcare.dog/",
+      repoUrl: "https://github.com/mcasillas17/TuringCare",
+      images: [
+        "/images/projects/turingcare-website.webp",
+        "/images/projects/turingcare-behavior-brief.webp",
+      ],
+      imageFit: "contain",
+      mediaCredit: { href: "/images/projects/CREDITS.md" },
+    });
+    expect(project?.stack).toEqual([
+      "TypeScript", "React", "Vite", "React Router", "TanStack Query",
+      "Hono", "Drizzle", "PostgreSQL", "Better Auth", "i18next",
+    ]);
+    const features = project?.highlights.join(" ");
+    expect(features).toMatch(/journal/i);
+    expect(features).toMatch(/goals.*skills.*weekly/i);
+    expect(features).toMatch(/trainers.*courses/i);
+    expect(features).toMatch(/Behavior Brief.*PDF/i);
+    expect(features).toMatch(/English.*Spanish/i);
+    expect(project?.mediaCredit?.label).toMatch(/public.*Behavior Brief.*explanation/i);
+  });
+
+  it("describes Thwiply's persistent manual tasks and current on-device providers", () => {
+    const project = getProject("thwiply");
+    expect(project?.summary).toMatch(/Today tasks/);
+    expect(project?.stack).toEqual([
+      "Kotlin", "Jetpack Compose", "Room", "Hilt", "Coroutines", "LiteRT-LM", "ML Kit",
+    ]);
+    const features = project?.highlights.join(" ");
+    expect(features).toMatch(/create.*complete.*delete.*persist/i);
+    expect(features).toMatch(/Qwen 2\.5.*LiteRT-LM.*Gemini Nano.*ML Kit\/AICore/);
+    expect(features).toMatch(/optional model setup/i);
+    expect(features).toMatch(/preferences.*restarts/i);
+    expect(features).not.toMatch(/notification|screenshot|automatic.*extract/i);
+    expect(project?.vision).toBe(
+      "Turn everyday notifications and captured text into useful, organized tasks through a private assistant that lives on your device.",
+    );
+  });
+
+  it.each(["scorearc", "wallcrawl", "turingcare"])("ships optimized local screenshot media for %s", (slug) => {
     const project = getProject(slug);
     expect(project?.images.length).toBeGreaterThan(0);
     for (const image of project!.images) {

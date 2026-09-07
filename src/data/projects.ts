@@ -279,27 +279,30 @@ export const projects: Project[] = [
     slug: "thwiply",
     title: "Thwiply",
     summary:
-      "An Android playground for private, on-device AI: download a model to your phone and explore streamed responses locally.",
+      "An Android companion for manual Today tasks and on-device AI experiments, with persistent task storage and a streaming LLM Lab.",
     cardSummary:
-      "Explore private AI on your phone: download a model, run it locally, and watch responses stream.",
+      "Keep Today tasks on your phone and explore on-device AI in a streaming LLM Lab, with model setup on your terms.",
     preview: {
       kind: "flow",
-      label: "On-device inference",
-      steps: ["Download", "Initialize", "Stream"],
+      label: "Local LLM Lab",
+      steps: ["Choose model", "Set up", "Stream"],
     },
     year: "2026",
     tags: ["Android", "AI", "Open source"],
     stack: [
       "Kotlin",
       "Jetpack Compose",
-      "LiteRT-LM",
-      "Gemma 3",
+      "Room",
       "Hilt",
+      "Coroutines",
+      "LiteRT-LM",
+      "ML Kit",
     ],
     highlights: [
-      "Compose onboarding that downloads a model to the app’s files directory and reports download state.",
-      "LiteRT-LM engine initialization and streamed debug inference after a model is available.",
-      "Hilt-provided app dependencies, Coroutines/Flow state, and an OkHttp download client.",
+      "Create, complete, and delete manual tasks in Today, with changes that persist across app restarts.",
+      "Stream responses in the local LLM Lab using Qwen 2.5 through LiteRT-LM or Gemini Nano through ML Kit/AICore on supported devices.",
+      "Start with Today and Settings, then enter optional model setup when you want to explore local inference.",
+      "Keep theme and provider preferences across app restarts.",
     ],
     vision:
       "Turn everyday notifications and captured text into useful, organized tasks through a private assistant that lives on your device.",
@@ -543,26 +546,35 @@ export const projects: Project[] = [
     slug: "turingcare",
     title: "TuringCare",
     cardSummary:
-      "A behavior journal and shareable brief that help dog owners work with force-free trainers.",
-    preview: {
-      kind: "flow",
-      label: "From observation to support",
-      steps: ["Journal", "Behavior brief", "Trainer"],
-    },
+      "A behavior journal, practice goals, and a shareable brief that help dog owners work with force-free trainers.",
     summary:
-      "A humane, force-free dog-training support platform — owners keep a structured behavior journal, find science-based trainers, and export a shareable “Behavior Brief” PDF.",
+      "A bilingual dog-training companion that brings behavior journaling, practice goals, and force-free support together in a shareable Behavior Brief.",
     year: "2026",
     tags: ["Web app", "Full-stack"],
-    stack: ["TypeScript", "Next.js", "Node", "PostgreSQL", "Drizzle"],
+    stack: [
+      "TypeScript", "React", "Vite", "React Router", "TanStack Query",
+      "Hono", "Drizzle", "PostgreSQL", "Better Auth", "i18next",
+    ],
     highlights: [
-      "Structured behavior journal for puppy and newly-adopted-dog owners.",
-      "Exportable “Behavior Brief” PDF to share with a trainer.",
-      "Directory to find science-based, force-free trainers.",
+      "Keep a structured behavior journal to capture everyday observations about your dog.",
+      "Set training goals, work on skills, and choose a weekly practice focus.",
+      "Find positive-reinforcement trainers and courses to support your next steps.",
+      "Export a shareable Behavior Brief PDF to bring your journal and training context to a trainer.",
+      "Use the journal and training tools in English or Spanish.",
     ],
     vision:
       "Help dog owners and trainers build a shared understanding of everyday behavior, making compassionate, force-free support easier to find and follow.",
+    liveUrl: "https://turingcare.dog/",
     repoUrl: "https://github.com/mcasillas17/TuringCare",
-    images: [],
+    images: [
+      "/images/projects/turingcare-website.webp",
+      "/images/projects/turingcare-behavior-brief.webp",
+    ],
+    imageFit: "contain",
+    mediaCredit: {
+      label: "Public website and Behavior Brief explanation",
+      href: "/images/projects/CREDITS.md",
+    },
   },
   {
     slug: "light-master",

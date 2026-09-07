@@ -56,8 +56,9 @@ test("the archive preserves all eight projects and the original issue numbers", 
 
 for (const width of [390, 1440]) {
   for (const project of [
-    { slug: "scorearc", title: "ScoreArc", repo: "ScoreArc", count: 1 },
-    { slug: "wallcrawl", title: "WallCrawl", repo: "WallCrawl", count: 3 },
+    { slug: "scorearc", title: "ScoreArc", repo: "ScoreArc", count: 1, liveUrl: "https://www.scorearc.futbol/en/c/world-cup/2026" },
+    { slug: "wallcrawl", title: "WallCrawl", repo: "WallCrawl", count: 3, liveUrl: null },
+    { slug: "turingcare", title: "TuringCare", repo: "TuringCare", count: 2, liveUrl: "https://turingcare.dog/" },
   ]) {
     test(`${project.title} at ${width}px shows real media, features, and vision`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -83,9 +84,9 @@ for (const width of [390, 1440]) {
       const source = page.getByRole("link", { name: "View Source" });
       await expect(source).toHaveAttribute("href", `https://github.com/mcasillas17/${project.repo}`);
       await expect(source).toHaveAttribute("rel", /noopener/);
-      if (project.slug === "scorearc") {
+      if (project.liveUrl) {
         await expect(page.getByRole("link", { name: "Live demo" })).toHaveAttribute(
-          "href", "https://www.scorearc.futbol/en/c/world-cup/2026",
+          "href", project.liveUrl,
         );
       } else {
         await expect(page.getByRole("link", { name: "Live demo" })).toHaveCount(0);
@@ -98,4 +99,15 @@ for (const width of [390, 1440]) {
       expect(errors).toEqual([]);
     });
   }
+
+  test(`Thwiply at ${width}px presents manual tasks and on-device AI`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/projects/thwiply");
+    await expect(page.getByRole("heading", { level: 1, name: "Thwiply" })).toBeVisible();
+    await expect(page.getByText(/Create, complete, and delete manual tasks/)).toBeVisible();
+    await expect(page.getByText(/Qwen 2\.5.*Gemini Nano/)).toBeVisible();
+    await expect(page.locator("main")).not.toContainText(/Gemma 3|scaffold|Current status/i);
+    await expect(page.getByRole("heading", { name: "Vision", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
 }

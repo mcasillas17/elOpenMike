@@ -83,6 +83,18 @@ describe("/projects/[slug] detail page", () => {
     );
   });
 
+  it("presents TuringCare's public website in a contained two-image carousel", async () => {
+    render(await ProjectDetailPage({ params: Promise.resolve({ slug: "turingcare" }) }));
+    const carousel = screen.getByRole("group", { name: "TuringCare screenshot photos" });
+    const images = carousel.querySelectorAll("img");
+    expect(images).toHaveLength(2);
+    images.forEach((image) => expect(image).toHaveClass("object-contain"));
+    expect(screen.getByRole("link", { name: "Live demo" })).toHaveAttribute("href", "https://turingcare.dog/");
+    expect(screen.getByRole("link", { name: /public.*Behavior Brief.*explanation/i })).toHaveAttribute(
+      "href", "/images/projects/CREDITS.md",
+    );
+  });
+
   it("sets metadata title and description from the project", async () => {
     const meta = await generateMetadata({
       params: Promise.resolve({ slug: sample.slug }),

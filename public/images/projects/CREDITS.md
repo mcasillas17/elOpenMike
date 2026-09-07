@@ -11,6 +11,25 @@ Product: [ScoreArc by Miguel Casillas](https://github.com/mcasillas17/ScoreArc).
 Team marks and tournament imagery belong to their respective owners and appear
 as part of the captured product interface.
 
+## TuringCare
+
+These are real browser screenshots of
+[TuringCare's public website](https://turingcare.dog/), captured on 2026-09-07 UTC
+(September 6 local time) without logging in:
+
+| Portfolio file | Public page section | Dimensions |
+| --- | --- | --- |
+| `turingcare-website.webp` | [Website hero](https://turingcare.dog/#top), including the brand and Turing's photo | 1440 x 875 |
+| `turingcare-behavior-brief.webp` | [Behavior Brief explanation](https://turingcare.dog/#brief) | 1440 x 474 |
+
+Both images were converted losslessly from PNG to WebP without changing the
+page content. The Behavior Brief section uses the website's illustrative Maple
+example; it is not a capture of a user's generated PDF or private journal.
+
+Product: [TuringCare by Miguel Casillas](https://github.com/mcasillas17/TuringCare).
+The accompanying product and stack descriptions were checked against source
+revision [`e42687b`](https://github.com/mcasillas17/TuringCare/tree/e42687b46ae59c70f3fceb68bffac3dbca4aa946).
+
 ## WallCrawl
 
 The following screenshots are from
